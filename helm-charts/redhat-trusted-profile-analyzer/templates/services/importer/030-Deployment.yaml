@@ -1,0 +1,77 @@
+{{- if .Values.modules.importer.enabled }}
+{{- $mod := dict "root" . "name" "importer" "component" "importer" "module" .Values.modules.importer -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "trustification.common.name" $mod }}
+  labels:
+    {{- include "trustification.common.labels" $mod | nindent 4 }}
+  annotations:
+    {{- include "trustification.application.annotations" $mod | nindent 4 }}
+
+spec:
+  replicas: {{ include "trustification.application.replicas" $mod }}
+  selector:
+    matchLabels:
+      {{- include "trustification.common.selectorLabels" $mod | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "trustification.common.selectorLabels" $mod | nindent 8 }}
+        {{- include "trustification.application.podLabels" $mod | nindent 8 }}
+
+    spec:
+      {{- include "trustification.application.pod" $mod | nindent 6 }}
+      {{- include "trustification.application.podAffinity" $mod | nindent 6 }}
+
+      containers:
+        - name: service
+          {{- include "trustification.common.defaultImage" $mod | nindent 10 }}
+          {{- include "trustification.application.container" $mod | nindent 10 }}
+          {{- include "trustification.application.infrastructure.probes" $mod | nindent 10 }}
+
+          command: [ "/usr/local/bin/trustd" ]
+          args:
+            - importer
+            - --working-dir
+            - "/data/workdir"
+            - --concurrency
+            - {{ $mod.module.concurrency | default 1 | quote }}
+
+          env:
+
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+
+            {{- include "trustification.application.rust.envVars" $mod | nindent 12 }}
+            {{- include "trustification.application.infrastructure.envVars" $mod | nindent 12 }}
+            {{- include "trustification.postgres.envVars" (dict "root" . "database" .Values.database) | nindent 12 }}
+            {{- include "trustification.storage.envVars" $mod | nindent 12 }}
+
+          ports:
+            {{- include "trustification.application.infrastructure.podPorts" $mod | nindent 12 }}
+
+          volumeMounts:
+            - name: workdir
+              mountPath: /data/workdir
+            {{- include "trustification.storage.volumeMount" $mod | nindent 12 }}
+            {{- include "trustification.application.extraVolumeMounts" $mod | nindent 12 }}
+
+      volumes:
+        - name: workdir
+          ephemeral:
+            volumeClaimTemplate:
+              metadata:
+                labels:
+                  type: importer-working-directory
+              spec:
+                accessModes: [ "ReadWriteOnce" ]
+                resources:
+                  requests:
+                    storage: {{ $mod.module.workingDirectory.size | quote }}
+        {{- include "trustification.storage.volume" $mod | nindent 8 }}
+        {{- include "trustification.application.extraVolumes" $mod | nindent 8 }}
+
+{{ end }}

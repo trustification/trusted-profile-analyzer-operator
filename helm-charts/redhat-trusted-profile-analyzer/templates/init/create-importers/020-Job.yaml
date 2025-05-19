@@ -1,0 +1,68 @@
+{{- if .Values.modules.createImporters.enabled }}
+{{- $mod := dict "root" . "name" "create-importers" "component" "database" "module" .Values.modules.createImporters -}}
+kind: Job
+apiVersion: batch/v1
+metadata:
+  name: {{ include "trustification.common.name" $mod }}
+  labels:
+    {{- include "trustification.common.labels" $mod | nindent 4 }}
+
+  annotations:
+    {{- include "trustification.application.annotations" $mod | nindent 4 }}
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "4"
+    helm.sh/hook-weight: "40"
+    helm.sh/hook: "post-install,pre-upgrade"
+    helm.sh/hook-delete-policy: before-hook-creation
+
+spec:
+  backoffLimit: 1000
+  completions: 1
+  parallelism: 1
+  ttlSecondsAfterFinished: 600
+
+  template:
+    metadata:
+      labels:
+        {{- include "trustification.common.selectorLabels" $mod | nindent 8 }}
+
+    spec:
+
+      restartPolicy: OnFailure
+
+      {{- include "trustification.application.pod" $mod | nindent 6 }}
+
+      volumes:
+        {{- include "trustification.application.extraVolumes" $mod | nindent 8 }}
+
+      containers:
+        - name: job
+          {{- include "trustification.common.defaultImage" $mod | nindent 10 }}
+          {{- include "trustification.application.container" $mod | nindent 6 }}
+
+          env:
+            {{- include "trustification.psql.envVars" ( dict "root" . "database" ( merge ( deepCopy (.Values.modules.createImporters.database | default dict ) ) (deepCopy .Values.database) ) ) | nindent 12 }}
+
+          volumeMounts:
+            {{- include "trustification.application.extraVolumeMounts" $mod | nindent 12 }}
+
+          command:
+            - psql
+            - -v
+            - ON_ERROR_STOP=1
+            - -c
+            - |
+              {{ range $key, $value := .Values.modules.createImporters.importers }}
+              INSERT INTO IMPORTER
+                (name, revision, state, last_change, configuration)
+              VALUES
+                ({{ $key | squote }}, gen_random_uuid(), 0, now(), '{{ $value | toJson }}'::jsonb)
+              ON CONFLICT (name) DO UPDATE
+              SET
+                revision=EXCLUDED.revision,
+                configuration=EXCLUDED.configuration
+              ;
+              {{ end }}
+
+{{- end }}

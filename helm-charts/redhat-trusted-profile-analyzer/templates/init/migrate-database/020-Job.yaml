@@ -1,0 +1,55 @@
+{{- if .Values.modules.migrateDatabase.enabled }}
+{{- $mod := dict "root" . "name" "migrate-db" "component" "database" "module" .Values.modules.migrateDatabase -}}
+kind: Job
+apiVersion: batch/v1
+metadata:
+  name: {{ include "trustification.common.name" $mod }}
+  labels:
+    {{- include "trustification.common.labels" $mod | nindent 4 }}
+
+  annotations:
+    {{- include "trustification.application.annotations" $mod | nindent 4 }}
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "3"
+    helm.sh/hook-weight: "20"
+    helm.sh/hook: "pre-install,pre-upgrade"
+    helm.sh/hook-delete-policy: before-hook-creation
+
+spec:
+  backoffLimit: 1000
+  completions: 1
+  parallelism: 1
+  ttlSecondsAfterFinished: 600
+
+  template:
+    metadata:
+      labels:
+        {{- include "trustification.common.selectorLabels" $mod | nindent 8 }}
+
+    spec:
+
+      restartPolicy: OnFailure
+
+      {{- include "trustification.application.pod" $mod | nindent 6 }}
+
+      volumes:
+        {{- include "trustification.application.extraVolumes" $mod | nindent 8 }}
+
+      containers:
+        - name: job
+          {{- include "trustification.common.defaultImage" $mod | nindent 10 }}
+          {{- include "trustification.application.container" $mod | nindent 6 }}
+
+          env:
+            {{- include "trustification.postgres.envVars" ( dict "root" . "database" ( merge ( required "Using migrateDatabase requires setting .Values.migrateDatabase" (deepCopy .Values.migrateDatabase) ) ( deepCopy .Values.database ) ) ) | nindent 12 }}
+
+          volumeMounts:
+            {{- include "trustification.application.extraVolumeMounts" $mod | nindent 12 }}
+
+          command:
+            - trustd
+            - db
+            - migrate
+
+{{- end }}

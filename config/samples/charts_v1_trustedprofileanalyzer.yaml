@@ -1,0 +1,74 @@
+apiVersion: charts.trustification.io/v1
+kind: TrustedProfileAnalyzer
+metadata:
+  name: trustedprofileanalyzer-sample
+spec:
+  # Default values copied from <project_dir>/helm-charts/redhat-trusted-profile-analyzer/values.yaml
+  appDomain: change-me
+  collector:
+    deployment:
+      enabled: false
+  database: {}
+  image:
+    fullName: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:3d17f211ae1272d4179adb8a152b0fd5ab6eabcacf1e52ecf87a329d93044eb3
+    pullPolicy: IfNotPresent
+  infrastructure:
+    port: 9010
+  ingress: {}
+  metrics:
+    enabled: false
+  modules:
+    createDatabase:
+      enabled: false
+      image: {}
+    createImporters:
+      enabled: false
+      image: {}
+      importers: {}
+    importer:
+      concurrency: 1
+      enabled: true
+      image: {}
+      infrastructure: {}
+      metrics: {}
+      replicas: 1
+      resources:
+        requests:
+          cpu: 1
+          memory: 8Gi
+      rust: {}
+      tracing: {}
+      workingDirectory:
+        size: 32Gi
+    migrateDatabase:
+      enabled: false
+      image: {}
+    server:
+      enabled: true
+      image: {}
+      infrastructure: {}
+      ingress: {}
+      metrics: {}
+      replicas: 1
+      resources:
+        requests:
+          cpu: 1
+          memory: 8Gi
+      rust: {}
+      tracing: {}
+  oidc:
+    clients:
+      cli:
+        clientSecret: null
+      frontend: {}
+  openshift:
+    useServiceCa: true
+  partOf: trustify
+  replicas: 1
+  rust: {}
+  storage: {}
+  tls: {}
+  tracing:
+    enabled: false
+  
+  
