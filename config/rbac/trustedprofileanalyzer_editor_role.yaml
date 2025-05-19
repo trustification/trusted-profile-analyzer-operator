@@ -1,0 +1,27 @@
+# permissions for end users to edit trustedprofileanalyzers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: rhtpa-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: trustedprofileanalyzer-editor-role
+rules:
+- apiGroups:
+  - charts.trustification.io
+  resources:
+  - trustedprofileanalyzers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - charts.trustification.io
+  resources:
+  - trustedprofileanalyzers/status
+  verbs:
+  - get

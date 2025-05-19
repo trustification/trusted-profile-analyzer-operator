@@ -1,0 +1,7 @@
+
+OpenShift:
+  Detected:       {{ include "trustification.openshift.detect" . }}
+  Use Service CA: {{ include "trustification.openshift.useServiceCa" . }}
+
+Console:
+    {{ include "trustification.host.server" (dict "root" .) }}

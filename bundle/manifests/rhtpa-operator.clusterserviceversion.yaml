@@ -1,0 +1,320 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "charts.trustification.io/v1",
+          "kind": "TrustedProfileAnalyzer",
+          "metadata": {
+            "name": "trustedprofileanalyzer-sample"
+          },
+          "spec": {
+            "appDomain": "change-me",
+            "collector": {
+              "deployment": {
+                "enabled": false
+              }
+            },
+            "database": {},
+            "image": {
+              "fullName": "registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:3d17f211ae1272d4179adb8a152b0fd5ab6eabcacf1e52ecf87a329d93044eb3",
+              "pullPolicy": "IfNotPresent"
+            },
+            "infrastructure": {
+              "port": 9010
+            },
+            "ingress": {},
+            "metrics": {
+              "enabled": false
+            },
+            "modules": {
+              "createDatabase": {
+                "enabled": false,
+                "image": {}
+              },
+              "createImporters": {
+                "enabled": false,
+                "image": {},
+                "importers": {}
+              },
+              "importer": {
+                "concurrency": 1,
+                "enabled": true,
+                "image": {},
+                "infrastructure": {},
+                "metrics": {},
+                "replicas": 1,
+                "resources": {
+                  "requests": {
+                    "cpu": 1,
+                    "memory": "8Gi"
+                  }
+                },
+                "rust": {},
+                "tracing": {},
+                "workingDirectory": {
+                  "size": "32Gi"
+                }
+              },
+              "migrateDatabase": {
+                "enabled": false,
+                "image": {}
+              },
+              "server": {
+                "enabled": true,
+                "image": {},
+                "infrastructure": {},
+                "ingress": {},
+                "metrics": {},
+                "replicas": 1,
+                "resources": {
+                  "requests": {
+                    "cpu": 1,
+                    "memory": "8Gi"
+                  }
+                },
+                "rust": {},
+                "tracing": {}
+              }
+            },
+            "oidc": {
+              "clients": {
+                "cli": {
+                  "clientSecret": null
+                },
+                "frontend": {}
+              }
+            },
+            "openshift": {
+              "useServiceCa": true
+            },
+            "partOf": "trustify",
+            "replicas": 1,
+            "rust": {},
+            "storage": {},
+            "tls": {},
+            "tracing": {
+              "enabled": false
+            }
+          }
+        }
+      ]
+    capabilities: Basic Install
+    createdAt: "2025-05-14T10:10:42Z"
+    operators.operatorframework.io/builder: operator-sdk-v1.39.2
+    operators.operatorframework.io/project_layout: helm.sdk.operatorframework.io/v1
+  name: rhtpa-operator.v2.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - kind: TrustedProfileAnalyzer
+      name: trustedprofileanalyzers.charts.trustification.io
+      version: v1
+  description: rhtpa operator
+  displayName: trustification-operator
+  icon:
+  - base64data: PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz48c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjM4IiBoZWlnaHQ9IjM4IiB2aWV3Qm94PSIwIDAgMzggMzgiPjxkZWZzPjxzdHlsZT4uZHtmaWxsOiNlMDA7fS5le2ZpbGw6I2ZmZjt9LmZ7ZmlsbDojZTBlMGUwO308L3N0eWxlPjwvZGVmcz48ZyBpZD0iYSI+PHJlY3QgY2xhc3M9ImUiIHg9IjEiIHk9IjEiIHdpZHRoPSIzNiIgaGVpZ2h0PSIzNiIgcng9IjkiIHJ5PSI5Ii8+PHBhdGggY2xhc3M9ImYiIGQ9Im0yOCwyLjI1YzQuMjczNCwwLDcuNzUsMy40NzY2LDcuNzUsNy43NXYxOGMwLDQuMjczNC0zLjQ3NjYsNy43NS03Ljc1LDcuNzVIMTBjLTQuMjczNCwwLTcuNzUtMy40NzY2LTcuNzUtNy43NVYxMGMwLTQuMjczNCwzLjQ3NjYtNy43NSw3Ljc1LTcuNzVoMThtMC0xLjI1SDEwQzUuMDI5NCwxLDEsNS4wMjk0LDEsMTB2MThjMCw0Ljk3MDYsNC4wMjk0LDksOSw5aDE4YzQuOTcwNiwwLDktNC4wMjk0LDktOVYxMGMwLTQuOTcwNi00LjAyOTQtOS05LTloMFoiLz48L2c+PGcgaWQ9ImIiPjxwYXRoIGNsYXNzPSJkIiBkPSJtMjguNDQyNCwyNy41NTgxbC00LjgxODUtNC44MTg1Yy43MTM1LS42OTQ2LDEuMjc3Ni0xLjU1MjcsMS42MjMyLTIuNTMxNi4xMTUyLS4zMjUyLS4wNTU3LS42ODIxLS4zODA5LS43OTc0LS4zMjIzLS4xMTYyLS42ODI2LjA1NTItLjc5NjkuMzgxMy0uNzU3OCwyLjE0MzEtMi43OTQ5LDMuNTgzLTUuMDY5MywzLjU4My0yLjk2MzksMC01LjM3NS0yLjQxMTEtNS4zNzUtNS4zNzVzMi40MTExLTUuMzc1LDUuMzc1LTUuMzc1Yy4zNDQ3LDAsLjYyNS0uMjc5OC42MjUtLjYyNXMtLjI4MDMtLjYyNS0uNjI1LS42MjVjLTMuNjUzMywwLTYuNjI1LDIuOTcyMi02LjYyNSw2LjYyNXMyLjk3MTcsNi42MjUsNi42MjUsNi42MjVjMS4zMjUxLDAsMi41Nzc3LS40MDc0LDMuNjM2Mi0xLjEwNDVsNC45MjE0LDQuOTIxNGMuMTIyMS4xMjIxLjI4MjIuMTgzMS40NDI0LjE4MzFzLjMyMDMtLjA2MS40NDI0LS4xODMxYy4yNDMyLS4yNDQxLjI0MzItLjYzOTYsMC0uODgzOFoiLz48cGF0aCBkPSJtMjAuNDQyNCwyNy41NTgxbC0yLTJjLS4yNDQxLS4yNDQxLS42NDA2LS4yNDQxLS44ODQ4LDAtLjI0MzIuMjQ0MS0uMjQzMi42Mzk2LDAsLjg4MzhsLjkwNjIuOTA1OWMtNC45MTkxLS4yODA0LTguODM4OC00LjM1OTQtOC44Mzg4LTkuMzQ3OCwwLTUuMTY5NCw0LjIwNjEtOS4zNzUsOS4zNzUtOS4zNzUuMzQ0NywwLC42MjUtLjI3OTguNjI1LS42MjVzLS4yODAzLS42MjUtLjYyNS0uNjI1Yy01Ljg1ODQsMC0xMC42MjUsNC43NjY2LTEwLjYyNSwxMC42MjUsMCw1LjY5NDksNC41MDc3LDEwLjM0NDUsMTAuMTQwNiwxMC42MDA1bC0uOTU3OS45NTc2Yy0uMjQzMi4yNDQxLS4yNDMyLjYzOTYsMCwuODgzOC4xMjIxLjEyMjEuMjgyMi4xODMxLjQ0MjQuMTgzMXMuMzIwMy0uMDYxLjQ0MjQtLjE4MzFsMi0yYy4yNDMyLS4yNDQxLjI0MzItLjYzOTYsMC0uODgzOFoiLz48cGF0aCBkPSJtMjUuNSwxNy42MjVjLTIuMjc0NCwwLTQuMTI1LTEuODUwNi00LjEyNS00LjEyNXYtNC4wMjg4YzAtLjI5NDkuMjA2MS0uNTQ5OC40OTUxLS42MTEzbDMuNS0uNzQ0MWMuMDg1OS0uMDE4Ni4xNzM4LS4wMTg2LjI1OTgsMGwzLjUuNzQ0MWMuMjg5MS4wNjEuNDk1MS4zMTY0LjQ5NTEuNjExM3Y0LjAyODhjMCwyLjI3NDQtMS44NTA2LDQuMTI1LTQuMTI1LDQuMTI1Wm0tMi44NzUtNy42NDc5djMuNTIyOWMwLDEuNTg1NCwxLjI5LDIuODc1LDIuODc1LDIuODc1czIuODc1LTEuMjg5NiwyLjg3NS0yLjg3NXYtMy41MjI5bC0yLjg3NS0uNjEwOC0yLjg3NS42MTA4WiIvPjxwYXRoIGNsYXNzPSJkIiBkPSJtMjUsMTQuMzUyMWMtLjE2MDIsMC0uMzIwMy0uMDYxLS40NDI0LS4xODMxbC0xLTFjLS4yNDMyLS4yNDQxLS4yNDMyLS42Mzk2LDAtLjg4MzguMjQ0MS0uMjQ0MS42NDA2LS4yNDQxLjg4NDgsMGwuNTU3Ni41NTgxLDEuNTU3Ni0xLjU1ODFjLjI0NDEtLjI0NDEuNjQwNi0uMjQ0MS44ODQ4LDAsLjI0MzIuMjQ0MS4yNDMyLjYzOTYsMCwuODgzOGwtMiwyYy0uMTIyMS4xMjIxLS4yODIyLjE4MzEtLjQ0MjQuMTgzMVoiLz48L2c+PC9zdmc+
+    mediatype: image/svg+xml
+  install:
+    spec:
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - namespaces
+          verbs:
+          - get
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - '*'
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+        - apiGroups:
+          - charts.trustification.io
+          resources:
+          - trustedprofileanalyzers
+          - trustedprofileanalyzers/status
+          - trustedprofileanalyzers/finalizers
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          - services
+          - services/finalizers
+          - endpoints
+          - persistentvolumeclaims
+          - events
+          - configmaps
+          - secrets
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          - daemonsets
+          - replicasets
+          - statefulsets
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        serviceAccountName: rhtpa-operator-controller-manager
+      deployments:
+      - label:
+          app.kubernetes.io/managed-by: kustomize
+          app.kubernetes.io/name: rhtpa-operator
+          control-plane: controller-manager
+        name: rhtpa-operator-controller-manager
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              control-plane: controller-manager
+          strategy: {}
+          template:
+            metadata:
+              annotations:
+                kubectl.kubernetes.io/default-container: manager
+              labels:
+                control-plane: controller-manager
+            spec:
+              containers:
+              - args:
+                - --metrics-require-rbac
+                - --metrics-secure
+                - --metrics-bind-address=:8443
+                - --leader-elect
+                - --leader-election-id=rhtpa-operator
+                - --health-probe-bind-address=:8081
+                image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator:2.1.0
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8081
+                  initialDelaySeconds: 15
+                  periodSeconds: 20
+                name: manager
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: 8081
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 128Mi
+                  requests:
+                    cpu: 10m
+                    memory: 64Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                    - ALL
+              securityContext:
+                runAsNonRoot: true
+              serviceAccountName: rhtpa-operator-controller-manager
+              terminationGracePeriodSeconds: 10
+      permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        serviceAccountName: rhtpa-operator-controller-manager
+    strategy: deployment
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - rhtpa
+  - trust-analyzer
+  links:
+  - name: Rhtpa Operator
+    url: https://rhtpa-operator.domain
+  maintainers:
+    - email: mdessi@redhat.com
+      name: Max Dessi
+  maturity: alpha
+  minKubeVersion: 1.31.0
+  provider:
+    name: rhtpa-operator
+    url: github.com/trustification/trustification-operator
+  version: 2.1.0

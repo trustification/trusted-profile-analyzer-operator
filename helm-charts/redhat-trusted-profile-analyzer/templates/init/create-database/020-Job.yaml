@@ -1,0 +1,78 @@
+{{- if .Values.modules.createDatabase.enabled }}
+{{- $mod := dict "root" . "name" "create-db" "component" "database" "module" .Values.modules.createDatabase -}}
+kind: Job
+apiVersion: batch/v1
+metadata:
+  name: {{ include "trustification.common.name" $mod }}
+  labels:
+    {{- include "trustification.common.labels" $mod | nindent 4 }}
+
+  annotations:
+    {{- include "trustification.application.annotations" $mod | nindent 4 }}
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "0"
+    helm.sh/hook-weight: "5"
+    helm.sh/hook: "pre-install,pre-upgrade"
+    helm.sh/hook-delete-policy: before-hook-creation
+
+spec:
+  backoffLimit: 1000
+  completions: 1
+  parallelism: 1
+  ttlSecondsAfterFinished: 600
+
+  template:
+    metadata:
+      labels:
+        {{- include "trustification.common.selectorLabels" $mod | nindent 8 }}
+
+    spec:
+
+      restartPolicy: OnFailure
+
+      {{- include "trustification.application.pod" $mod | nindent 6 }}
+
+      volumes:
+        - name: init-data
+          configMap:
+            name: {{ include "trustification.common.name" $mod }}
+        {{- include "trustification.application.extraVolumes" $mod | nindent 8 }}
+
+      containers:
+        - name: job
+          {{- include "trustification.common.defaultImage" $mod | nindent 10 }}
+          {{- include "trustification.application.container" $mod | nindent 6 }}
+
+          env:
+            # connect using the `createDatabase` settings
+            {{- include "trustification.psql.envVars" ( dict "root" . "database" ( merge ( required "Using createDatabase requires setting .Values.createDatabase" (deepCopy .Values.createDatabase) ) ( deepCopy .Values.database ) ) ) | nindent 12 }}
+
+            # create a user with the `database` settings
+            - name: DB_NAME
+              {{- include "trustification.common.envVarValue" .Values.database.name | nindent 14 }}
+            - name: DB_USERNAME
+              {{- include "trustification.common.envVarValue" .Values.database.username | nindent 14 }}
+            - name: DB_PASSWORD
+              {{- include "trustification.common.envVarValue" .Values.database.password | nindent 14 }}
+
+          volumeMounts:
+            - mountPath: /etc/init-data
+              name: init-data
+            {{- include "trustification.application.extraVolumeMounts" $mod | nindent 12 }}
+
+          command:
+            - psql
+            - --echo-all
+            - -v
+            - ON_ERROR_STOP=1
+            - -v
+            - db_name=$(DB_NAME)
+            - -v
+            - db_user=$(DB_USERNAME)
+            - -v
+            - db_password=$(DB_PASSWORD)
+            - -f
+            - /etc/init-data/init.sql
+
+{{- end }}

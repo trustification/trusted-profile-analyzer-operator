@@ -1,0 +1,18 @@
+{{- $mod := dict "root" . "name" "test" "component" "testing" "module" .Values.modules.server -}}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "trustification.common.name" $mod }}-test-connection
+  labels:
+    {{- include "trustification.common.labels" $mod | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: test
+      image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+      command:
+        - curl
+        - -k
+        - https://server:443/
+  restartPolicy: Never

@@ -1,0 +1,83 @@
+appDomain: change-me
+partOf: trustify
+replicas: 1
+
+image:
+  fullName: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:3d17f211ae1272d4179adb8a152b0fd5ab6eabcacf1e52ecf87a329d93044eb3
+  pullPolicy: IfNotPresent
+
+rust: {}
+
+ingress: {}
+
+tls: {}
+
+storage: {}
+
+database: {}
+
+openshift:
+  useServiceCa: true
+
+oidc:
+  clients:
+    frontend: {}
+    cli:
+      clientSecret:
+
+infrastructure:
+  port: 9010
+
+metrics:
+  enabled: false
+
+tracing:
+  enabled: false
+
+collector:
+  deployment:
+    enabled: false
+
+modules:
+  server:
+    enabled: true
+    replicas: 1
+    ingress: {}
+    image: {}
+    infrastructure: {}
+    tracing: {}
+    metrics: {}
+    rust: {}
+    resources:
+      requests:
+        cpu: 1
+        memory: 8Gi
+
+  importer:
+    enabled: true
+    replicas: 1
+    image: {}
+    infrastructure: {}
+    tracing: {}
+    metrics: {}
+    rust: {}
+    resources:
+      requests:
+        cpu: 1
+        memory: 8Gi
+    concurrency: 1
+    workingDirectory:
+      size: 32Gi
+
+  createDatabase:
+    enabled: false
+    image: {}
+
+  migrateDatabase:
+    enabled: false
+    image: {}
+
+  createImporters:
+    enabled: false
+    image: {}
+    importers: {}
