@@ -1,0 +1,105 @@
+appDomain: -trustify.apps-crc.testing
+
+ingress:
+  className: openshift-default
+  additionalAnnotations:
+    "haproxy.router.openshift.io/timeout": "5m"
+
+
+storage:
+  type: filesystem
+  size: 32Gi
+
+database:
+  host: infrastructure-postgresql
+  port: "5432"
+  name: trustify
+  username: trustify
+  password: trustify1234
+
+createDatabase:
+  name: postgres
+  username: postgres
+  password:
+    valueFrom:
+      secretKeyRef:
+        name: infrastructure-postgresql
+        key: postgres-password
+
+migrateDatabase:
+  username: postgres
+  password:
+    valueFrom:
+      secretKeyRef:
+        name: infrastructure-postgresql
+        key: postgres-password
+
+modules:
+  createDatabase:
+    enabled: true
+  migrateDatabase:
+    enabled: true
+
+## Infrastructure Charts
+
+keycloak:
+  enabled: true
+  resourcesPreset: large
+  production: true
+  proxyHeaders: xforwarded
+  podSecurityContext:
+    enabled: false
+  containerSecurityContext:
+    enabled: false
+  auth:
+    adminUser: admin
+    adminPassword: admin123456 # notsecret
+  tls:
+    enabled: true
+    existingSecret: sso-tls
+    usePem: true
+  service:
+    annotations:
+      service.beta.openshift.io/serving-cert-secret-name: sso-tls
+  ingress:
+    enabled: true
+    ingressClassName: openshift-default
+    servicePort: https
+    annotations:
+      route.openshift.io/termination: reencrypt
+  postgresql:
+    primary:
+      resourcesPreset: large
+      containerSecurityContext:
+        enabled: false
+      podSecurityContext:
+        enabled: false
+
+postgresql:
+  enabled: false # see remark in Chart.yaml
+
+oidc:
+  clients:
+    frontend: { }
+    cli:
+      clientSecret:
+        value: 5460cc91-4e20-4edd-881c-b15b169f8a79 # notsecret
+    testingUser:
+      clientSecret:
+        value: 0e6bf990-43b4-4efb-95d7-b24f2b94a525 # notsecret
+    testingManager:
+      clientSecret:
+        value: ca48053c-3b82-4650-a98d-4cace7f2d567 # notsecret
+
+tls:
+  additionalTrustAnchor: /etc/trust-anchor/tls.crt
+
+extraVolumes:
+  - name: trust-anchor
+    configMap:
+      name: crc-trust-anchor
+
+extraVolumeMounts:
+  - name: trust-anchor
+    readOnly: true
+    mountPath: /etc/trust-anchor
