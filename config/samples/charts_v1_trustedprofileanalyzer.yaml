@@ -1,4 +1,4 @@
-apiVersion: charts.trustification.io/v1
+apiVersion: charts.rhtpa.io/v1
 kind: TrustedProfileAnalyzer
 metadata:
   name: trustedprofileanalyzer-sample

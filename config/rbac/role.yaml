@@ -29,10 +29,10 @@ rules:
   - create
 
 ##
-## Rules for charts.trustification.io/v1, Kind: TrustedProfileAnalyzer
+## Rules for charts.rhtpa.io/v1, Kind: TrustedProfileAnalyzer
 ##
 - apiGroups:
-  - charts.trustification.io
+  - charts.rhtpa.io
   resources:
   - trustedprofileanalyzers
   - trustedprofileanalyzers/status

@@ -1,5 +1,5 @@
 # Use the 'create api' subcommand to add watches to this file.
-- group: charts.trustification.io
+- group: charts.rhtpa.io
   version: v1
   kind: TrustedProfileAnalyzer
   chart: helm-charts/redhat-trusted-profile-analyzer
