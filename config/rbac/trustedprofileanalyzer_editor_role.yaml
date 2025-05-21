@@ -8,7 +8,7 @@ metadata:
   name: trustedprofileanalyzer-editor-role
 rules:
 - apiGroups:
-  - charts.trustification.io
+  - charts.rhtpa.io
   resources:
   - trustedprofileanalyzers
   verbs:
@@ -20,7 +20,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - charts.trustification.io
+  - charts.rhtpa.io
   resources:
   - trustedprofileanalyzers/status
   verbs:

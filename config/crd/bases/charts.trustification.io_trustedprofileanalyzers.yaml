@@ -2,9 +2,9 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: trustedprofileanalyzers.charts.trustification.io
+  name: trustedprofileanalyzers.charts.rhtpa.io
 spec:
-  group: charts.trustification.io
+  group: charts.rhtpa.io
   names:
     kind: TrustedProfileAnalyzer
     listKind: TrustedProfileAnalyzerList
