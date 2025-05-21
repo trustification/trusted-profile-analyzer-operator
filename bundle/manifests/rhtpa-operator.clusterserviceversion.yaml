@@ -105,7 +105,7 @@ metadata:
     createdAt: "2025-05-14T10:10:42Z"
     operators.operatorframework.io/builder: operator-sdk-v1.39.2
     operators.operatorframework.io/project_layout: helm.sdk.operatorframework.io/v1
-  name: rhtpa-operator.v2.0.0
+  name: rhtpa-operator.v1.0.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -229,7 +229,7 @@ spec:
                 - --leader-elect
                 - --leader-election-id=rhtpa-operator
                 - --health-probe-bind-address=:8081
-                image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator:2.0.0
+                image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator:1.0.0
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -317,4 +317,4 @@ spec:
   provider:
     name: rhtpa-operator
     url: https://github.com/trustification/trusted-profile-analyzer-operator
-  version: 2.0.0
+  version: 1.0.0

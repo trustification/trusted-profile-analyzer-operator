@@ -41,4 +41,4 @@ spec:
   provider:
     name: rhtpa-operator
     url: https://github.com/trustification/trusted-profile-analyzer-operator
-  version: 2.0.0
+  version: 1.0.0
