@@ -1,5 +1,5 @@
 kind: TrustedProfileAnalyzer
-apiVersion: charts.trustification.io/v1
+apiVersion: charts.rhtpa.io/v1
 metadata:
   name: rhtpa-demo
   namespace: trustify
