@@ -107,7 +107,7 @@ metadata:
     operators.operatorframework.io/project_layout: helm.sdk.operatorframework.io/v1
     support: Red Hat
     repository: https://github.com/trustification/trusted-profile-analyzer-operator
-    containerImage: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:ac9284d104077fe0e880735363ef28aec1d77224ef41859b62c45b8ec7223b33
+    containerImage: registry.redhat.io/rhtpa/rhtpa-operator-rhel9@sha256:69050d1a7b6ab496de5ceb76e51b0cf851fe92a7db4a08b6e5469583663f6c91
   name: rhtpa-operator.v1.0.0
   namespace: placeholder
 spec:
@@ -233,7 +233,7 @@ spec:
                 - --leader-elect
                 - --leader-election-id=rhtpa-operator
                 - --health-probe-bind-address=:8081
-                image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator:1.0.0
+                image: registry.redhat.io/rhtpa/rhtpa-operator-rhel9:1.0.0
                 livenessProbe:
                   httpGet:
                     path: /healthz
