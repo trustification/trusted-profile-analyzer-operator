@@ -19,7 +19,7 @@ metadata:
             },
             "database": {},
             "image": {
-              "fullName": "registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:3d17f211ae1272d4179adb8a152b0fd5ab6eabcacf1e52ecf87a329d93044eb3",
+              "fullName": "registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:2e8590c43deaa14fcb267da633190326300bb7348ed9bebf0be322a4d35f193c",
               "pullPolicy": "IfNotPresent"
             },
             "infrastructure": {
@@ -233,7 +233,7 @@ spec:
                 - --leader-elect
                 - --leader-election-id=rhtpa-operator
                 - --health-probe-bind-address=:8081
-                image: registry.redhat.io/rhtpa/rhtpa-operator-rhel9:1.0.0
+                image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:6f672827c67430c564f7350a76f8119da1c8c4cd74832f30a954ff71afdd1105
                 livenessProbe:
                   httpGet:
                     path: /healthz
