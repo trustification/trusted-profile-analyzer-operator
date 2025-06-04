@@ -4,5 +4,5 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 images:
 - name: controller
-  newName: registry.redhat.io/rhtpa/rhtpa-operator-rhel9
+  newName: registry.redhat.io/rhtpa/rhtpa-rhel9-operator
   newTag: 1.0.0

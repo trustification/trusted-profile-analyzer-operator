@@ -25,7 +25,7 @@
 ```
 
 # Container repository
-- Replace ```registry.redhat.io/rhtpa/rhtpa-operator-rhel9``` occurrences with your registry like quay.io/<your_username>/rhtpa-rhel9-operator 
+- Replace ```registry.redhat.io/rhtpa/rhtpa-rhel9-operator``` occurrences with your registry like quay.io/<your_username>/rhtpa-rhel9-operator 
   or map on the crc/ocp with a registry mirroring 
   
 ```console
