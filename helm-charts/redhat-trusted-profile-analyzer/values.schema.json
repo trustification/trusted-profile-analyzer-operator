@@ -243,6 +243,9 @@
                   "type": "integer",
                   "minimum": 1,
                   "description": "The max number of import jobs that may run concurrently\n"
+                },
+                "storageClassName": {
+                  "type": "string"
                 }
               }
             }
