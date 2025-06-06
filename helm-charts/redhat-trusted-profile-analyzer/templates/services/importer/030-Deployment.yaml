@@ -67,6 +67,9 @@ spec:
                 labels:
                   type: importer-working-directory
               spec:
+                {{- with $mod.module.storageClassName }}
+                storageClassName: {{ . | quote }}
+                {{- end }}
                 accessModes: [ "ReadWriteOnce" ]
                 resources:
                   requests:
