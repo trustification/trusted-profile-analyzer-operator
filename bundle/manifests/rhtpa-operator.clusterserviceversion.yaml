@@ -105,6 +105,17 @@ metadata:
     createdAt: "2025-05-14T10:10:42Z"
     operators.operatorframework.io/builder: operator-sdk-v1.40.0
     operators.operatorframework.io/project_layout: helm.sdk.operatorframework.io/v1
+    features.operators.openshift.io/cnf: "false"
+    features.operators.openshift.io/cni: "false"
+    features.operators.openshift.io/csi: "false"
+    features.operators.openshift.io/disconnected: "false"
+    features.operators.openshift.io/fips-compliant: "false"
+    features.operators.openshift.io/proxy-aware: "true"
+    features.operators.openshift.io/tls-profiles: "false"
+    features.operators.openshift.io/token-auth-aws: "false"
+    features.operators.openshift.io/token-auth-azure: "false"
+    features.operators.openshift.io/token-auth-gcp: "false"
+    operators.openshift.io/valid-subscription: '["Red Hat Trusted Profile Analyzer"]'
     support: Red Hat
     repository: https://github.com/trustification/trusted-profile-analyzer-operator
     containerImage: registry.redhat.io/rhtpa/rhtpa-rhel9-operator:1.0.0
