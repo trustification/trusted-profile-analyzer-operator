@@ -81,6 +81,13 @@ spec:
             source: https://github.com/github/advisory-database
             path: advisories
             disabled: false
+        quay-redhat-user-workloads:
+          quay:
+            description: SBOMs from konflux image attachments
+            period: 1d
+            source: quay.io
+            namespace: redhat-user-workloads
+            disabled: true
     importer:
       concurrency: 4
       enabled: true
