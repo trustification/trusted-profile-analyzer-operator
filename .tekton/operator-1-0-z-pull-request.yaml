@@ -37,8 +37,6 @@ spec:
     value: Dockerfile
   - name: path-context
     value: .
-  - name: manager-registry-url
-    value: registry.redhat.io/rhtpa/rhtpa-rhel9-operator
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while maintaining trust after pipeline customization.
