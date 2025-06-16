@@ -9,7 +9,10 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "release/1.0.z"
+      == "release/1.0.z" && (".tekton/operator-bundle-1-0-z-pull-request.yaml".pathChanged() 
+      || ".tekton/operator-bundle-1-0-z-pull-request.yaml".pathChanged()
+      ||  "bundle.Dockerfile".pathChanged() || "Dockerfile.rhtpa-operator.rh".pathChanged()
+      ||  || "helm-charts/***".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: rhtpa-operator-1-0-z
@@ -31,6 +34,8 @@ spec:
     value: Dockerfile
   - name: path-context
     value: .
+  - name: manager-registry-url
+    value: registry.redhat.io/rhtpa/rhtpa-rhel9-operator
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while maintaining trust after pipeline customization.
