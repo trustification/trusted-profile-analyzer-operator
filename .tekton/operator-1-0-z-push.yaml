@@ -8,7 +8,13 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "release/1.0.z"
+      == "release/1.0.z" && (
+      ".tekton/operator-bundle-1-0-z-push-request.yaml".pathChanged() || 
+      ".tekton/operator-bundle-1-0-z-push-request.yaml".pathChanged() || 
+      "bundle.Dockerfile".pathChanged() || 
+      "Dockerfile.rhtpa-operator.rh".pathChanged() || 
+      "helm-charts/***".pathChanged()
+      )
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: rhtpa-operator-1-0-z
