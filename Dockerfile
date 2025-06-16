@@ -1,5 +1,7 @@
 # Build the manager binary
-FROM quay.io/operator-framework/helm-operator:v1.40.0
+# v4.16
+FROM registry.redhat.io/openshift4/ose-helm-rhel9-operator@sha256:a681bc71167de7ee3958ce409e50990e99a0cbe98b934fe2408c2b4c802e7ada
+#FROM quay.io/operator-framework/helm-operator:v1.40.0
 
 LABEL com.redhat.component="rhtpa-operator"
 LABEL description="Red Hat Trusted Profile Analyzer Operator image"
