@@ -1,6 +1,6 @@
 # Build the manager binary
 # v4.16
-FROM registry.redhat.io/openshift4/ose-helm-rhel9-operator@sha256:a681bc71167de7ee3958ce409e50990e99a0cbe98b934fe2408c2b4c802e7ada
+FROM registry.redhat.io/openshift4/ose-helm-rhel9-operator@sha256:b25e2dc071ff9e7f7bfd68ae3cd652ae2d3a4e5935f6dfaf880362b40cf372dc
 #FROM quay.io/operator-framework/helm-operator:v1.40.0
 
 LABEL com.redhat.component="rhtpa-operator"
