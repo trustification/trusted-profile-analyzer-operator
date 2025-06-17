@@ -5,7 +5,7 @@ metadata:
     alm-examples: |-
       [
         {
-          "apiVersion": "charts.rhtpa.io/v1",
+          "apiVersion": "rhtpa.io/v1",
           "kind": "TrustedProfileAnalyzer",
           "metadata": {
             "name": "trustedprofileanalyzer-sample"
@@ -19,7 +19,7 @@ metadata:
             },
             "database": {},
             "image": {
-              "fullName": "registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:01c2ae1f052c61d14dc7981a86c565db58ac5b219246c8de323eef05e3bd8f05",
+              "fullName": "quay.io/redhat-user-workloads/trusted-content-tenant/rhtpa-product-0-3-z@sha256:01c2ae1f052c61d14dc7981a86c565db58ac5b219246c8de323eef05e3bd8f05",
               "pullPolicy": "IfNotPresent"
             },
             "infrastructure": {
@@ -118,7 +118,7 @@ metadata:
     operators.openshift.io/valid-subscription: '["Red Hat Trusted Profile Analyzer"]'
     support: Red Hat
     repository: https://github.com/trustification/trusted-profile-analyzer-operator
-    containerImage: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:37fcbd399023bab803860c1f1d582ff9fd97cf60c9b1ef8aab2546bbf46281de
+    containerImage: quay.io/mdessi/rhtpa-rhel9-operator@sha256:2410b3d05721246daf524d6dca7b4b1fb9596160ea7f362122e204bb49f4607b
   name: rhtpa-operator.v1.0.0
   namespace: placeholder
 spec:
@@ -126,7 +126,7 @@ spec:
   customresourcedefinitions:
     owned:
     - kind: TrustedProfileAnalyzer
-      name: trustedprofileanalyzers.charts.rhtpa.io
+      name: trustedprofileanalyzers.rhtpa.io
       version: v1
   description: |
     Red Hat Trusted Profile Analyzer is a proactive service that assists in risk management of Open Source Software (OSS) packages and dependencies. The Trusted Profile Analyzer service brings awareness to and remediation of OSS vulnerabilities discovered within the software supply chain.
@@ -157,7 +157,7 @@ spec:
           verbs:
           - create
         - apiGroups:
-          - charts.trustification.io
+          - rhtpa.io
           resources:
           - trustedprofileanalyzers
           - trustedprofileanalyzers/status
@@ -238,13 +238,13 @@ spec:
             spec:
               containers:
               - args:
-                - --metrics-require-rbac
+                #- --metrics-require-rbac
                 - --metrics-secure
                 - --metrics-bind-address=:8443
                 - --leader-elect
                 - --leader-election-id=rhtpa-operator
                 - --health-probe-bind-address=:8081
-                image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:37fcbd399023bab803860c1f1d582ff9fd97cf60c9b1ef8aab2546bbf46281de
+                image: quay.io/mdessi/rhtpa-rhel9-operator@sha256:2410b3d05721246daf524d6dca7b4b1fb9596160ea7f362122e204bb49f4607b
                 livenessProbe:
                   httpGet:
                     path: /healthz

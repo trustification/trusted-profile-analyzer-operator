@@ -1,5 +1,5 @@
 kind: TrustedProfileAnalyzer
-apiVersion: charts.rhtpa.io/v1
+apiVersion: rhtpa.io/v1
 metadata:
   name: rhtpa-demo
   namespace: trustify
@@ -32,7 +32,7 @@ spec:
           name: infrastructure-postgresql
           key: postgres-password
   image:
-    fullName: 'registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:2e8590c43deaa14fcb267da633190326300bb7348ed9bebf0be322a4d35f193c'
+    fullName: 'quay.io/redhat-user-workloads/trusted-content-tenant/rhtpa-product-0-3-z@sha256:01c2ae1f052c61d14dc7981a86c565db58ac5b219246c8de323eef05e3bd8f05'
     pullPolicy: IfNotPresent
   infrastructure:
     port: 9010

@@ -50,7 +50,7 @@ spec:
   make podman-push
   make bundle-build
   make bundle-push
-  operator-sdk run bundle -n trustify quay.io/<your_username>/trustification-operator-bundle:v2.1.0
+  operator-sdk run bundle -n trustify quay.io/<your_username>/trustification-operator-bundle:v1.1.0
 ```
 
 # Deploy an instance
