@@ -54,7 +54,7 @@ spec:
 ```
 
 # Deploy an instance
-From the UI or from cli with
+From the UI or from cli with the values of trustify of namespace and services configured from helm-chart infrastructure
 ```console
 kubectl apply -f trusted-profile-analyzer-demo.yaml
 ```
