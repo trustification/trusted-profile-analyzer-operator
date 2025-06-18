@@ -21,12 +21,22 @@ bin
 # Go workspace file
 go.work
 go.work.sum
+vendor
 
 # env file
 .env
 
 # editor and IDE paraphernalia
 .idea
+.vscode
 *.swp
 *.swo
 *~
+.vscode
+
+# macos
+.DS_Store
+
+# potato
+.DS_Store
+bundle/.DS_Store
