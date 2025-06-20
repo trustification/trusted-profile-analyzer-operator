@@ -1,5 +1,5 @@
 kind: TrustedProfileAnalyzer
-apiVersion: charts.rhtpa.io/v1
+apiVersion: rhtpa.io/v1
 metadata:
   name: rhtpa-demo
   namespace: trustify
@@ -32,7 +32,7 @@ spec:
           name: infrastructure-postgresql
           key: postgres-password
   image:
-    fullName: 'registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:3d17f211ae1272d4179adb8a152b0fd5ab6eabcacf1e52ecf87a329d93044eb3'
+    fullName: 'registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:01c2ae1f052c61d14dc7981a86c565db58ac5b219246c8de323eef05e3bd8f05'
     pullPolicy: IfNotPresent
   infrastructure:
     port: 9010
@@ -81,6 +81,13 @@ spec:
             source: https://github.com/github/advisory-database
             path: advisories
             disabled: false
+        quay-redhat-user-workloads:
+          quay:
+            description: SBOMs from konflux image attachments
+            period: 1d
+            source: quay.io
+            namespace: redhat-user-workloads
+            disabled: true
     importer:
       concurrency: 4
       enabled: true

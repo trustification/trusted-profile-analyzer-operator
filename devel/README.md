@@ -25,7 +25,7 @@
 ```
 
 # Container repository
-- Replace ```registry.redhat.io/rhtpa/rhtpa-operator-rhel9``` occurrences with your registry like quay.io/<your_username>/rhtpa-rhel9-operator 
+- Replace ```registry.redhat.io/rhtpa/rhtpa-rhel9-operator``` occurrences with your registry like quay.io/<your_username>/rhtpa-rhel9-operator 
   or map on the crc/ocp with a registry mirroring 
   
 ```console
@@ -50,11 +50,11 @@ spec:
   make podman-push
   make bundle-build
   make bundle-push
-  operator-sdk run bundle -n trustify quay.io/<your_username>/trustification-operator-bundle:v2.1.0
+  operator-sdk run bundle -n trustify quay.io/<your_username>/trustification-operator-bundle:v1.0.0
 ```
 
 # Deploy an instance
-From the UI or from cli with
+From the UI or from cli with the values of trustify of namespace and services configured from helm-chart infrastructure
 ```console
 kubectl apply -f trusted-profile-analyzer-demo.yaml
 ```

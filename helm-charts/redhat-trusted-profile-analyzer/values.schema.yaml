@@ -195,6 +195,7 @@ properties:
                   The max number of import jobs that may run concurrently
               storageClassName:
                 type: string
+
       createDatabase:
         description: |
           Job to create a database in a PostgreSQL instance

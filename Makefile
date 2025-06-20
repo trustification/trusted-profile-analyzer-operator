@@ -32,7 +32,7 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 # This variable is used to construct full image tags for bundle and catalog images.
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
-# trustification.io/rhtpa-operator-bundle:$VERSION and trustification.io/rhtpa-operator-catalog:$VERSION.
+# registry.redhat.io/rhtpa/rhtpa-operator-bundle:$VERSION and registry.redhat.io/rhtpa/rhtpa-operator-catalog:$VERSION.
 IMAGE_TAG_BASE ?= registry.redhat.io/rhtpa/rhtpa-rhel9-operator
 #IMAGE_DIGEST ?=
 
@@ -56,7 +56,8 @@ endif
 
 # Set the Operator SDK version to use. By default, what is installed on the system is used.
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
-OPERATOR_SDK_VERSION ?= v1.39.2
+OPERATOR_SDK_VERSION ?= v1.40.0
+OPM_VERSION = v1.55.0
 
 # Image URL to use all building/pushing image targets
 ifdef IMAGE_TAG
@@ -85,6 +86,28 @@ all: podman-build
 .PHONY: help
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+##@ Development
+
+.PHONY: manifests
+manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+
+.PHONY: generate
+generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+	$(CONTROLLER_GEN) object:headerFile="" paths="./..."
+
+.PHONY: fmt
+fmt: ## Run go fmt against code.
+	go fmt ./...
+
+.PHONY: vet
+vet: ## Run go vet against code.
+	go vet ./...
+
+.PHONY: test
+test: manifests generate fmt vet envtest ## Run tests.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
 
 ##@ Build
 
@@ -160,6 +183,16 @@ KUSTOMIZE = $(shell which kustomize)
 endif
 endif
 
+.PHONY: controller-gen
+controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
+$(CONTROLLER_GEN): $(LOCALBIN)
+	test -s $(LOCALBIN)/controller-gen || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
+
+.PHONY: envtest
+envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
+$(ENVTEST): $(LOCALBIN)
+	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+
 .PHONY: helm-operator
 HELM_OPERATOR = $(shell pwd)/bin/helm-operator
 helm-operator: ## Download helm-operator locally if necessary, preferring the $(pwd)/bin path over global if both exist.
@@ -215,7 +248,7 @@ ifeq (,$(shell which opm 2>/dev/null))
 	@{ \
 	set -e ;\
 	mkdir -p $(dir $(OPM)) ;\
-	curl -sSLo $(OPM) https://github.com/operator-framework/operator-registry/releases/download/v1.23.0/$(OS)-$(ARCH)-opm ;\
+	curl -sSLo $(OPM) https://github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/$(OS)-$(ARCH)-opm ;\
 	chmod +x $(OPM) ;\
 	}
 else
