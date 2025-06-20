@@ -8,7 +8,7 @@ metadata:
   name: rhtpa-operator-trustedprofileanalyzer-viewer-role
 rules:
 - apiGroups:
-  - charts.rhtpa.io
+  - rhtpa.io
   resources:
   - trustedprofileanalyzers
   verbs:
@@ -16,7 +16,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - charts.rhtpa.io
+  - rhtpa.io
   resources:
   - trustedprofileanalyzers/status
   verbs:

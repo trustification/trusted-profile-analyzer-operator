@@ -3,10 +3,10 @@
   path: /spec/template/spec/containers/0/args/0
   value: --metrics-bind-address=:8443
 # This patch adds the args to allow securing the metrics endpoint
-- op: add
-  path: /spec/template/spec/containers/0/args/0
-  value: --metrics-secure
+#- op: add
+#  path: /spec/template/spec/containers/0/args/0
+#  value: --metrics-secure
 # This patch adds the args to allow RBAC-based authn/authz the metrics endpoint
-- op: add
-  path: /spec/template/spec/containers/0/args/0
-  value: --metrics-require-rbac
+#- op: add
+#  path: /spec/template/spec/containers/0/args/0
+#  value: --metrics-require-rbac

@@ -5,7 +5,7 @@ metadata:
     alm-examples: |-
       [
         {
-          "apiVersion": "charts.rhtpa.io/v1",
+          "apiVersion": "rhtpa.io/v1",
           "kind": "TrustedProfileAnalyzer",
           "metadata": {
             "name": "trustedprofileanalyzer-sample"
@@ -19,7 +19,7 @@ metadata:
             },
             "database": {},
             "image": {
-              "fullName": "registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:3d17f211ae1272d4179adb8a152b0fd5ab6eabcacf1e52ecf87a329d93044eb3",
+              "fullName": "registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:01c2ae1f052c61d14dc7981a86c565db58ac5b219246c8de323eef05e3bd8f05",
               "pullPolicy": "IfNotPresent"
             },
             "infrastructure": {
@@ -103,11 +103,22 @@ metadata:
       ]
     capabilities: Basic Install
     createdAt: "2025-05-14T10:10:42Z"
-    operators.operatorframework.io/builder: operator-sdk-v1.39.2
+    operators.operatorframework.io/builder: operator-sdk-v1.40.0
     operators.operatorframework.io/project_layout: helm.sdk.operatorframework.io/v1
+    features.operators.openshift.io/cnf: "false"
+    features.operators.openshift.io/cni: "false"
+    features.operators.openshift.io/csi: "false"
+    features.operators.openshift.io/disconnected: "false"
+    features.operators.openshift.io/fips-compliant: "false"
+    features.operators.openshift.io/proxy-aware: "true"
+    features.operators.openshift.io/tls-profiles: "false"
+    features.operators.openshift.io/token-auth-aws: "false"
+    features.operators.openshift.io/token-auth-azure: "false"
+    features.operators.openshift.io/token-auth-gcp: "false"
+    operators.openshift.io/valid-subscription: '["Red Hat Trusted Profile Analyzer"]'
     support: Red Hat
     repository: https://github.com/trustification/trusted-profile-analyzer-operator
-    containerImage: registry.redhat.io/rhtpa/rhtpa-operator-rhel9@sha256:69050d1a7b6ab496de5ceb76e51b0cf851fe92a7db4a08b6e5469583663f6c91
+    containerImage: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:ad15c24c94c36c24f125673796d1f2bcd645e1078eb5a22dd284a1494f1621bb
   name: rhtpa-operator.v1.0.0
   namespace: placeholder
 spec:
@@ -115,7 +126,7 @@ spec:
   customresourcedefinitions:
     owned:
     - kind: TrustedProfileAnalyzer
-      name: trustedprofileanalyzers.charts.rhtpa.io
+      name: trustedprofileanalyzers.rhtpa.io
       version: v1
   description: |
     Red Hat Trusted Profile Analyzer is a proactive service that assists in risk management of Open Source Software (OSS) packages and dependencies. The Trusted Profile Analyzer service brings awareness to and remediation of OSS vulnerabilities discovered within the software supply chain.
@@ -146,7 +157,7 @@ spec:
           verbs:
           - create
         - apiGroups:
-          - charts.trustification.io
+          - rhtpa.io
           resources:
           - trustedprofileanalyzers
           - trustedprofileanalyzers/status
@@ -227,13 +238,13 @@ spec:
             spec:
               containers:
               - args:
-                - --metrics-require-rbac
-                - --metrics-secure
+                #- --metrics-require-rbac
+                #- --metrics-secure
                 - --metrics-bind-address=:8443
                 - --leader-elect
-                - --leader-election-id=rhtpa-operator
+                #- --leader-election-id=195237d9.rhtpa-operator
                 - --health-probe-bind-address=:8081
-                image: registry.redhat.io/rhtpa/rhtpa-operator-rhel9:1.0.0
+                image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:ad15c24c94c36c24f125673796d1f2bcd645e1078eb5a22dd284a1494f1621bb
                 livenessProbe:
                   httpGet:
                     path: /healthz
