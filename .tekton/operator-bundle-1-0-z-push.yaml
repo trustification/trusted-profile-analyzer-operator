@@ -8,7 +8,7 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "release/1.0.z"
+      == "release/1.0.z" && (.tekton/operator-bundle-1-0-z-push-request.yaml".pathChanged() || "bundle.Dockerfile".pathChanged())
       #&& (
       #".tekton/operator-1-0-z-push-request.yaml".pathChanged() ||
       #".tekton/operator-bundle-1-0-z-push-request.yaml".pathChanged() ||
@@ -37,6 +37,10 @@ spec:
     value: .
   - name: manager-registry-url
     value: registry.redhat.io/rhtpa/rhtpa-rhel9-operator
+  - name: build-source-image
+    value: "true"
+  - name: hermetic
+    value: "false"
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while maintaining trust after pipeline customization.
