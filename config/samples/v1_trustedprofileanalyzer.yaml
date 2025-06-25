@@ -10,7 +10,7 @@ spec:
       enabled: false
   database: {}
   image:
-    fullName: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:01c2ae1f052c61d14dc7981a86c565db58ac5b219246c8de323eef05e3bd8f05
+    fullName: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:95eeea76c9a219761daace6f2a1d5a8cc5f0d37eaf8e670513703104e0578246
     pullPolicy: IfNotPresent
   infrastructure:
     port: 9010
