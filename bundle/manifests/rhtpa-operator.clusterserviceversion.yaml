@@ -118,7 +118,7 @@ metadata:
     operators.openshift.io/valid-subscription: '["Red Hat Trusted Profile Analyzer"]'
     support: Red Hat
     repository: https://github.com/trustification/trusted-profile-analyzer-operator
-    containerImage: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:844a033e2b56894590d5e2b14fda0e920ebed136ada911a2d08a540e897cc3da
+    containerImage: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:106dc5bb2f8e6bff9ae25b4db057d4ba9931b3d9efbe8962777e7849bc5d7364
   name: rhtpa-operator.v1.0.0
   namespace: placeholder
 spec:
@@ -244,7 +244,7 @@ spec:
                 - --leader-elect
                 #- --leader-election-id=195237d9.rhtpa-operator
                 - --health-probe-bind-address=:8081
-                image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:844a033e2b56894590d5e2b14fda0e920ebed136ada911a2d08a540e897cc3da
+                image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:106dc5bb2f8e6bff9ae25b4db057d4ba9931b3d9efbe8962777e7849bc5d7364
                 livenessProbe:
                   httpGet:
                     path: /healthz
