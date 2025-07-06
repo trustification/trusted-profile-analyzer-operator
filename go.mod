@@ -28,7 +28,7 @@ require (
 	github.com/containerd/containerd v1.7.27 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
-	github.com/containerd/platforms v0.2.1 // indirect
+	github.com/containerd/platforms v1.0.0-rc.1 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/docker/docker-credential-helpers v0.9.3 // indirect
@@ -106,6 +106,8 @@ require (
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.35.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.35.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
