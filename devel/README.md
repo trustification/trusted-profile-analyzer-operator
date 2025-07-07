@@ -13,7 +13,7 @@
 - Download the repo https://github.com/trustification/trustify-helm-charts/ 
 ```console 
   NAMESPACE=trustify APP_DOMAIN=-$NAMESPACE.$(oc -n openshift-ingress-operator get ingresscontrollers.operator.openshift.io default -o jsonpath='{.status.domain}')
-  helm upgrade --install --dependency-update -n $NAMESPACE infrastructure charts/trustify-infrastructure --values values-ocp-no-aws-crc.yaml  --set-string keycloak.ingress.hostname=sso$APP_DOMAIN --set-string appDomain=$APP_DOMAIN
+  helm upgrade --install --dependency-update -n $NAMESPACE infrastructure charts/trustify-infrastructure --values values-ocp-no-aws-crc.yaml  --set-string keycloak.ingress.hostname=sso$APP_DOMAIN --set-string appDomain=$APP_DOMAIN --set tracing.enabled=true --set metrics.enabled=true --set-string collector.endpoint="http://infrastructure-otelcol:4317"
 ```
 
 # RBAC
@@ -48,9 +48,12 @@ spec:
 ```console
   make podman-build
   make podman-push
+ ```
+update the operator sha and then run
+```console
   make bundle-build
   make bundle-push
-  operator-sdk run bundle -n trustify quay.io/<your_username>/trustification-operator-bundle:v1.0.0
+  operator-sdk run bundle -n trustify quay.io/<your_username>/rhtpa-rhel9-operator-bundle:v1.0.0
 ```
 
 # Deploy an instance
@@ -58,3 +61,10 @@ From the UI or from cli with the values of trustify of namespace and services co
 ```console
 kubectl apply -f trusted-profile-analyzer-demo.yaml
 ```
+
+# Cleanup an instance
+From the UI
+- Delete deployment rhtpa-operator-controller-manager 
+- Delete subscription rhtpa-operator-v1-0-0-sub
+- Delete catalogSource rhtpa-operator-catalog
+
