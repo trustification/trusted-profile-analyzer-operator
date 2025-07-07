@@ -19,9 +19,9 @@ Arguments (dict):
 {{- include "_trustification.storage.common.envVars" ( set (deepCopy .) "storage" .storage ) }}
 
 {{- if eq .storage.type "filesystem" }}
-{{- include "_trustification.storage.filesystem.envVars" . }}
+{{ include "_trustification.storage.filesystem.envVars" . }}
 {{- else if eq .storage.type "s3" }}
-{{- include "_trustification.storage.s3.envVars" . }}
+{{ include "_trustification.storage.s3.envVars" . }}
 {{- else }}
 {{- fail ".storage.type must either be set to 'filesystem' or 's3'" }}
 {{- end }}
@@ -54,19 +54,20 @@ Arguments (dict):
   {{- include "trustification.common.envVarValue" .storage.accessKey | nindent 2 }}
 - name: TRUSTD_S3_SECRET_KEY
   {{- include "trustification.common.envVarValue" .storage.secretKey | nindent 2 }}
-
-{{ if .storage.endpoint }}
-- name: TRUSTD_S3_ENDPOINT
-  value: {{ .storage.endpoint | quote }}
-- name: TRUSTD_S3_REGION
-  value: "eu-west-1" # just a dummy value
-{{ else }}
 - name: TRUSTD_S3_REGION
   {{- include "trustification.common.envVarValue" .storage.region | nindent 2 }}
-{{ end }}
-
 - name: TRUSTD_S3_BUCKET
   value: {{ .storage.bucket | quote }}
+
+{{- with .storage.pathStyle }}
+- name: TRUSTD_S3_PATH_STYLE
+  value: {{ . | quote }}
+{{- end }}
+
+{{- with .root.Values.tls.additionalTrustAnchor }}
+- name: TRUSTD_S3_TRUST_ANCHORS
+  value: {{ . | quote }}
+{{- end }}
 
 {{- end }}
 

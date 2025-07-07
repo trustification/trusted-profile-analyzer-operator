@@ -9,7 +9,7 @@ metadata:
 
   annotations:
     {{- include "trustification.application.annotations" $mod | nindent 4 }}
-    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook: PreSync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
     argocd.argoproj.io/sync-wave: "3"
     helm.sh/hook-weight: "20"

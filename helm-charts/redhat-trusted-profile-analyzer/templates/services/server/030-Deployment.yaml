@@ -58,11 +58,6 @@ spec:
             - name: UI_CLIENT_ID
               value: {{ include "trustification.oidc.frontendClientId" . }}
 
-            {{- with $mod.module.analyticsWriteKey }}
-            - name: UI_ANALYTICS_WRITE_KEY
-              value: {{ . | quote }}
-            {{- end }}
-
             {{- with $mod.module.uploadLimit }}
             - name: TRUSTD_SBOM_UPLOAD_LIMIT
               value: {{ include "trustification.common.byteSizeValue" . }}
@@ -72,7 +67,11 @@ spec:
               value: {{ include "trustification.common.byteSizeValue" . }}
             {{- end }}
 
-            {{/* FIXME: adapt env-var */}}
+            {{- with $mod.module.maximumCacheSize }}
+            - name: TRUSTD_MAX_CACHE_SIZE
+              value: {{ . | quote }}
+            {{- end }}
+
             {{- if eq ( include "trustification.openshift.useServiceCa" .root ) "true" }}
             - name: CLIENT_TLS_CA_CERTIFICATES
               value: /run/secrets/kubernetes.io/serviceaccount/service-ca.crt
