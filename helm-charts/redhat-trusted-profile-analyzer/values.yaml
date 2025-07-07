@@ -34,9 +34,7 @@ metrics:
 tracing:
   enabled: false
 
-collector:
-  deployment:
-    enabled: false
+collector: {}
 
 modules:
   server:
