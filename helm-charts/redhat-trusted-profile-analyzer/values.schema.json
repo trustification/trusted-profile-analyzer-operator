@@ -6,8 +6,7 @@
   "required": [
     "appDomain",
     "tracing",
-    "metrics",
-    "collector"
+    "metrics"
   ],
   "properties": {
     "$schema": {
@@ -121,9 +120,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "deployment": {
-          "$ref": "#/definitions/OtelDeployment"
-        },
         "endpoint": {
           "type": "string",
           "description": "OpenTelemetry collector endpoint for tracing and metrics.\n"
@@ -188,10 +184,11 @@
             {
               "type": "object",
               "properties": {
-                "analyticsWriteKey": {
-                  "type": "string"
-                },
                 "uploadLimit": {
+                  "$ref": "#/definitions/ByteSize"
+                },
+                "maximumCacheSize": {
+                  "description": "The maximum number of the bytes the analysis cache will hold before evicting entries.\n",
                   "$ref": "#/definitions/ByteSize"
                 }
               }
@@ -342,6 +339,54 @@
       "$ref": "#/definitions/Feature"
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "anyOf": [
+          {
+            "properties": {
+              "metrics": {
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "tracing": {
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "then": {
+        "required": [
+          "collector"
+        ],
+        "properties": {
+          "collector": {
+            "required": [
+              "endpoint"
+            ]
+          }
+        }
+      }
+    }
+  ],
   "definitions": {
     "Scalable": {
       "description": "Configuration options for a scalable deployment.\n",
@@ -819,6 +864,10 @@
         },
         "storageClassName": {
           "type": "string"
+        },
+        "compression": {
+          "$ref": "#/definitions/StorageCompression",
+          "description": "The compression algorithm used when storing documents.\n"
         }
       }
     },
@@ -829,7 +878,8 @@
         "type",
         "accessKey",
         "secretKey",
-        "bucket"
+        "bucket",
+        "region"
       ],
       "additionalProperties": false,
       "properties": {
@@ -848,35 +898,29 @@
           "$ref": "#/definitions/ValueOrRef"
         },
         "bucket": {
-          "type": "string"
+          "type": "string",
+          "description": "The name of the bucket.\n"
         },
-        "region": true,
-        "endpoint": true
-      },
-      "oneOf": [
-        {
-          "type": "object",
-          "required": [
-            "region"
-          ],
-          "properties": {
-            "region": {
-              "$ref": "#/definitions/ValueOrRef"
-            }
-          }
+        "region": {
+          "$ref": "#/definitions/ValueOrRef",
+          "description": "The AWS region of the bucket, or an endpoint.\n"
         },
-        {
-          "type": "object",
-          "required": [
-            "endpoint"
-          ],
-          "properties": {
-            "endpoint": {
-              "type": "string",
-              "format": "uri"
-            }
-          }
+        "compression": {
+          "$ref": "#/definitions/StorageCompression",
+          "description": "The compression algorithm used when storing documents.\n"
+        },
+        "pathStyle": {
+          "type": "boolean",
+          "description": "Allow enabling path style access.\n"
         }
+      }
+    },
+    "StorageCompression": {
+      "type": "string",
+      "default": "none",
+      "enum": [
+        "none",
+        "zstd"
       ]
     },
     "Postgres": {
@@ -974,19 +1018,6 @@
           "type": "number",
           "minimum": 1,
           "description": "The number of HTTP workers of the Actix application.\n\nAlso see: <https://actix.rs/docs/server/#multi-threading>\n"
-        }
-      }
-    },
-    "OtelDeployment": {
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Enable the deployment of the OpenTelemetry collector"
-        },
-        "config": {
-          "type": "object",
-          "description": "The OTEL collector configuration. If not present, a default will be generated.\n"
         }
       }
     }
