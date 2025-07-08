@@ -11,8 +11,18 @@ spec:
   containers:
     - name: test
       image: registry.access.redhat.com/ubi9/ubi-minimal:latest
-      command:
-        - curl
-        - -k
-        - https://server:443/
+      command: ["sh", "-c"]
+      args:
+        - |
+          for _ in $(seq 1 24); do
+            date
+            if curl -k https://server:443/; then
+              echo "Success"
+              exit 0
+            fi
+            echo
+            sleep 5
+          done;
+          echo "Failed"'
+          exit 1
   restartPolicy: Never
