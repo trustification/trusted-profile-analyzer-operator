@@ -310,13 +310,13 @@ spec:
         serviceAccountName: rhtpa-operator-controller-manager
     strategy: deployment
   installModes:
-  - supported: false
-    type: OwnNamespace
-  - supported: false
+  - supported: true
+    type:
+  - supported: true
     type: SingleNamespace
   - supported: false
     type: MultiNamespace
-  - supported: true
+  - supported: false
     type: AllNamespaces
   keywords:
   - rhtpa
