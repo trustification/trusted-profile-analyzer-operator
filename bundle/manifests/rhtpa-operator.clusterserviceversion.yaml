@@ -311,7 +311,7 @@ spec:
     strategy: deployment
   installModes:
   - supported: true
-    type:
+    type: OwnNamespace
   - supported: true
     type: SingleNamespace
   - supported: false
