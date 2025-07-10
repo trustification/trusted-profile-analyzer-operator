@@ -6,4 +6,4 @@ metadata:
 rules:
 - apiGroups: ["networking.k8s.io"]
   resources: ["ingresses"]
-  verbs: ["create", "get", "list", "watch"]
+  verbs: ["create", "get", "list", "watch", "delete"]
