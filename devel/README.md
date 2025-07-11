@@ -24,6 +24,7 @@ or if you want to enable metrics and tracing
 ```
 
 # RBAC
+// @TODO remove after added on the /config/rbac
 ```console
   kubectl apply -f role-ingress.yaml
   kubectl apply -f rolebinding-ingress.yaml
