@@ -29,6 +29,8 @@ or if you want to enable metrics and tracing
   kubectl apply -f rolebinding-ingress.yaml
   kubectl apply -f role-job.yaml
   kubectl apply -f rolebinding-job.yaml
+  kubectl apply -f clusterRoleBinding.yaml
+  kubectl apply -f clusterRoleIngress.yaml
 ```
 
 # Container repository
