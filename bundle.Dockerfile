@@ -14,6 +14,8 @@ LABEL vendor="Red Hat, Inc."
 LABEL distribution-scope="public"
 LABEL url="https://www.redhat.com"
 LABEL version="1.0.0"
+LABEL cpe="cpe:/a:redhat:trusted_profile_analyzer:2.1::el9"
+LABEL org.opencontainers.image.created="${SOURCE_DATE_EPOCH}"
 
 LABEL features.operators.openshift.io/cni="false"
 LABEL features.operators.openshift.io/disconnected="false"
@@ -33,9 +35,9 @@ LABEL operators.operatorframework.io.bundle.package.v1=rhtpa-operator
 LABEL operators.operatorframework.io.bundle.channels.v1=stable,stable-v1.0
 LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.40.0
 LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
-LABEL operators.operatorframework.io.metrics.project_layout=helm.sdk.operatorframework.io/v1
-LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v4
+LABEL operators.operatorframework.io.metrics.project_layout=hybrid.helm.sdk.operatorframework.io/v1-alpha
 LABEL operators.openshift.io/valid-subscription="Red Hat Trusted Profile Analyzer"
+
 # Labels for testing.
 LABEL operators.operatorframework.io.test.mediatype.v1=scorecard+v1
 LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/
