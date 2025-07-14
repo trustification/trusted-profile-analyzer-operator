@@ -2,11 +2,9 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: bind-get-ingress
-  namespace: trustify
 subjects:
 - kind: ServiceAccount
   name: rhtpa-operator-controller-manager
-  namespace: trustify
 roleRef:
   kind: Role
   name: allow-get-ingress
