@@ -40,17 +40,6 @@ LABEL summary="RHTPA Operator"
 LABEL release=1.0.0
 LABEL maintainer="Red Hat"
 
-LABEL com.redhat.component="rhtpa-operator"
-LABEL description="Red Hat Trusted Profile Analyzer Operator image"
-LABEL io.k8s.description="Red Hat Trusted Profile Analyzer Operator image"
-LABEL io.k8s.display-name="RHTPA operator container image for Red Hat Trusted Profile Analyzer"
-LABEL io.openshift.tags="RHTPA, rhtpa-operator, Red Hat Trusted Profile Analyzer"
-LABEL name="rhtpa-operator"
-LABEL org.opencontainers.image.source="https://github.com/trustification/trusted-profile-analyzer-operator"
-LABEL summary="RHTPA Operator"
-LABEL release=1.0.0
-LABEL maintainer="Red Hat"
-
 RUN microdnf update -y && microdnf clean all -y
 
 ENV HOME=/opt/helm \
