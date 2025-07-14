@@ -23,17 +23,6 @@ or if you want to enable metrics and tracing
   helm upgrade --install --dependency-update -n $NAMESPACE infrastructure charts/trustify-infrastructure --values values-ocp-no-aws-crc.yaml  --set-string keycloak.ingress.hostname=sso$APP_DOMAIN --set-string appDomain=$APP_DOMAIN --set tracing.enabled=true --set metrics.enabled=true --set-string collector.endpoint="http://infrastructure-otelcol:4317"
 ```
 
-# RBAC
-// @TODO remove after added on the /config/rbac
-```console
-  kubectl apply -f role-ingress.yaml
-  kubectl apply -f rolebinding-ingress.yaml
-  kubectl apply -f role-job.yaml
-  kubectl apply -f rolebinding-job.yaml
-  kubectl apply -f clusterRoleBinding.yaml
-  kubectl apply -f clusterRoleIngress.yaml
-```
-
 # Container repository
 - Replace ```registry.redhat.io/rhtpa/rhtpa-rhel9-operator``` occurrences with your registry like quay.io/<your_username>/rhtpa-rhel9-operator 
   or map on the crc/ocp with a registry mirroring 
