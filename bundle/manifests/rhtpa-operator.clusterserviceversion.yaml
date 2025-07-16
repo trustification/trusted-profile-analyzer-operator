@@ -19,7 +19,7 @@ metadata:
             },
             "database": {},
             "image": {
-              "fullName": "registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:a2292b85edeb3a1b1e2487b842dd569dad3617734b2ea355b616e97030be016f",
+              "fullName": "registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:ed67a8b0d4fc3fd5ce4dffcebc534290e97df6a99c55c4830bb150fc4d0f4825",
               "pullPolicy": "IfNotPresent"
             },
             "infrastructure": {
