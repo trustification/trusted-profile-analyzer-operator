@@ -35,7 +35,7 @@ LABEL operators.operatorframework.io.bundle.package.v1=rhtpa-operator
 LABEL operators.operatorframework.io.bundle.channels.v1=stable,stable-v1.0
 LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.40.0
 LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
-LABEL operators.operatorframework.io.metrics.project_layout=hybrid.helm.sdk.operatorframework.io/v1-alpha
+LABEL operators.operatorframework.io.metrics.project_layout=helm.sdk.operatorframework.io/v1
 LABEL operators.openshift.io/valid-subscription="Red Hat Trusted Profile Analyzer"
 
 # Labels for testing.

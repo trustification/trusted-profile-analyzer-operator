@@ -104,7 +104,7 @@ metadata:
     capabilities: Basic Install
     createdAt: "2025-05-14T10:10:42Z"
     operators.operatorframework.io/builder: operator-sdk-v1.40.0
-    operators.operatorframework.io/project_layout: hybrid.helm.sdk.operatorframework.io/v1-alpha
+    operators.operatorframework.io/project_layout: helm.sdk.operatorframework.io/v1
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
