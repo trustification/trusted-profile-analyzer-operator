@@ -4,8 +4,8 @@
 # More info: https://book.kubebuilder.io/reference/project-config.html
 domain: trustification.io
 layout:
-#- helm.sdk.operatorframework.io/v1
-- hybrid.helm.sdk.operatorframework.io/v1-alpha
+- helm.sdk.operatorframework.io/v1
+# - hybrid.helm.sdk.operatorframework.io/v1-alpha
 plugins:
   manifests.sdk.operatorframework.io/v2: {}
   scorecard.sdk.operatorframework.io/v2: {}
