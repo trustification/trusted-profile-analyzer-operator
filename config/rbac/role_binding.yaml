@@ -25,15 +25,17 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: rhtpa-operator-controller-manager
-    namespace: system
+    namespace: placeholder
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: bind-get-ingress
+  namespace: placeholder
 subjects:
   - kind: ServiceAccount
     name: rhtpa-operator-controller-manager
+    namespace: placeholder
 roleRef:
   kind: Role
   name: allow-get-ingress
@@ -43,6 +45,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: bind-job
+  namespace: placeholder
 subjects:
   - kind: ServiceAccount
     name: rhtpa-operator-controller-manager
