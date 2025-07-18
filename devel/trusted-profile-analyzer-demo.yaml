@@ -5,9 +5,7 @@ metadata:
   namespace: trustify
 spec:
   appDomain: -trustify.apps-crc.testing
-  collector:
-    deployment:
-      enabled: false
+  collector: {}
 
   createDatabase:
     name: postgres

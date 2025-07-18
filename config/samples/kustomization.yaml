@@ -1,4 +1,4 @@
 ## Append samples of your project ##
 resources:
-- cv1_trustedprofileanalyzer.yaml
+- v1_trustedprofileanalyzer.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

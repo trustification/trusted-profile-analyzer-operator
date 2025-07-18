@@ -12,11 +12,7 @@ metadata:
           },
           "spec": {
             "appDomain": "change-me",
-            "collector": {
-              "deployment": {
-                "enabled": false
-              }
-            },
+            "collector": {},
             "database": {},
             "image": {
               "fullName": "registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:ed67a8b0d4fc3fd5ce4dffcebc534290e97df6a99c55c4830bb150fc4d0f4825",
@@ -102,23 +98,20 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-05-14T10:10:42Z"
-    operators.operatorframework.io/builder: operator-sdk-v1.40.0
-    operators.operatorframework.io/project_layout: helm.sdk.operatorframework.io/v1
+    createdAt: "2025-07-18T10:37:17Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
     features.operators.openshift.io/disconnected: "false"
     features.operators.openshift.io/fips-compliant: "false"
-    features.operators.openshift.io/proxy-aware: "true"
+    features.operators.openshift.io/proxy-aware: "false"
     features.operators.openshift.io/tls-profiles: "false"
     features.operators.openshift.io/token-auth-aws: "false"
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
     operators.openshift.io/valid-subscription: '["Red Hat Trusted Profile Analyzer"]'
-    support: Red Hat
-    repository: https://github.com/trustification/trusted-profile-analyzer-operator
-    containerImage: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:2a6e65ea68f711d6a08bef58c85874c558236f03cc695c21d6feb27dc4e0e4a9
+    operators.operatorframework.io/builder: operator-sdk-v1.40.0
+    operators.operatorframework.io/project_layout: helm.sdk.operatorframework.io/v1
   name: rhtpa-operator.v1.0.0
   namespace: placeholder
 spec:
@@ -277,6 +270,26 @@ spec:
       permissions:
       - rules:
         - apiGroups:
+          - networking.k8s.io
+          resources:
+          - ingresses
+          verbs:
+          - create
+          - get
+          - list
+          - watch
+          - delete
+        - apiGroups:
+          - batch
+          resources:
+          - jobs
+          verbs:
+          - create
+          - get
+          - list
+          - watch
+          - delete
+        - apiGroups:
           - ""
           resources:
           - configmaps
@@ -322,11 +335,11 @@ spec:
   - rhtpa
   - trusted-profile-analyzer
   links:
-  - name: RHTPA Operator
-    url: https://rhtpa-operator.domain
+  - name: Trusted Profile Analyzer Operator
+    url: https://github.com/trustification/trusted-profile-analyzer-operator
   maintainers:
-    - email: rhtpa-support@redhat.com
-      name: Red Hat
+  - email: rhtpa-support@redhat.com
+    name: Red Hat
   maturity: alpha
   minKubeVersion: 1.29.0
   provider:
