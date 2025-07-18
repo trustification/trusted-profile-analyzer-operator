@@ -5,9 +5,7 @@ metadata:
 spec:
   # Default values copied from <project_dir>/helm-charts/redhat-trusted-profile-analyzer/values.yaml
   appDomain: change-me
-  collector:
-    deployment:
-      enabled: false
+  collector: {}
   database: {}
   image:
     fullName: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:ed67a8b0d4fc3fd5ce4dffcebc534290e97df6a99c55c4830bb150fc4d0f4825

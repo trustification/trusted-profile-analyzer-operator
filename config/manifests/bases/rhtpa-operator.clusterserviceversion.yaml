@@ -4,12 +4,12 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
+    features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
+    features.operators.openshift.io/csi: "false"
     features.operators.openshift.io/disconnected: "false"
     features.operators.openshift.io/fips-compliant: "false"
     features.operators.openshift.io/proxy-aware: "false"
-    features.operators.openshift.io/cnf: "false"
-    features.operators.openshift.io/csi: "false"
     features.operators.openshift.io/tls-profiles: "false"
     features.operators.openshift.io/token-auth-aws: "false"
     features.operators.openshift.io/token-auth-azure: "false"
@@ -40,13 +40,13 @@ spec:
     type: AllNamespaces
   keywords:
   - rhtpa
-  - trust-analyzer
+  - trusted-profile-analyzer
   links:
   - name: Trusted Profile Analyzer Operator
     url: https://github.com/trustification/trusted-profile-analyzer-operator
   maintainers:
-    - email: rhtpa-support@redhat.com
-      name: Red Hat
+  - email: rhtpa-support@redhat.com
+    name: Red Hat
   maturity: alpha
   minKubeVersion: 1.29.0
   provider:

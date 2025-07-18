@@ -9,9 +9,9 @@ spec:
     kind: TrustedProfileAnalyzer
     listKind: TrustedProfileAnalyzerList
     plural: trustedprofileanalyzers
-    singular: trustedprofileanalyzer
     shortNames:
-      - rhtpa
+    - rhtpa
+    singular: trustedprofileanalyzer
   scope: Namespaced
   versions:
   - name: v1
