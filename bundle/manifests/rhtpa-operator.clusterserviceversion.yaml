@@ -237,7 +237,7 @@ spec:
                 - --leader-elect
                 #- --leader-election-id=195237d9.rhtpa-operator
                 - --health-probe-bind-address=:8081
-                image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:17d1aea49cf36349ef97982f74add56f373dbd61d55394747ce093105095c2e9
+                image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:b271d8a8e4beff137cefce6beee0133f6cc023b0791f2a2b5927c5aadd30f932
                 livenessProbe:
                   httpGet:
                     path: /healthz
