@@ -244,7 +244,7 @@ spec:
                       - --metrics-bind-address=:8443
                       - --leader-elect
                       - --health-probe-bind-address=:8081
-                    image: quay.io/mdessi/rhtpa-rhel9-operator@sha256:b9b7d35743903836b283bf0c0209223cbfdfb02b573b396d3c83396bdb72239f
+                    image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:b271d8a8e4beff137cefce6beee0133f6cc023b0791f2a2b5927c5aadd30f932
                     livenessProbe:
                       httpGet:
                         path: /healthz
