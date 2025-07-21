@@ -30,9 +30,9 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o ma
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 LABEL com.redhat.component="rhtpa-operator"
-LABEL description="Red Hat Trusted Profile Analyzer Operator image"
-LABEL io.k8s.description="Red Hat Trusted Profile Analyzer Operator image"
-LABEL io.k8s.display-name="RHTPA operator container image for Red Hat Trusted Profile Analyzer"
+LABEL description="Red Hat Trusted Profile Analyzer Operator"
+LABEL io.k8s.description="Red Hat Trusted Profile Analyzer Operator"
+LABEL io.k8s.display-name="RHTPA operator for Red Hat Trusted Profile Analyzer"
 LABEL io.openshift.tags="RHTPA, rhtpa-operator, Red Hat Trusted Profile Analyzer"
 LABEL name="rhtpa-operator"
 LABEL org.opencontainers.image.source="https://github.com/trustification/trusted-profile-analyzer-operator"
