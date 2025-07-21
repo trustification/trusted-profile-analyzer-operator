@@ -13,6 +13,8 @@ resources:
 - rolebinding_ingress.yaml
 - role_job.yaml
 - rolebinding_job.yaml
+- role_cluster_ingress.yaml
+- role_cluster_ingress_binding.yaml
 # The following RBAC configurations are used to protect
 # the metrics endpoint with authn/authz. These configurations
 # ensure that only authorized users and service accounts
