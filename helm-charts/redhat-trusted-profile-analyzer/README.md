@@ -6,4 +6,4 @@ Designed for development and security teams to gain visibility and insights into
 
 This Helm chart requires some Amazon Web Services resources to be provided by the user.
 
-For detailed instructions on how to deploy this Helm chart, please check [Red Hat Trusted Profile Analyzer documentation](https://access.redhat.com/documentation/en-us/red_hat_trusted_profile_analyzer/2.0/html/deployment_guide/index).
+For detailed instructions on how to deploy this Helm chart, please check [Red Hat Trusted Profile Analyzer documentation](https://docs.redhat.com/en/documentation/red_hat_trusted_profile_analyzer/2.0/html/deployment_guide/index).
