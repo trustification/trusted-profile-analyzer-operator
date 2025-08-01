@@ -1,0 +1,139 @@
+kind: TrustedProfileAnalyzer
+apiVersion: rhtpa.io/v1
+metadata:
+  name: rhtpa-demo
+  namespace: trustify
+spec:
+  appDomain: -change-me
+  collector: {}
+
+  createDatabase:
+    name: postgres
+    password:
+      valueFrom:
+        secretKeyRef:
+          name: infrastructure-postgresql
+          key: postgres-password
+    username: postgres    
+  database: {
+    host: infrastructure-postgresql,
+    port: "5432",
+    name: trustify,
+    username: trustify,
+    password: trustify1234
+  }
+  migrateDatabase:
+    username: postgres
+    password:
+      valueFrom:
+        secretKeyRef:
+          name: infrastructure-postgresql
+          key: postgres-password
+  image:
+    fullName: 'registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:ed67a8b0d4fc3fd5ce4dffcebc534290e97df6a99c55c4830bb150fc4d0f4825'
+    pullPolicy: IfNotPresent
+  infrastructure:
+    port: 9010
+  ingress: {
+    className: openshift-default,
+    additionalAnnotations: {
+      haproxy.router.openshift.io/timeout: 5m
+    }
+  }
+  metrics:
+    enabled: false
+  modules:
+    createDatabase:
+      enabled: true
+      image: {}
+    createImporters:
+      enabled: true
+      image: {}
+      importers:
+        redhat-sboms:
+          sbom:
+            description: All Red Hat SBOMs
+            period: 1d
+            source: https://access.redhat.com/security/data/sbom/beta/
+            keys:
+              - https://access.redhat.com/security/data/97f5eac4.txt#77E79ABE93673533ED09EBE2DCE3823597F5EAC4
+            disabled: true
+            fetchRetries: 50
+        redhat-csaf:
+          csaf:
+            description: All Red Hat CSAF data
+            period: 1d
+            source: redhat.com
+            disabled: true
+            fetchRetries: 50
+        cve:
+          cve:
+            description: CVE list v5
+            period: 1d
+            source: https://github.com/CVEProject/cvelistV5
+            disabled: false
+        osv-github:
+          osv:
+            description: GitHub Advisory Database
+            period: 1d
+            source: https://github.com/github/advisory-database
+            path: advisories
+            disabled: false
+        quay-redhat-user-workloads:
+          quay:
+            description: SBOMs from konflux image attachments
+            period: 1d
+            source: quay.io
+            namespace: redhat-user-workloads
+            disabled: true
+    importer:
+      concurrency: 4
+      enabled: true
+      image: {}
+      infrastructure: {}
+      metrics: {}
+      replicas: 1
+      resources:
+        requests:
+          cpu: 1
+          memory: 8Gi
+      rust: {}
+      tracing: {}
+      workingDirectory:
+        size: 32Gi
+    migrateDatabase:
+      enabled: true
+      image: {}
+    server:
+      enabled: true
+      image: {}
+      infrastructure: {}
+      ingress: {}
+      metrics: {}
+      replicas: 1
+      resources:
+        requests:
+          cpu: 1
+          memory: 8Gi
+      rust: {}
+      tracing: {}
+  oidc:
+    clients:
+      cli:
+        clientSecret: null
+      frontend: {}
+  openshift:
+    useServiceCa: true
+  partOf: trustify
+  postgresql:
+    enabled: true
+  replicas: 1
+  rust: {}
+  storage: {
+    type: filesystem,
+    size: 32Gi
+  }
+
+  tracing:
+    enabled: false
+
