@@ -112,7 +112,7 @@ metadata:
     operators.openshift.io/valid-subscription: '["Red Hat Trusted Profile Analyzer"]'
     operators.operatorframework.io/builder: operator-sdk-v1.40.0
     operators.operatorframework.io/project_layout: helm.sdk.operatorframework.io/v1
-  name: rhtpa-operator.v1.0.0
+  name: rhtpa-operator.v1.0.1
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -373,4 +373,4 @@ spec:
       name: manager
     - image: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:ed67a8b0d4fc3fd5ce4dffcebc534290e97df6a99c55c4830bb150fc4d0f4825
       name: rhtpa-trustification-service-rhel9-ed67a8b0d4fc3fd5ce4dffcebc534290e97df6a99c55c4830bb150fc4d0f4825-annotation
-  version: 1.0.0
+  version: 1.0.1
