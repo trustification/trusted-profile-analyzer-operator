@@ -3,4 +3,10 @@
   version: v1
   kind: TrustedProfileAnalyzer
   chart: helm-charts/redhat-trusted-profile-analyzer
+  WatchDependentResources: false
+  MaxConcurrentReconciles: 4
+  # ReconcilePeriod
+  # OverrideValues
+  # ReconcilePeriod
+  # Selector
 # +kubebuilder:scaffold:watch

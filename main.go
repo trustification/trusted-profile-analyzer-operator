@@ -55,6 +55,7 @@ func main() {
 		watchesPath          string
 		probeAddr            string
 		enableLeaderElection bool
+		development          bool
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
@@ -64,8 +65,9 @@ func main() {
 	flag.StringVar(&leaderElectionID, "leader-election-id", "195237d9.rhtpa-operator", "provide leader election")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&development, "development", false, "Enable development log")
 	opts := zap.Options{
-		Development: false,
+		Development: development,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -133,7 +135,7 @@ func main() {
 			setupLog.Error(err, "unable to create controller", "controller", "Helm")
 			os.Exit(1)
 		}
-		setupLog.Info("configured watch", "gvk", w.GroupVersionKind, "chartPath", w.ChartPath, "maxConcurrentReconciles", maxConcurrentReconciles, "reconcilePeriod", reconcilePeriod)
+		setupLog.Info("configured watch", "gvk", w.GroupVersionKind, "chartPath", w.ChartPath, "maxConcurrentReconciles", maxConcurrentReconciles, "reconcilePeriod", reconcilePeriod, "development", development)
 	}
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
