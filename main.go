@@ -55,6 +55,7 @@ func main() {
 		watchesPath          string
 		probeAddr            string
 		enableLeaderElection bool
+		development          bool
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
@@ -64,8 +65,9 @@ func main() {
 	flag.StringVar(&leaderElectionID, "leader-election-id", "195237d9.rhtpa-operator", "provide leader election")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&development, "development", false, "Enable debug log")
 	opts := zap.Options{
-		Development: false,
+		Development: true,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -103,6 +105,7 @@ func main() {
 	}
 
 	for _, w := range ws {
+
 		reconcilePeriod := defaultReconcilePeriod
 		if w.ReconcilePeriod != nil {
 			reconcilePeriod = w.ReconcilePeriod.Duration
@@ -114,7 +117,8 @@ func main() {
 		}
 
 		r, err := reconciler.New(
-			reconciler.SkipDependentWatches(w.WatchDependentResources != nil && !*w.WatchDependentResources),
+			//reconciler.SkipDependentWatches(w.WatchDependentResources != nil && !*w.WatchDependentResources),
+			reconciler.SkipDependentWatches(true),
 			reconciler.WithChart(*w.Chart),
 			reconciler.WithGroupVersionKind(w.GroupVersionKind),
 			reconciler.WithInstallAnnotations(annotation.DefaultInstallAnnotations...),
@@ -125,6 +129,7 @@ func main() {
 			reconciler.WithUpgradeAnnotations(annotation.DefaultUpgradeAnnotations...),
 			reconciler.WithUninstallAnnotations(annotation.DefaultUninstallAnnotations...),
 		)
+
 		if err != nil {
 			setupLog.Error(err, "unable to create helm reconciler", "controller", "Helm")
 			os.Exit(1)
@@ -133,7 +138,7 @@ func main() {
 			setupLog.Error(err, "unable to create controller", "controller", "Helm")
 			os.Exit(1)
 		}
-		setupLog.Info("configured watch", "gvk", w.GroupVersionKind, "chartPath", w.ChartPath, "maxConcurrentReconciles", maxConcurrentReconciles, "reconcilePeriod", reconcilePeriod)
+		setupLog.Info("configured watch", "gvk", w.GroupVersionKind, "chartPath", w.ChartPath, "maxConcurrentReconciles", maxConcurrentReconciles, "reconcilePeriod", reconcilePeriod, "development", development)
 	}
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

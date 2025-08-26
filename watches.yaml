@@ -3,4 +3,6 @@
   version: v1
   kind: TrustedProfileAnalyzer
   chart: helm-charts/redhat-trusted-profile-analyzer
+  watchDependentResources: false
+  skipDependentWatches: true
 # +kubebuilder:scaffold:watch
