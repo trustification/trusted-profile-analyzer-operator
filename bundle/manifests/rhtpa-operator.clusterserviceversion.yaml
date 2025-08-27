@@ -98,7 +98,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-07-23T09:21:58Z"
+    createdAt: "2025-08-28T07:05:48Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -110,17 +110,19 @@ metadata:
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
     operators.openshift.io/valid-subscription: '["Red Hat Trusted Profile Analyzer"]'
-    operators.operatorframework.io/builder: operator-sdk-v1.40.0
+    operators.operatorframework.io/builder: operator-sdk-v1.41.1
     operators.operatorframework.io/project_layout: helm.sdk.operatorframework.io/v1
+    repository: https://github.com/trustification/trusted-profile-analyzer-operator
+    support: Red Hat
   name: rhtpa-operator.v1.0.1
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - kind: TrustedProfileAnalyzer
-      name: trustedprofileanalyzers.rhtpa.io
-      version: v1
+      - kind: TrustedProfileAnalyzer
+        name: trustedprofileanalyzers.rhtpa.io
+        version: v1
   description: |
     Red Hat Trusted Profile Analyzer (RHTPA) provides a single source of truth for your software inventory across all your environments. You can verify the integrity of your in-house and third-party applications against their respective Software Bill of Materials (SBOM) document.  Trusted Profile Analyzer provides vulnerability, component and license transparency, strengthens your software supply chain security, and enables an accurate, up-to-date understanding of your software inventory.
 
