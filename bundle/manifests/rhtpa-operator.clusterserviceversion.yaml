@@ -266,7 +266,7 @@ spec:
                       - --metrics-bind-address=:8443
                       - --leader-elect
                       - --health-probe-bind-address=:8081
-                    image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:69bee2e2b316b9646468c9dcaa8c32d4310b008630b23ec37900f3a98c733703
+                    image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:4f793a58523d9317c08c1540b4116666b5dc585ba516c86d3dc180bc92342760
                     livenessProbe:
                       httpGet:
                         path: /healthz
@@ -375,7 +375,7 @@ spec:
     name: Red Hat
     url: https://github.com/trustification/trusted-profile-analyzer-operator
   relatedImages:
-    - image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:69bee2e2b316b9646468c9dcaa8c32d4310b008630b23ec37900f3a98c733703
+    - image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:4f793a58523d9317c08c1540b4116666b5dc585ba516c86d3dc180bc92342760
       name: manager
     - image: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:ed67a8b0d4fc3fd5ce4dffcebc534290e97df6a99c55c4830bb150fc4d0f4825
       name: rhtpa-trustification-service-rhel9-ed67a8b0d4fc3fd5ce4dffcebc534290e97df6a99c55c4830bb150fc4d0f4825-annotation
