@@ -356,7 +356,7 @@ spec:
       type: OwnNamespace
     - supported: true
       type: SingleNamespace
-    - supported: true
+    - supported: false
       type: MultiNamespace
     - supported: false
       type: AllNamespaces
