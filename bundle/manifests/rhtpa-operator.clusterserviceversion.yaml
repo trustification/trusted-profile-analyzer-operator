@@ -15,7 +15,7 @@ metadata:
             "collector": {},
             "database": {},
             "image": {
-              "fullName": "registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:ed67a8b0d4fc3fd5ce4dffcebc534290e97df6a99c55c4830bb150fc4d0f4825",
+              "fullName": "registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:fa1863256acb99fc466e365c6137ee8dc51f97c78559a075c73688915941e644",
               "pullPolicy": "IfNotPresent"
             },
             "infrastructure": {
@@ -377,6 +377,6 @@ spec:
   relatedImages:
     - image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:4dac38ecceb986e654356ebd21eb34086b03d47b028318835d61432bd30298af
       name: manager
-    - image: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:ed67a8b0d4fc3fd5ce4dffcebc534290e97df6a99c55c4830bb150fc4d0f4825
-      name: rhtpa-trustification-service-rhel9-ed67a8b0d4fc3fd5ce4dffcebc534290e97df6a99c55c4830bb150fc4d0f4825-annotation
+    - image: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:fa1863256acb99fc466e365c6137ee8dc51f97c78559a075c73688915941e644
+      name: rhtpa-trustification-service-rhel9-fa1863256acb99fc466e365c6137ee8dc51f97c78559a075c73688915941e644-annotation
   version: 1.0.1
