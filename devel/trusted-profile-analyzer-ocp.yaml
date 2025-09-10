@@ -30,7 +30,7 @@ spec:
           name: infrastructure-postgresql
           key: postgres-password
   image:
-    fullName: 'registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:fa1863256acb99fc466e365c6137ee8dc51f97c78559a075c73688915941e644'
+    fullName: 'registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:d5cf4a5bff94b59197f668a63d29591e3bc92ee89402edc70039e592d75cb84e'
     pullPolicy: IfNotPresent
   infrastructure:
     port: 9010
