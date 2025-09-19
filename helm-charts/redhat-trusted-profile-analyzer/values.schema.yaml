@@ -31,12 +31,12 @@ properties:
   extraVolumes:
     type: array
     items:
-      $ref: "schemas/kubernetes-json-schema/master/v1.29.0/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
+      $ref: "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.29.0/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
 
   extraVolumeMounts:
     type: array
     items:
-      $ref: "schemas/kubernetes-json-schema/master/v1.29.0/_definitions.json#/definitions//io.k8s.api.core.v1.VolumeMount"
+      $ref: "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.29.0/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeMount"
 
   storage:
     $ref: "#/definitions/StorageConfig"
@@ -185,7 +185,7 @@ properties:
                   - size
                 properties:
                   size:
-                    $ref: "schemas/kubernetes-json-schema/master/v1.29.0/_definitions.json#/definitions/io.k8s.apimachinery.pkg.api.resource.Quantity"
+                    $ref: "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.29.0/_definitions.json#/definitions/io.k8s.apimachinery.pkg.api.resource.Quantity"
               concurrency:
                 type: integer
                 minimum: 1
@@ -559,7 +559,7 @@ definitions:
           - valueFrom
         properties:
           valueFrom:
-            $ref: "schemas/kubernetes-json-schema/master/v1.29.0/_definitions.json#/definitions/io.k8s.api.core.v1.EnvVarSource"
+            $ref: "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.29.0/_definitions.json#/definitions/io.k8s.api.core.v1.EnvVarSource"
 
       - type: object
         additionalProperties: false
@@ -638,7 +638,7 @@ definitions:
         enum:
           - filesystem
       size:
-        $ref: "schemas/kubernetes-json-schema/master/v1.29.0/_definitions.json#/definitions/io.k8s.apimachinery.pkg.api.resource.Quantity"
+        $ref: "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.29.0/_definitions.json#/definitions/io.k8s.apimachinery.pkg.api.resource.Quantity"
       storageClassName:
         type: string
       compression:
