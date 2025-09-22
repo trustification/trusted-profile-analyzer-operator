@@ -5,7 +5,7 @@ LABEL description="The bundle image for the rhtas-operator, containing manifests
 LABEL io.k8s.description="The bundle image for the rhtas-operator, containing manifests, metadata and testing scorecard."
 LABEL io.k8s.display-name="RHTPA operator bundle container image for Red Hat Trusted Profile Analyzer."
 LABEL io.openshift.tags="rhtpa-operator-bundle, Red Hat, rhtpa-operator, rhtpa, Red Hat Trusted Profile Analyzer."
-LABEL name="rhtpa-operator-bundle"
+LABEL name="rhtpa/rhtpa-operator-bundle"
 LABEL org.opencontainers.image.source="https://github.com/trustification/trusted-profile-analyzer-operator"
 LABEL summary="Operator Bundle for the rhtpa-operator."
 LABEL release=1.0.1
@@ -14,7 +14,7 @@ LABEL vendor="Red Hat, Inc."
 LABEL distribution-scope="public"
 LABEL url="https://www.redhat.com"
 LABEL version="1.0.1"
-LABEL cpe="cpe:/a:redhat:trusted_profile_analyzer:2.1::el9"
+LABEL cpe="cpe:/a:redhat:trusted_profile_analyzer:1.0::el9"
 LABEL org.opencontainers.image.created="${SOURCE_DATE_EPOCH}"
 
 LABEL features.operators.openshift.io/cni="false"
