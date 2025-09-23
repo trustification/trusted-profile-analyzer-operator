@@ -14,7 +14,7 @@ LABEL vendor="Red Hat, Inc."
 LABEL distribution-scope="public"
 LABEL url="https://www.redhat.com"
 LABEL version="1.0.1"
-LABEL cpe="cpe:/a:redhat:trusted_profile_analyzer:1.0::el9"
+LABEL cpe="cpe:/a:redhat:trusted_profile_analyzer:2.1::el9"
 LABEL org.opencontainers.image.created="${SOURCE_DATE_EPOCH}"
 
 LABEL features.operators.openshift.io/cni="false"
