@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: registry.redhat.io/rhtpa/rhtpa-rhel9-operator
-  newTag: 1.0.2
+  newTag: 1.0.3
