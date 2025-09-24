@@ -8,12 +8,12 @@ LABEL io.openshift.tags="rhtpa-operator-bundle, Red Hat, rhtpa-operator, rhtpa, 
 LABEL name="rhtpa/rhtpa-operator-bundle"
 LABEL org.opencontainers.image.source="https://github.com/trustification/trusted-profile-analyzer-operator"
 LABEL summary="Operator Bundle for the rhtpa-operator."
-LABEL release=1.0.3
 LABEL maintainer="Red Hat"
 LABEL vendor="Red Hat, Inc."
 LABEL distribution-scope="public"
 LABEL url="https://www.redhat.com"
 LABEL version="1.0.3"
+LABEL release=1.0.3
 LABEL cpe="cpe:/a:redhat:trusted_profile_analyzer:2.1::el9"
 LABEL org.opencontainers.image.created="${SOURCE_DATE_EPOCH}"
 

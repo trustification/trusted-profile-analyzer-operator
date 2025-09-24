@@ -37,7 +37,8 @@ LABEL io.openshift.tags="RHTPA, rhtpa-operator, Red Hat Trusted Profile Analyzer
 LABEL name="rhtpa-operator"
 LABEL org.opencontainers.image.source="https://github.com/trustification/trusted-profile-analyzer-operator"
 LABEL summary="RHTPA Operator"
-LABEL release=1.0.1
+LABEL version="1.0.3"
+LABEL release=1.0.3
 LABEL maintainer="Red Hat"
 
 RUN microdnf update -y && microdnf clean all -y
