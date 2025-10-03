@@ -272,6 +272,11 @@ spec:
                       initialDelaySeconds: 15
                       periodSeconds: 20
                     name: manager
+                    env:
+                      - name: WATCH_NAMESPACE
+                        valueFrom:
+                          fieldRef:
+                            fieldPath: metadata.namespace
                     readinessProbe:
                       httpGet:
                         path: /readyz
