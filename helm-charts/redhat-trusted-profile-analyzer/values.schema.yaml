@@ -77,10 +77,36 @@ properties:
     type: object
     additionalProperties: false
     properties:
+      enabled:
+        type: boolean
+        default: true
+        description: |
+          Controls whether ingress resources should be created globally. Defaults to true for backward compatibility.
+      hosts:
+        type: array
+        items:
+          type: string
+        description: |
+          Multiple hostnames for the ingress. If specified, overrides the single host configuration.
+          These hosts will be automatically used for TLS configuration if no explicit TLS config is provided.
       className:
         type: string
       additionalAnnotations:
         type: object
+      tls:
+        type: array
+        items:
+          type: object
+          properties:
+            hosts:
+              type: array
+              items:
+                type: string
+            secretName:
+              type: string
+        description: |
+          TLS configuration for the ingress. Each item can specify hosts and secretName for TLS termination.
+          If not specified and hosts are defined, TLS will be automatically configured using the hosts.
 
   infrastructure:
     type: object
@@ -106,6 +132,10 @@ properties:
         type: boolean
         description: |
           Enable support for application metrics.
+      otelMetricExportInterval:
+        type: integer
+        description: |
+          The interval in milliseconds for exporting metrics. Will be used as the value for the `OTEL_METRIC_EXPORT_INTERVAL` variable.
 
   tracing:
     type: object
@@ -115,6 +145,19 @@ properties:
         type: boolean
         description: |
           Enable support for distributed tracing.
+      otelBspMaxExportBatchSize:
+        type: integer
+        minimum: 1
+        description: |
+          The maximum batch size for exporting spans. Will be used as the value for the `OTEL_BSP_MAX_EXPORT_BATCH_SIZE` variable.
+      otelTracesSampler:
+        type: string
+        description: |
+          The trace sampling strategy. Will be used as the value for the `OTEL_TRACES_SAMPLER` variable.
+      otelTracesSamplerArg:
+        type: string
+        description: |
+          The trace sampling probability. Will be used as the value for the `OTEL_TRACES_SAMPLER_ARG` variable.
 
   collector:
     type: object
@@ -122,6 +165,7 @@ properties:
     properties:
       endpoint:
         type: string
+        pattern: ^(http|https)://
         description: |
           OpenTelemetry collector endpoint for tracing and metrics.
 
@@ -224,7 +268,7 @@ properties:
                 type: object
                 description: The importers to create
                 additionalProperties:
-                  $ref: "https://raw.githubusercontent.com/trustification/trustify/main/modules/importer/schema/importer.json"
+                  $ref: "https://raw.githubusercontent.com/guacsec/trustify/main/modules/importer/schema/importer.json"
 
   database:
     $ref: "#/definitions/PostgresConfig"
@@ -350,6 +394,10 @@ definitions:
     properties:
       enabled:
         type: boolean
+      otelMetricExportInterval:
+        type: integer
+        description: |
+          The interval in milliseconds for exporting metrics. Will be used as the value for the `OTEL_METRIC_EXPORT_INTERVAL` variable.
 
   Tracing:
     type: object
@@ -365,6 +413,19 @@ definitions:
     properties:
       enabled:
         type: boolean
+      otelBspMaxExportBatchSize:
+        type: integer
+        minimum: 1
+        description: |
+          The maximum batch size for exporting spans. Will be used as the value for the `OTEL_BSP_MAX_EXPORT_BATCH_SIZE` variable.
+      otelTracesSampler:
+        type: string
+        description: |
+          The trace sampling strategy. Will be used as the value for the `OTEL_TRACES_SAMPLER` variable.
+      otelTracesSamplerArg:
+        type: string
+        description: |
+          The trace sampling probability. Will be used as the value for the `OTEL_TRACES_SAMPLER_ARG` variable.
 
   Image:
     type: object
@@ -417,6 +478,13 @@ definitions:
     type: object
     additionalProperties: false
     properties:
+      hosts:
+        type: array
+        items:
+          type: string
+        description: |
+          Hostnames for the ingress. If not specified, defaults to [{service-name}{appDomain}].
+          These hosts will be automatically used for TLS configuration if no explicit TLS config is provided.
       className:
         type: string
       additionalAnnotations:
@@ -425,6 +493,20 @@ definitions:
           type: string
         description: |
           Additional annotations which will be used as annotations on `Ingress` resources.
+      tls:
+        type: array
+        items:
+          type: object
+          properties:
+            hosts:
+              type: array
+              items:
+                type: string
+            secretName:
+              type: string
+        description: |
+          TLS configuration for the ingress. Each item can specify hosts and secretName for TLS termination.
+          If not specified and hosts are defined, TLS will be automatically configured using the hosts.
 
   Feature:
     type: object
@@ -459,7 +541,7 @@ definitions:
           - content
         properties:
           content:
-            $ref: "https://raw.githubusercontent.com/trustification/trustify/main/common/auth/schema/auth.json"
+            $ref: "https://raw.githubusercontent.com/guacsec/trustify/main/common/auth/schema/auth.json"
       - type: object
         additionalProperties: false
         required:
@@ -774,4 +856,3 @@ definitions:
           The number of HTTP workers of the Actix application.
 
           Also see: <https://actix.rs/docs/server/#multi-threading>
-

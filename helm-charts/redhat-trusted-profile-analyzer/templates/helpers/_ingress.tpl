@@ -28,7 +28,7 @@ Arguments (dict):
 {{- end }}
 
 {{/*
-A default ingress definion.
+A default ingress definition.
 
 Arguments (dict):
   * root - .
@@ -61,15 +61,35 @@ metadata:
 
 spec:
   {{- include "trustification.ingress.className" . | nindent 2 }}
+  {{- $tlsConfig := .module.ingress.tls | default .root.Values.ingress.tls -}}
+  {{- $ingressHosts := .module.ingress.hosts | default .root.Values.ingress.hosts -}}
+  {{- if (empty $ingressHosts) }}
+    {{- $ingressHosts = list .host }}
+  {{- end }}
+  {{- $tlsEnabled := include "trustification.tls.serviceEnabled" .root -}}
+  {{- if and (eq $tlsEnabled "true") (or (not (empty $tlsConfig)) (not (empty $ingressHosts))) }}
+  tls:
+    {{- if (not (empty $tlsConfig)) }}
+    {{- $tlsConfig | toYaml | nindent 4 }}
+    {{- else if (not (empty $ingressHosts)) }}
+    - hosts:
+        {{- range $ingressHosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ include "trustification.common.name" . }}-tls
+    {{- end }}
+  {{- end }}
   rules:
-    - host: {{ .host | quote }}
+    {{- range $ingressHosts }}
+    - host: {{ . | quote }}
       http:
         paths:
           - pathType: Prefix
             path: /
             backend:
               service:
-                name: {{ include "trustification.common.name" . }}
+                name: {{ include "trustification.common.name" $ }}
                 port:
                   name: endpoint
+    {{- end }}
 {{- end }}

@@ -1,4 +1,4 @@
-{{- if .Values.modules.server.enabled }}
+{{- if and .Values.modules.server.enabled .Values.ingress.enabled }}
 {{- $mod := dict "root" . "name" "server" "component" "server" "module" .Values.modules.server -}}
 {{- include "trustification.ingress.defaultIngress" ( set (deepCopy $mod) "host" (include "trustification.host.server" $mod ) ) }}
 {{- end }}

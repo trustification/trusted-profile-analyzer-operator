@@ -1,5 +1,5 @@
 {{/*
-Get value from a resource. Currenlty only from secrets.
+Get value from a resource. Currently only from secrets.
 
 Arguments (dict):
   * .root - .

@@ -73,11 +73,41 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Controls whether ingress resources should be created globally. Defaults to true for backward compatibility.\n"
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Multiple hostnames for the ingress. If specified, overrides the single host configuration.\nThese hosts will be automatically used for TLS configuration if no explicit TLS config is provided.\n"
+        },
         "className": {
           "type": "string"
         },
         "additionalAnnotations": {
           "type": "object"
+        },
+        "tls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hosts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "secretName": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "TLS configuration for the ingress. Each item can specify hosts and secretName for TLS termination.\nIf not specified and hosts are defined, TLS will be automatically configured using the hosts.\n"
         }
       }
     },
@@ -103,6 +133,10 @@
         "enabled": {
           "type": "boolean",
           "description": "Enable support for application metrics.\n"
+        },
+        "otelMetricExportInterval": {
+          "type": "integer",
+          "description": "The interval in milliseconds for exporting metrics. Will be used as the value for the `OTEL_METRIC_EXPORT_INTERVAL` variable.\n"
         }
       }
     },
@@ -113,6 +147,19 @@
         "enabled": {
           "type": "boolean",
           "description": "Enable support for distributed tracing.\n"
+        },
+        "otelBspMaxExportBatchSize": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The maximum batch size for exporting spans. Will be used as the value for the `OTEL_BSP_MAX_EXPORT_BATCH_SIZE` variable.\n"
+        },
+        "otelTracesSampler": {
+          "type": "string",
+          "description": "The trace sampling strategy. Will be used as the value for the `OTEL_TRACES_SAMPLER` variable.\n"
+        },
+        "otelTracesSamplerArg": {
+          "type": "string",
+          "description": "The trace sampling probability. Will be used as the value for the `OTEL_TRACES_SAMPLER_ARG` variable.\n"
         }
       }
     },
@@ -122,6 +169,7 @@
       "properties": {
         "endpoint": {
           "type": "string",
+          "pattern": "^(http|https)://",
           "description": "OpenTelemetry collector endpoint for tracing and metrics.\n"
         }
       }
@@ -298,7 +346,7 @@
                   "type": "object",
                   "description": "The importers to create",
                   "additionalProperties": {
-                    "$ref": "https://raw.githubusercontent.com/trustification/trustify/main/modules/importer/schema/importer.json"
+                    "$ref": "https://raw.githubusercontent.com/guacsec/trustify/main/modules/importer/schema/importer.json"
                   }
                 }
               }
@@ -471,6 +519,10 @@
       "properties": {
         "enabled": {
           "type": "boolean"
+        },
+        "otelMetricExportInterval": {
+          "type": "integer",
+          "description": "The interval in milliseconds for exporting metrics. Will be used as the value for the `OTEL_METRIC_EXPORT_INTERVAL` variable.\n"
         }
       }
     },
@@ -491,6 +543,19 @@
       "properties": {
         "enabled": {
           "type": "boolean"
+        },
+        "otelBspMaxExportBatchSize": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The maximum batch size for exporting spans. Will be used as the value for the `OTEL_BSP_MAX_EXPORT_BATCH_SIZE` variable.\n"
+        },
+        "otelTracesSampler": {
+          "type": "string",
+          "description": "The trace sampling strategy. Will be used as the value for the `OTEL_TRACES_SAMPLER` variable.\n"
+        },
+        "otelTracesSamplerArg": {
+          "type": "string",
+          "description": "The trace sampling probability. Will be used as the value for the `OTEL_TRACES_SAMPLER_ARG` variable.\n"
         }
       }
     },
@@ -563,6 +628,13 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Hostnames for the ingress. If not specified, defaults to [{service-name}{appDomain}].\nThese hosts will be automatically used for TLS configuration if no explicit TLS config is provided.\n"
+        },
         "className": {
           "type": "string"
         },
@@ -572,6 +644,24 @@
             "type": "string"
           },
           "description": "Additional annotations which will be used as annotations on `Ingress` resources.\n"
+        },
+        "tls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hosts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "secretName": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "TLS configuration for the ingress. Each item can specify hosts and secretName for TLS termination.\nIf not specified and hosts are defined, TLS will be automatically configured using the hosts.\n"
         }
       }
     },
@@ -609,7 +699,7 @@
           ],
           "properties": {
             "content": {
-              "$ref": "https://raw.githubusercontent.com/trustification/trustify/main/common/auth/schema/auth.json"
+              "$ref": "https://raw.githubusercontent.com/guacsec/trustify/main/common/auth/schema/auth.json"
             }
           }
         },

@@ -9,7 +9,7 @@ Arguments: string or object
 value: {{ . | quote }}
 {{- else if empty . }}{{/* if it's empty, we drop the value section */ -}}
 {{- else }}
-{{- . | toYaml }}{{/* otherwise, it must be an oject */ -}}
+{{- . | toYaml }}{{/* otherwise, it must be an object */ -}}
 {{- end }}
 
 {{- end }}

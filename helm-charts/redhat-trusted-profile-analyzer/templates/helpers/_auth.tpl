@@ -79,7 +79,7 @@ data:
 {{/*
 Create the authenticator default configuration.
 
-Arugments: (dict)
+Arguments: (dict)
   * root - .
   * module - module object
 */}}
