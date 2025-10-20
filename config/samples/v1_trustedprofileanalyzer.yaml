@@ -8,7 +8,7 @@ spec:
   collector: {}
   database: {}
   image:
-    fullName: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:4365bd4de518b86d08be84d10e6bc923e4759d8fae9b34746604f08acf74b32e
+    fullName: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:b716530c3b6ee8a79814fc75f55b65d5bcfaa61ac50c9947348751904b8351c7
     pullPolicy: IfNotPresent
   infrastructure:
     port: 9010
