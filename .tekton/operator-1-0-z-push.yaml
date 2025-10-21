@@ -19,6 +19,10 @@ metadata:
   namespace: trusted-content-tenant
 spec:
   params:
+  - name: version
+    value: "v1.0.3"
+  - name: version-postfix-qe
+    value: "-rc1"
   - name: git-url
     value: '{{source_url}}'
   - name: revision
@@ -536,7 +540,7 @@ spec:
       - name: IMAGE_DIGEST
         value: $(tasks.build-image-index.results.IMAGE_DIGEST)
       - name: ADDITIONAL_TAGS
-        value: ["v1.0.3-rc","{{revision}}"]
+        value: [ "{{version}}{{version-postfix-qe}}","{{revision}}" ]
       runAfter:
       - build-image-index
       taskRef:
