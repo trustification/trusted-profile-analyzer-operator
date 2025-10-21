@@ -22,7 +22,7 @@ spec:
   - name: version
     value: "v1.0.3"
   - name: version-postfix-qe
-    value: "-rc1"
+    value: "-rc"
   - name: git-url
     value: '{{source_url}}'
   - name: revision
@@ -540,7 +540,7 @@ spec:
       - name: IMAGE_DIGEST
         value: $(tasks.build-image-index.results.IMAGE_DIGEST)
       - name: ADDITIONAL_TAGS
-        value: [ "{{version}}{{version-postfix-qe}}","{{revision}}" ]
+      value: ['$(params.version)$(params.version-postfix-qe)','{{revision}}']
       runAfter:
       - build-image-index
       taskRef:
