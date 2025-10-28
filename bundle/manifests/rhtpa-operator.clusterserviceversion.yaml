@@ -473,5 +473,5 @@ spec:
     - image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:2e1fcb0b5b10a58c20904f25661541116c3f12ed7c4bb3c983d8b220699363f6
       name: manager
     - image: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:b716530c3b6ee8a79814fc75f55b65d5bcfaa61ac50c9947348751904b8351c7
-      name: trusted-content-tenant/rhtpa-product-0-4-z-b716530c3b6ee8a79814fc75f55b65d5bcfaa61ac50c9947348751904b8351c7-annotation
+      name: rhtpa-trustification-service-rhel9-b716530c3b6ee8a79814fc75f55b65d5bcfaa61ac50c9947348751904b8351c7-annotation
   version: 1.0.3
