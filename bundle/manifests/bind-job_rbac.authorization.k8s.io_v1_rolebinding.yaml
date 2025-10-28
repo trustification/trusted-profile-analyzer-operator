@@ -2,11 +2,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   creationTimestamp: null
-  name: rhtpa-operator-bind-job
+  name: bind-job
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: rhtpa-operator-role-job
+  name: role-job
 subjects:
 - kind: ServiceAccount
   name: controller-manager
