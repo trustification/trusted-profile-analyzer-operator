@@ -48,6 +48,8 @@ spec:
     spec:
       deployments: null
     strategy: ""
+  cleanup:
+    enabled: true
   installModes:
     - supported: true
       type: OwnNamespace
