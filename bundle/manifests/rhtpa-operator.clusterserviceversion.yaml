@@ -14,10 +14,7 @@ metadata:
             "appDomain": "change-me",
             "collector": {},
             "database": {},
-            "image": {
-              "fullName": "registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:b716530c3b6ee8a79814fc75f55b65d5bcfaa61ac50c9947348751904b8351c7",
-              "pullPolicy": "IfNotPresent"
-            },
+            "image": {},
             "infrastructure": {
               "port": 9010
             },
@@ -474,6 +471,4 @@ spec:
   relatedImages:
     - image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:d50382baaf924564b342778f38af18d4e7a16d13c55fc29be1dadfc8db9904eb
       name: manager
-    - image: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:b716530c3b6ee8a79814fc75f55b65d5bcfaa61ac50c9947348751904b8351c7
-      name: rhtpa-trustification-service-rhel9-b716530c3b6ee8a79814fc75f55b65d5bcfaa61ac50c9947348751904b8351c7-annotation
   version: 1.1.0
