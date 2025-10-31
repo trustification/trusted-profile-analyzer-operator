@@ -356,7 +356,7 @@ spec:
                         valueFrom:
                           fieldRef:
                             fieldPath: metadata.annotations['olm.targetNamespaces']
-                    image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:d50382baaf924564b342778f38af18d4e7a16d13c55fc29be1dadfc8db9904eb
+                    image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:ed760168000bd1ed3dfc375e9a11b2a74466fe669b9044de91b59e965824be49
                     livenessProbe:
                       httpGet:
                         path: /healthz
@@ -469,6 +469,6 @@ spec:
     name: Red Hat
     url: https://github.com/trustification/trusted-profile-analyzer-operator
   relatedImages:
-    - image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:d50382baaf924564b342778f38af18d4e7a16d13c55fc29be1dadfc8db9904eb
+    - image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:ed760168000bd1ed3dfc375e9a11b2a74466fe669b9044de91b59e965824be49
       name: manager
   version: 1.1.0
