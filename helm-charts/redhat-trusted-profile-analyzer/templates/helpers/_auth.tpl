@@ -174,7 +174,6 @@ authentication:
       scopeMappings: &keycloakScopeMappings
         "create:document": [ "create.advisory", "create.importer", "create.metadata", "create.sbom", "create.weakness", "upload.dataset" ]
         "read:document": [ "ai", "read.advisory", "read.importer", "read.metadata", "read.sbom", "read.weakness", "read.systemInformation" ]
-        "read:document": [ "ai", "read.advisory", "read.importer", "read.metadata", "read.sbom", "read.weakness" ]
         "update:document": [ "update.advisory", "update.importer", "update.metadata", "update.sbom", "update.weakness" ]
         "delete:document": [ "delete.advisory", "delete.importer", "delete.metadata", "delete.sbom", "delete.vulnerability", "delete.weakness" ]
       {{- with .root.Values.tls.additionalTrustAnchor }}
