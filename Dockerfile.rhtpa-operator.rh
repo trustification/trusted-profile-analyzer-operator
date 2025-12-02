@@ -1,5 +1,5 @@
-# Build the manager binary 9.6-1756993846/1.24.6-1756993846
-FROM registry.access.redhat.com/ubi9/go-toolset:9.7-1763633888@sha256:71f121a44270e46a17a548d6b92096a1a0fb56db44927ad318d095177d6dce4b AS builder
+# Build the manager binary 9.7-1764620329 1.25.3-1764620329
+FROM registry.access.redhat.com/ubi9/go-toolset@sha256:2e8adc5be8eba060e919a6f7309a7b5ef09dd72d3ae9e747b9eb02e96f35a0f5 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -40,8 +40,8 @@ LABEL io.openshift.tags="RHTPA, rhtpa-operator, Red Hat Trusted Profile Analyzer
 LABEL name="rhtpa/rhtpa-rhel9-operator"
 LABEL org.opencontainers.image.source="https://github.com/trustification/trusted-profile-analyzer-operator"
 LABEL summary="RHTPA Operator"
-LABEL version="1.1.0"
-LABEL release=1.1.0
+LABEL version="1.1.1"
+LABEL release=1.1.1
 LABEL maintainer="Red Hat"
 LABEL cpe="cpe:/a:redhat:trusted_profile_analyzer:2.2::el9"
 LABEL org.opencontainers.image.created="${SOURCE_DATE_EPOCH}"

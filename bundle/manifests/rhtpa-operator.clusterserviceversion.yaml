@@ -111,7 +111,7 @@ metadata:
     operators.operatorframework.io/project_layout: helm.sdk.operatorframework.io/v1
     repository: https://github.com/trustification/trusted-profile-analyzer-operator
     support: Red Hat
-  name: rhtpa-operator.v1.1.0
+  name: rhtpa-operator.v1.1.1
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -373,4 +373,4 @@ spec:
   relatedImages:
     - image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:af3ec8405bdb4fea5462129d2519a6c90d0c106612a1ef038c0ee108b89b9533
       name: manager
-  version: 1.1.0
+  version: 1.1.1
