@@ -98,6 +98,9 @@ spec:
           oci or docker.
         name: buildah-format
         type: string
+      - default: "false"
+        description: Enable cache proxy configuration
+        name: enable-cache-proxy
       - default: []
         description: Array of --build-arg values ("arg=value" strings) for buildah
         name: build-args
@@ -133,12 +136,14 @@ spec:
             value: $(params.rebuild)
           - name: skip-checks
             value: $(params.skip-checks)
+          - name: enable-cache-proxy
+            value: $(params.enable-cache-proxy)
         taskRef:
           params:
             - name: name
               value: init
             - name: bundle
-              value: quay.io/konflux-ci/tekton-catalog/task-init:0.2@sha256:d6a10101f672a85da0a402177848a82fe7af439bc54451e54b0fbb1ddbeeb1f6
+              value: quay.io/konflux-ci/tekton-catalog/task-init:0.2@sha256:b349d24cb896573695802d6913d311640b44675ec082b3ad167721946a6a0a71
             - name: kind
               value: task
           resolver: bundles
@@ -188,7 +193,7 @@ spec:
             - name: name
               value: prefetch-dependencies-oci-ta
             - name: bundle
-              value: quay.io/konflux-ci/tekton-catalog/task-prefetch-dependencies-oci-ta:0.2@sha256:3fa0204a481044b21f0e784ce39cbd25e8fb49c664a5458f3eef351fff1c906e
+              value: quay.io/konflux-ci/tekton-catalog/task-prefetch-dependencies-oci-ta:0.2@sha256:3e5e834290a1ed57fd14c0082e5a10789c8fe382ed682ef7f981475a7b316b49
             - name: kind
               value: task
           resolver: bundles
@@ -224,6 +229,10 @@ spec:
             value: $(tasks.clone-repository.results.url)
           - name: BUILDAH_FORMAT
             value: $(params.buildah-format)
+          - name: HTTP_PROXY
+            value: $(tasks.init.results.http-proxy)
+          - name: NO_PROXY
+            value: $(tasks.init.results.no-proxy)
           - name: SOURCE_ARTIFACT
             value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
           - name: CACHI2_ARTIFACT
@@ -235,7 +244,7 @@ spec:
             - name: name
               value: buildah-oci-ta
             - name: bundle
-              value: quay.io/konflux-ci/tekton-catalog/task-buildah-oci-ta:0.7@sha256:916781b75e5f42a2e0b578b3ab3418e8bcc305168b2cd26ff41c8057e5c9ec28
+              value: quay.io/konflux-ci/tekton-catalog/task-buildah-oci-ta:0.7@sha256:2de614f405527e779534a5d1a1293a528c482aa6abebc8ea158ad47e4be5dea4
             - name: kind
               value: task
           resolver: bundles
@@ -266,7 +275,7 @@ spec:
             - name: name
               value: build-image-index
             - name: bundle
-              value: quay.io/konflux-ci/tekton-catalog/task-build-image-index:0.2@sha256:803ae1ecf35bc5d22be9882819e942e4b699cb17655055afc6bb6b02d34cfab8
+              value: quay.io/konflux-ci/tekton-catalog/task-build-image-index:0.2@sha256:39561ac43e325159497c10c0284cf61dfddf39e39100ca5e3df6b73c5d96db8b
             - name: kind
               value: task
           resolver: bundles
@@ -550,7 +559,7 @@ spec:
             - name: name
               value: apply-tags
             - name: bundle
-              value: quay.io/konflux-ci/tekton-catalog/task-apply-tags:0.2@sha256:a61d8a6d0ba804869e8fe57a9289161817afad379ef2d7433d75ae40a148e2ec
+              value: quay.io/konflux-ci/tekton-catalog/task-apply-tags:0.2@sha256:e4017ec351a0891ef95989f35bd20b8c3f091fa1a3da364c4d4e975e99f3063c
             - name: kind
               value: task
           resolver: bundles
@@ -590,7 +599,7 @@ spec:
             - name: name
               value: rpms-signature-scan
             - name: bundle
-              value: quay.io/konflux-ci/konflux-vanguard/task-rpms-signature-scan:0.2@sha256:90c2b32ebf0a00f42c0c1d1675feb75ba71793ad1a4c22ddea7cdc71ed997a04
+              value: quay.io/konflux-ci/tekton-catalog/task-rpms-signature-scan:0.2@sha256:7a7a2f0b6d0ffc590530289d3b8bad3b45c59ef338cb3c8d350038e7537f405f
             - name: kind
               value: task
           resolver: bundles
