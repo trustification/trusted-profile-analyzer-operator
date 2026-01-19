@@ -15,7 +15,6 @@ LABEL url="https://www.redhat.com"
 LABEL version="1.1.1"
 LABEL release=1.1.1
 LABEL cpe="cpe:/a:redhat:trusted_profile_analyzer:2.2::el9"
-LABEL org.opencontainers.image.created="${SOURCE_DATE_EPOCH}"
 
 LABEL features.operators.openshift.io/cni="false"
 LABEL features.operators.openshift.io/disconnected="false"
