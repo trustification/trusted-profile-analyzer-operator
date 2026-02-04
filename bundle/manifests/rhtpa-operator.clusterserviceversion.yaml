@@ -348,7 +348,7 @@ spec:
           serviceAccountName: rhtpa-operator-controller-manager
     strategy: deployment
   installModes:
-    - supported: true
+    - supported: false
       type: OwnNamespace
     - supported: true
       type: SingleNamespace
