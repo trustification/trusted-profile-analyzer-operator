@@ -71,4 +71,4 @@ spec:
   provider:
     name: Red Hat
     url: https://github.com/trustification/trusted-profile-analyzer-operator
-  version: 1.1.2
+  version: 1.1.3
