@@ -127,3 +127,10 @@ modules:
           source: quay.io
           namespace: redhat-user-workloads
           disabled: true
+
+  tlsConfigurator:
+    enabled: false
+    name: tls-configurator
+    image:
+      fullName: quay.io/mdessi/tls-configurator:latest
+      pullPolicy: IfNotPresent

@@ -283,6 +283,14 @@ properties:
           - $ref: "#/definitions/Image"
           - $ref: "#/definitions/Application"
 
+      tlsConfigurator:
+        description: |
+          TLS Configurator for Openshift
+        allOf:
+          - $ref: "#/definitions/Feature"
+          - $ref: "#/definitions/Image"
+          - $ref: "#/definitions/Application"
+
       createImporters:
         description: |
           Job to create a set of pre-defined importers
