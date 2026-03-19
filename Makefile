@@ -131,6 +131,10 @@ e2e-minikube: ## Deploy operator on Minikube for e2e testing (requires running M
 run: helm-operator ## Run against the configured Kubernetes cluster in ~/.kube/config
 	$(HELM_OPERATOR) run
 
+.PHONY: build-tls-configurator
+build-tls-configurator: ## Build the TLS configurator binary (also shipped in the operator image).
+	CGO_ENABLED=0 go build -ldflags="-w -s" -o bin/tls-configurator ./cmd/tls-configurator
+
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.
 	docker build -t ${IMG} .

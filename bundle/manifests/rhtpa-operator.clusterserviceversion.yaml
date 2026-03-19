@@ -149,6 +149,54 @@ spec:
       clusterPermissions:
         - rules:
             - apiGroups:
+                - ""
+              resources:
+                - serviceaccounts
+              verbs:
+                - create
+                - get
+                - list
+                - watch
+                - delete
+                - patch
+                - update
+            - apiGroups:
+                - batch
+              resources:
+                - jobs
+              verbs:
+                - create
+                - get
+                - list
+                - watch
+                - delete
+                - patch
+                - update
+            - apiGroups:
+                - rbac.authorization.k8s.io
+              resources:
+                - clusterroles
+                - clusterrolebindings
+              verbs:
+                - create
+                - get
+                - list
+                - watch
+                - delete
+                - patch
+                - update
+            - apiGroups:
+                - config.openshift.io
+              resources:
+                - ingresses
+                - clusterversions
+              verbs:
+                - get
+                - list
+                - watch
+                - patch
+                - update
+            - apiGroups:
                 - networking.k8s.io
               resources:
                 - ingresses
@@ -271,6 +319,9 @@ spec:
                       - --leader-elect
                       - --health-probe-bind-address=:8081
                     image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:ced5f0bd75a99c14701731fea2cabc7753376228ebc1516556a87a5b2904811f
+                    env:
+                      - name: RELATED_IMAGE_TLS_CONFIGURATOR
+                        value: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:ced5f0bd75a99c14701731fea2cabc7753376228ebc1516556a87a5b2904811f
                     livenessProbe:
                       httpGet:
                         path: /healthz

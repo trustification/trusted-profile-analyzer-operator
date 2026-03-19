@@ -39,6 +39,15 @@ linters:
         linters:
           - dupl
           - lll
+      # The TLS configurator deals in OpenSSL/IANA cipher-suite names, which
+      # recur as literals in lookup tables and test fixtures. Naming each one as
+      # a constant makes those tables harder to read, not easier.
+      - path: "pkg/tlsconfigurator/*"
+        linters:
+          - goconst
+      - path: "test/tlsconfigurator/*"
+        linters:
+          - goconst
 
 formatters:
   enable:
