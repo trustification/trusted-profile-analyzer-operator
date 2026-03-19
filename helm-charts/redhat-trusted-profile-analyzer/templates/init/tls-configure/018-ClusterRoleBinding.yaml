@@ -1,0 +1,24 @@
+{{- if .Values.modules.tlsConfigurator.enabled }}
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tls-configurator
+  labels:
+    app.kubernetes.io/name: tls-configurator
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "2"
+    helm.sh/hook-weight: "18"
+    helm.sh/hook: "pre-install,pre-upgrade"
+    helm.sh/hook-delete-policy: before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tls-configurator
+subjects:
+  - kind: ServiceAccount
+    name: tls-configurator
+    namespace: openshift-ingress-operator
+{{- end }}

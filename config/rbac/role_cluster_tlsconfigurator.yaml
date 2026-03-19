@@ -1,0 +1,11 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tls-configurator
+rules:
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["create", "get", "list", "watch", "delete", "patch"]
+- apiGroups: ["config.openshift.io"]
+  resources: ["ingresses", "clusterversions"]
+  verbs: ["get", "list", "watch", "patch", "update"]
