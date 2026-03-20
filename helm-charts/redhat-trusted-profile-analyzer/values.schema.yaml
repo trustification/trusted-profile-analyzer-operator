@@ -568,6 +568,11 @@ definitions:
     type: object
     additionalProperties: false
     properties:
+      uiScopes:
+        type: string
+        description: |
+          Optional value for the `UI_SCOPES` environment variable in the server deployment.
+
       issuerUrl:
         $ref: "#/definitions/ValueOrRef"
 

@@ -57,6 +57,10 @@ spec:
               value: {{ include "trustification.oidc.frontendIssuerUrl" . }}
             - name: UI_CLIENT_ID
               value: {{ include "trustification.oidc.frontendClientId" . }}
+            {{- with (include "trustification.oidc.uiScopes" . | trim) }}
+            - name: UI_SCOPES
+              value: {{ . | quote }}
+            {{- end }}
 
             {{- with $mod.module.uploadLimit }}
             - name: TRUSTD_SBOM_UPLOAD_LIMIT

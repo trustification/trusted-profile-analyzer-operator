@@ -25,6 +25,16 @@ Arguments: (dict)
 {{- end }}
 
 {{/*
+UI scopes passed to the backend for the frontend client.
+Arguments: .
+*/}}
+{{- define "trustification.oidc.uiScopes" -}}
+{{- if .Values.oidc.uiScopes -}}
+{{- .Values.oidc.uiScopes -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Configuration required for setting up an OIDC client for making requests
 
 Arguments (dict):

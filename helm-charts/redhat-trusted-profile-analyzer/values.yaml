@@ -3,7 +3,7 @@ partOf: trustify
 replicas: 1
 
 image:
-  fullName: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:416a66e3d492abaaa7c6a0bd19b72569218755663b09aa51462298c62d477b18
+  fullName: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:7e8f7bc3d6ac60f987cc21f275f9430665af7755659bd399f3013ee661c3bdd0
   pullPolicy: IfNotPresent
 
 rust: {}
@@ -21,6 +21,7 @@ openshift:
   useServiceCa: true
 
 oidc:
+  uiScopes: ""
   clients:
     frontend: {}
     cli:
