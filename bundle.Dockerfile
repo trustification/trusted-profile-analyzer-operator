@@ -12,8 +12,8 @@ LABEL maintainer="Red Hat"
 LABEL vendor="Red Hat, Inc."
 LABEL distribution-scope="public"
 LABEL url="https://www.redhat.com"
-LABEL version="1.1.3"
-LABEL release=1.1.3
+LABEL version="1.1.4"
+LABEL release=1.1.4
 LABEL cpe="cpe:/a:redhat:trusted_profile_analyzer:2.2::el9"
 
 LABEL features.operators.openshift.io/cni="false"
@@ -33,7 +33,7 @@ LABEL operators.operatorframework.io.bundle.metadata.v1=metadata/
 LABEL operators.operatorframework.io.bundle.package.v1=rhtpa-operator
 LABEL operators.operatorframework.io.bundle.channels.v1=stable,stable-v1.0,stable-v1.1
 LABEL operators.operatorframework.io.bundle.channel.default.v1=stable-v1.1
-LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.42.0
+LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.42.2
 LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
 LABEL operators.operatorframework.io.metrics.project_layout=helm.sdk.operatorframework.io/v1
 
