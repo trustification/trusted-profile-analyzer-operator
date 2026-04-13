@@ -290,9 +290,6 @@ properties:
   keycloak:
     $ref: "#/definitions/Feature"
 
-  keycloakPostInstall:
-    $ref: "#/definitions/Feature"
-
   postgresql:
     $ref: "#/definitions/Feature"
 
@@ -568,10 +565,10 @@ definitions:
     type: object
     additionalProperties: false
     properties:
-      uiScopes:
+      uiScope:
         type: string
         description: |
-          Optional value for the `UI_SCOPES` environment variable in the server deployment.
+          Optional value for the `UI_SCOPE` environment variable in the server deployment.
 
       issuerUrl:
         $ref: "#/definitions/ValueOrRef"
@@ -581,6 +578,12 @@ definitions:
         description: |
           Use insecure TLS when communicating with the issuer (DANGER!)
         default: false
+
+      userInfo:
+        type: boolean
+        description: |
+          Value for the `OIDC_USER_INFO` environment variable in the server deployment
+        default: true
 
       clients:
         properties:

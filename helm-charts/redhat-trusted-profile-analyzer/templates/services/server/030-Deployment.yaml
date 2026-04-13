@@ -57,8 +57,10 @@ spec:
               value: {{ include "trustification.oidc.frontendIssuerUrl" . }}
             - name: UI_CLIENT_ID
               value: {{ include "trustification.oidc.frontendClientId" . }}
-            {{- with (include "trustification.oidc.uiScopes" . | trim) }}
-            - name: UI_SCOPES
+            - name: OIDC_USER_INFO
+              value: {{ include "trustification.oidc.userInfo" . }}
+            {{- with (include "trustification.oidc.uiScope" . | trim) }}
+            - name: UI_SCOPE
               value: {{ . | quote }}
             {{- end }}
 

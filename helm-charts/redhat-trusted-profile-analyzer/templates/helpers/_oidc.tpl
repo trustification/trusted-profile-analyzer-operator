@@ -28,10 +28,18 @@ Arguments: (dict)
 UI scopes passed to the backend for the frontend client.
 Arguments: .
 */}}
-{{- define "trustification.oidc.uiScopes" -}}
-{{- if .Values.oidc.uiScopes -}}
-{{- .Values.oidc.uiScopes -}}
+{{- define "trustification.oidc.uiScope" -}}
+{{- if .Values.oidc.uiScope -}}
+{{- .Values.oidc.uiScope -}}
 {{- end -}}
+{{- end -}}
+
+{{/*
+OIDC user Info boolean.
+Arguments: .
+*/}}
+{{- define "trustification.oidc.userInfo" -}}
+{{- .Values.oidc.userInfo | default true -}}
 {{- end -}}
 
 {{/*
