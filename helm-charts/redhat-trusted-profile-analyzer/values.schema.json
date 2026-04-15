@@ -751,9 +751,9 @@
           "description": "Use insecure TLS when communicating with the issuer (DANGER!)\n",
           "default": false
         },
-        "userInfo": {
+        "loadUser": {
           "type": "boolean",
-          "description": "Value for the `OIDC_USER_INFO` boolean environment variable in the server deployment.\n",
+          "description": "Value for the `UI_LOAD_USER` boolean environment variable in the server deployment.\n",
           "default": true
         },
         "clients": {
