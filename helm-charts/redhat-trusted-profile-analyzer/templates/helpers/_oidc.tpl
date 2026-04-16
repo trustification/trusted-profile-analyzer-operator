@@ -39,7 +39,7 @@ OIDC user Info boolean.
 Arguments: .
 */}}
 {{- define "trustification.oidc.loadUser" -}}
-{{- .Values.oidc.loadUser | default true -}}
+{{- .Values.oidc.loadUser | default true | quote -}}
 {{- end -}}
 
 {{/*
