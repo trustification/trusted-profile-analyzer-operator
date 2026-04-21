@@ -1,5 +1,5 @@
 # Build the manager binary 1.25.8
-FROM registry.redhat.io/ubi9/go-toolset@sha256:4b7a967ce9c283ecfb1e7a186f7b97d3f35a479bcc38d3c03a0707f3c36e974d AS builder
+FROM registry.redhat.io/ubi10/go-toolset:1.25-1776753386 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -29,7 +29,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -mod=rea
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM registry.access.redhat.com/ubi10/ubi-minimal:latest
 
 LABEL com.redhat.component="rhtpa-operator"
 LABEL description="Red Hat Trusted Profile Analyzer Operator"
