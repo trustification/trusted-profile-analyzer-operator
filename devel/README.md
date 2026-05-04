@@ -24,7 +24,7 @@ or if you want to enable metrics and tracing
 ```
 
 # Container repository
-- Replace ```registry.redhat.io/rhtpa/rhtpa-rhel9-operator``` occurrences with your registry like quay.io/<your_username>/rhtpa-rhel9-operator 
+- Replace ```registry.redhat.io/rhtpa/rhtpa-rhel10-operator``` occurrences with your registry like quay.io/<your_username>/rhtpa-rhel10-operator 
   or map on the crc/ocp with a registry mirroring 
   
 ```console
@@ -36,12 +36,12 @@ spec:
   imageDigestMirrors:
     - mirrorSourcePolicy: AllowContactingSource
       mirrors:
-        - quay.io/<your_username>/rhtpa-trustification-service-rhel9
-      source: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9
+        - quay.io/<your_username>/rhtpa-trustification-service-rhel10
+      source: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel10
  ```
   
 
-- Replace IF NEEDED the image ```registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9``` in the makefile 
+- Replace IF NEEDED the image ```registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel10``` in the makefile 
 
 # Builds the operator
 ```console
@@ -52,7 +52,7 @@ update the operator sha and then run
 ```console
   make bundle-build
   make bundle-push
-  operator-sdk run bundle -n trustify quay.io/<your_username>/rhtpa-rhel9-operator-bundle:v2.0.0
+  operator-sdk run bundle -n trustify quay.io/<your_username>/rhtpa-rhel10-operator-bundle:v2.0.0
 ```
 
 # Deploy an instance
