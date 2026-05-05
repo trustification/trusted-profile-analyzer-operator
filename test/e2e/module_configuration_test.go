@@ -1,0 +1,353 @@
+/*
+Copyright 2025.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package e2e
+
+import (
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+)
+
+func TestServerModuleConfiguration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	dynamicClient := getDynamicClient(t)
+	k8sClient := getKubernetesClient(t)
+
+	// Create test namespace
+	testNamespace := "e2e-test-server-module"
+	createNamespace(t, k8sClient, testNamespace)
+	defer deleteNamespace(t, k8sClient, testNamespace)
+
+	// Create CR with server-only configuration
+	cr := loadCRFixture(t, "server_only_cr.yaml")
+	cr.SetNamespace(testNamespace)
+	cr.SetName("server-module-test")
+
+	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	require.NoError(t, err, "should be able to create server-only CR")
+
+	// Verify CR was created
+	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "server-module-test", metav1.GetOptions{})
+	require.NoError(t, err, "should be able to get CR")
+	assert.NotNil(t, retrieved, "retrieved CR should not be nil")
+}
+
+func TestImporterModuleConfiguration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	dynamicClient := getDynamicClient(t)
+	k8sClient := getKubernetesClient(t)
+
+	// Create test namespace
+	testNamespace := "e2e-test-importer-module"
+	createNamespace(t, k8sClient, testNamespace)
+	defer deleteNamespace(t, k8sClient, testNamespace)
+
+	// Create CR with importer-only configuration
+	cr := loadCRFixture(t, "importer_only_cr.yaml")
+	cr.SetNamespace(testNamespace)
+	cr.SetName("importer-module-test")
+
+	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	require.NoError(t, err, "should be able to create importer-only CR")
+
+	// Verify CR was created
+	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "importer-module-test", metav1.GetOptions{})
+	require.NoError(t, err, "should be able to get CR")
+	assert.NotNil(t, retrieved, "retrieved CR should not be nil")
+}
+
+func TestFullConfiguration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	dynamicClient := getDynamicClient(t)
+	k8sClient := getKubernetesClient(t)
+
+	// Create test namespace
+	testNamespace := "e2e-test-full-config"
+	createNamespace(t, k8sClient, testNamespace)
+	defer deleteNamespace(t, k8sClient, testNamespace)
+
+	// Create CR with full configuration
+	cr := loadCRFixture(t, "full_cr.yaml")
+	cr.SetNamespace(testNamespace)
+	cr.SetName("full-config-test")
+
+	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	require.NoError(t, err, "should be able to create full configuration CR")
+
+	// Verify CR was created with all fields
+	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "full-config-test", metav1.GetOptions{})
+	require.NoError(t, err, "should be able to get CR")
+
+	// Verify spec fields
+	spec, found, err := unstructured.NestedMap(retrieved.Object, "spec")
+	require.NoError(t, err, "should be able to get spec")
+	require.True(t, found, "spec should exist")
+
+	// Check appDomain
+	appDomain, found, err := unstructured.NestedString(spec, "appDomain")
+	require.NoError(t, err, "should be able to get appDomain")
+	require.True(t, found, "appDomain should exist")
+	assert.Equal(t, "full.example.com", appDomain, "appDomain should match")
+
+	// Check modules
+	modules, found, err := unstructured.NestedMap(spec, "modules")
+	require.NoError(t, err, "should be able to get modules")
+	require.True(t, found, "modules should exist")
+	assert.NotEmpty(t, modules, "modules should not be empty")
+}
+
+func TestModuleReplicasConfiguration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	dynamicClient := getDynamicClient(t)
+	k8sClient := getKubernetesClient(t)
+
+	testCases := []struct {
+		name             string
+		serverReplicas   int
+		importerReplicas int
+	}{
+		{
+			name:             "single-replica",
+			serverReplicas:   1,
+			importerReplicas: 1,
+		},
+		{
+			name:             "multi-replica-server",
+			serverReplicas:   3,
+			importerReplicas: 1,
+		},
+		{
+			name:             "multi-replica-importer",
+			serverReplicas:   1,
+			importerReplicas: 2,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			testNamespace := "e2e-test-replicas-" + tc.name
+			createNamespace(t, k8sClient, testNamespace)
+			defer deleteNamespace(t, k8sClient, testNamespace)
+
+			cr := loadCRFixture(t, "valid_cr.yaml")
+			cr.SetNamespace(testNamespace)
+			cr.SetName("replicas-test")
+
+			// Set replica counts
+			spec, _, _ := unstructured.NestedMap(cr.Object, "spec")
+			modules := map[string]interface{}{
+				"server": map[string]interface{}{
+					"enabled":  true,
+					"replicas": tc.serverReplicas,
+				},
+				"importer": map[string]interface{}{
+					"enabled":  true,
+					"replicas": tc.importerReplicas,
+				},
+			}
+			spec["modules"] = modules
+			unstructured.SetNestedMap(cr.Object, spec, "spec")
+
+			_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+			require.NoError(t, err, "should be able to create CR with replica configuration")
+
+			// Verify CR was created
+			retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "replicas-test", metav1.GetOptions{})
+			require.NoError(t, err, "should be able to get CR")
+			assert.NotNil(t, retrieved, "retrieved CR should not be nil")
+		})
+	}
+}
+
+func TestOIDCConfiguration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	dynamicClient := getDynamicClient(t)
+	k8sClient := getKubernetesClient(t)
+
+	// Create test namespace
+	testNamespace := "e2e-test-oidc"
+	createNamespace(t, k8sClient, testNamespace)
+	defer deleteNamespace(t, k8sClient, testNamespace)
+
+	cr := loadCRFixture(t, "full_cr.yaml")
+	cr.SetNamespace(testNamespace)
+	cr.SetName("oidc-test")
+
+	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	require.NoError(t, err, "should be able to create CR with OIDC configuration")
+
+	// Verify OIDC configuration
+	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "oidc-test", metav1.GetOptions{})
+	require.NoError(t, err, "should be able to get CR")
+
+	oidc, found, err := unstructured.NestedMap(retrieved.Object, "spec", "oidc")
+	require.NoError(t, err, "should be able to get OIDC config")
+	if found {
+		assert.NotEmpty(t, oidc, "OIDC configuration should not be empty")
+		t.Logf("OIDC configuration: %+v", oidc)
+	}
+}
+
+func TestDatabaseConfiguration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	dynamicClient := getDynamicClient(t)
+	k8sClient := getKubernetesClient(t)
+
+	// Create test namespace
+	testNamespace := "e2e-test-database"
+	createNamespace(t, k8sClient, testNamespace)
+	defer deleteNamespace(t, k8sClient, testNamespace)
+
+	cr := loadCRFixture(t, "full_cr.yaml")
+	cr.SetNamespace(testNamespace)
+	cr.SetName("database-test")
+
+	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	require.NoError(t, err, "should be able to create CR with database configuration")
+
+	// Verify database configuration
+	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "database-test", metav1.GetOptions{})
+	require.NoError(t, err, "should be able to get CR")
+
+	database, found, err := unstructured.NestedMap(retrieved.Object, "spec", "database")
+	require.NoError(t, err, "should be able to get database config")
+	if found {
+		assert.NotEmpty(t, database, "database configuration should not be empty")
+
+		// Check for expected database fields
+		if host, found, _ := unstructured.NestedString(database, "host"); found {
+			assert.NotEmpty(t, host, "database host should not be empty")
+		}
+	}
+}
+
+func TestStorageConfiguration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	dynamicClient := getDynamicClient(t)
+	k8sClient := getKubernetesClient(t)
+
+	// Create test namespace
+	testNamespace := "e2e-test-storage"
+	createNamespace(t, k8sClient, testNamespace)
+	defer deleteNamespace(t, k8sClient, testNamespace)
+
+	cr := loadCRFixture(t, "full_cr.yaml")
+	cr.SetNamespace(testNamespace)
+	cr.SetName("storage-test")
+
+	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	require.NoError(t, err, "should be able to create CR with storage configuration")
+
+	// Verify storage configuration
+	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "storage-test", metav1.GetOptions{})
+	require.NoError(t, err, "should be able to get CR")
+
+	storage, found, err := unstructured.NestedMap(retrieved.Object, "spec", "storage")
+	require.NoError(t, err, "should be able to get storage config")
+	if found {
+		assert.NotEmpty(t, storage, "storage configuration should not be empty")
+		t.Logf("Storage configuration present with %d fields", len(storage))
+	}
+}
+
+func TestMetricsAndTracingConfiguration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	dynamicClient := getDynamicClient(t)
+	k8sClient := getKubernetesClient(t)
+
+	// Create test namespace
+	testNamespace := "e2e-test-metrics-tracing"
+	createNamespace(t, k8sClient, testNamespace)
+	defer deleteNamespace(t, k8sClient, testNamespace)
+
+	cr := loadCRFixture(t, "full_cr.yaml")
+	cr.SetNamespace(testNamespace)
+	cr.SetName("metrics-tracing-test")
+
+	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	require.NoError(t, err, "should be able to create CR with metrics/tracing configuration")
+
+	// Verify metrics and tracing configuration
+	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "metrics-tracing-test", metav1.GetOptions{})
+	require.NoError(t, err, "should be able to get CR")
+
+	spec, found, err := unstructured.NestedMap(retrieved.Object, "spec")
+	require.NoError(t, err, "should be able to get spec")
+	require.True(t, found, "spec should exist")
+
+	if metrics, found, _ := unstructured.NestedMap(spec, "metrics"); found {
+		t.Logf("Metrics configuration present")
+		assert.NotEmpty(t, metrics, "metrics configuration should not be empty")
+	}
+
+	if tracing, found, _ := unstructured.NestedMap(spec, "tracing"); found {
+		t.Logf("Tracing configuration present")
+		assert.NotEmpty(t, tracing, "tracing configuration should not be empty")
+	}
+}

@@ -1,0 +1,12 @@
+apiVersion: rhtpa.io/v1
+kind: TrustedProfileAnalyzer
+metadata:
+  name: invalid-instance
+  namespace: test-namespace
+spec:
+  # Missing required appDomain field
+  replicas: -1  # Invalid negative value
+  modules:
+    server:
+      enabled: true
+      replicas: -5  # Invalid negative value

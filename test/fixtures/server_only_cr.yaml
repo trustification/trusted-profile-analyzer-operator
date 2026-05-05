@@ -1,0 +1,25 @@
+apiVersion: rhtpa.io/v1
+kind: TrustedProfileAnalyzer
+metadata:
+  name: server-only-instance
+  namespace: test-namespace
+spec:
+  appDomain: server.example.com
+  replicas: 1
+
+  modules:
+    server:
+      enabled: true
+      replicas: 1
+
+    importer:
+      enabled: false
+
+    createDatabase:
+      enabled: false
+
+    migrateDatabase:
+      enabled: false
+
+    createImporters:
+      enabled: false

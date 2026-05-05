@@ -1,0 +1,88 @@
+apiVersion: rhtpa.io/v1
+kind: TrustedProfileAnalyzer
+metadata:
+  name: full-instance
+  namespace: test-namespace
+spec:
+  appDomain: full.example.com
+  replicas: 2
+
+  modules:
+    server:
+      enabled: true
+      replicas: 2
+      resources:
+        requests:
+          cpu: 500m
+          memory: 512Mi
+        limits:
+          cpu: 1000m
+          memory: 1Gi
+
+    importer:
+      enabled: true
+      replicas: 1
+      resources:
+        requests:
+          cpu: 250m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+
+    createDatabase:
+      enabled: true
+
+    migrateDatabase:
+      enabled: true
+
+    createImporters:
+      enabled: true
+      sources:
+        - redhat
+        - csaf
+        - cve
+        - osv
+        - quay
+
+  oidc:
+    issuerUrl: https://keycloak.example.com/realms/trustify
+    clients:
+      frontend:
+        clientId: frontend
+      walker:
+        clientId: walker
+        clientSecret: walker-secret
+      cli:
+        clientId: cli
+        clientSecret: cli-secret
+
+  database:
+    host: postgres.database.svc
+    port: 5432
+    name: trustify
+    username: trustify
+    password: trustify123
+
+  storage:
+    endpoint: https://s3.example.com
+    region: us-east-1
+    bucket: trustify-storage
+    accessKey: AKIAIOSFODNN7EXAMPLE
+    secretKey: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+
+  metrics:
+    enabled: true
+    port: 8443
+
+  tracing:
+    enabled: true
+    endpoint: https://jaeger.example.com:14250
+
+  openshift:
+    useServiceCa: true
+
+  ingress:
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod

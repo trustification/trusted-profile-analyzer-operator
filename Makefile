@@ -110,6 +110,10 @@ vet: ## Run go vet against code.
 test: manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
 
+.PHONY: test-ci
+test-ci: manifests generate fmt vet envtest ## Run tests excluding e2e (for CI).
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test $$(go list ./... | grep -v /test/e2e) -v -race -coverprofile cover.out
+
 ##@ Build
 
 .PHONY: run
@@ -167,6 +171,16 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 
 OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH := $(shell uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
+
+## Tool Binaries
+LOCALBIN ?= $(shell pwd)/bin
+$(LOCALBIN):
+	mkdir -p $(LOCALBIN)
+
+## Tool Variables
+ENVTEST ?= $(LOCALBIN)/setup-envtest
+ENVTEST_K8S_VERSION ?= 1.31.0
+CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 
 .PHONY: kustomize
 KUSTOMIZE = $(shell pwd)/bin/kustomize

@@ -1,0 +1,34 @@
+apiVersion: rhtpa.io/v1
+kind: TrustedProfileAnalyzer
+metadata:
+  name: test-instance
+  namespace: test-namespace
+spec:
+  appDomain: test.example.com
+  replicas: 1
+  modules:
+    server:
+      enabled: true
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+    importer:
+      enabled: true
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+  oidc:
+    clients:
+      frontend:
+        clientId: test-frontend
+      cli:
+        clientSecret: test-secret
+  database:
+    host: postgres.test.svc
+    name: testdb
+  openshift:
+    useServiceCa: true
