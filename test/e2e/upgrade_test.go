@@ -33,7 +33,7 @@ import (
 
 func TestOperatorUpgradePreservesExistingCRs(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -48,11 +48,12 @@ func TestOperatorUpgradePreservesExistingCRs(t *testing.T) {
 	defer deleteNamespace(t, k8sClient, testNamespace)
 
 	// Create CR before "upgrade"
-	cr := loadCRFixture(t, "valid_cr.yaml")
+	cr := loadCRFixture(t, fixtureValidCR)
 	cr.SetNamespace(testNamespace)
 	cr.SetName("test-upgrade-preserve-instance")
 
-	created, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+	created, err := res.Create(ctx, cr, metav1.CreateOptions{})
 	require.NoError(t, err, "should be able to create CR before upgrade")
 
 	// Wait for initial reconciliation
@@ -66,14 +67,16 @@ func TestOperatorUpgradePreservesExistingCRs(t *testing.T) {
 	// 4. Verify CRs are preserved and reconciled correctly
 
 	// For this test, we'll verify the CR remains valid
-	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "test-upgrade-preserve-instance", metav1.GetOptions{})
-	require.NoError(t, err, "CR should exist after upgrade")
+	retrieved, err := res.Get(
+		ctx, "test-upgrade-preserve-instance", metav1.GetOptions{},
+	)
+	require.NoError(t, err, msgCRExistUpgrade)
 
 	// Verify spec is preserved
-	originalSpec, _, _ := unstructured.NestedMap(created.Object, "spec")
-	retrievedSpec, found, err := unstructured.NestedMap(retrieved.Object, "spec")
-	require.NoError(t, err, "should be able to get spec")
-	require.True(t, found, "spec should exist")
+	originalSpec, _, _ := unstructured.NestedMap(created.Object, fieldSpec)
+	retrievedSpec, found, err := unstructured.NestedMap(retrieved.Object, fieldSpec)
+	require.NoError(t, err, msgGetSpec)
+	require.True(t, found, msgSpecExist)
 
 	assert.NotEmpty(t, retrievedSpec, "spec should not be empty after upgrade")
 	_ = originalSpec // Used for comparison in real upgrade test
@@ -81,7 +84,7 @@ func TestOperatorUpgradePreservesExistingCRs(t *testing.T) {
 
 func TestOperatorUpgradeHandlesNewCRDs(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx := context.Background()
@@ -98,7 +101,10 @@ func TestOperatorUpgradeHandlesNewCRDs(t *testing.T) {
 	require.NoError(t, err, "should be able to create apiextensions client")
 
 	// Verify CRD is registered
-	crd, err := apiextensionsClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, "trustedprofileanalyzers.rhtpa.io", metav1.GetOptions{})
+	crdClient := apiextensionsClient.ApiextensionsV1().CustomResourceDefinitions()
+	crd, err := crdClient.Get(
+		ctx, "trustedprofileanalyzers.rhtpa.io", metav1.GetOptions{},
+	)
 	require.NoError(t, err, "CRD should exist")
 
 	// Verify CRD has correct group and versions
@@ -118,7 +124,7 @@ func TestOperatorUpgradeHandlesNewCRDs(t *testing.T) {
 
 func TestOperatorUpgradeRollout(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -140,13 +146,14 @@ func TestOperatorUpgradeRollout(t *testing.T) {
 	}
 
 	// Verify deployment is at current revision
-	assert.NotEmpty(t, deployment.ObjectMeta.Generation, "deployment should have generation number")
-	assert.Equal(t, deployment.ObjectMeta.Generation, deployment.Status.ObservedGeneration, "deployment should be up to date")
+	assert.NotEmpty(t, deployment.Generation, "deployment should have generation number")
+	assert.Equal(t, deployment.Generation,
+		deployment.Status.ObservedGeneration, "deployment should be up to date")
 }
 
 func TestOperatorUpgradePreservesLeaderElection(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -184,7 +191,7 @@ func TestOperatorUpgradePreservesLeaderElection(t *testing.T) {
 
 func TestOperatorUpgradeHandlesHelmReleases(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -199,12 +206,13 @@ func TestOperatorUpgradeHandlesHelmReleases(t *testing.T) {
 	defer deleteNamespace(t, k8sClient, testNamespace)
 
 	// Create CR
-	cr := loadCRFixture(t, "minimal_cr.yaml")
+	cr := loadCRFixture(t, fixtureMinimalCR)
 	cr.SetNamespace(testNamespace)
 	cr.SetName("test-upgrade-helm-instance")
 
-	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
-	require.NoError(t, err, "should be able to create CR")
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+	_, err := res.Create(ctx, cr, metav1.CreateOptions{})
+	require.NoError(t, err, msgCreateCR)
 
 	// Wait for Helm release to be created
 	time.Sleep(30 * time.Second)
@@ -217,8 +225,10 @@ func TestOperatorUpgradeHandlesHelmReleases(t *testing.T) {
 	t.Logf("Found Helm release: %s", releaseName)
 
 	// Simulate upgrade by triggering reconciliation
-	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "test-upgrade-helm-instance", metav1.GetOptions{})
-	require.NoError(t, err, "should be able to get CR")
+	retrieved, err := res.Get(
+		ctx, "test-upgrade-helm-instance", metav1.GetOptions{},
+	)
+	require.NoError(t, err, msgGetCR)
 
 	// Add annotation to trigger reconciliation
 	annotations := retrieved.GetAnnotations()
@@ -228,8 +238,8 @@ func TestOperatorUpgradeHandlesHelmReleases(t *testing.T) {
 	annotations["helm.sh/upgrade-test"] = time.Now().Format(time.RFC3339)
 	retrieved.SetAnnotations(annotations)
 
-	_, err = dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Update(ctx, retrieved, metav1.UpdateOptions{})
-	require.NoError(t, err, "should be able to update CR")
+	_, err = res.Update(ctx, retrieved, metav1.UpdateOptions{})
+	require.NoError(t, err, msgUpdateCR)
 
 	// Wait for Helm to reconcile
 	time.Sleep(30 * time.Second)
@@ -241,46 +251,37 @@ func TestOperatorUpgradeHandlesHelmReleases(t *testing.T) {
 
 func TestOperatorUpgradeBackwardCompatibility(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	dynamicClient := getDynamicClient(t)
-	k8sClient := getKubernetesClient(t)
-
-	// Create test namespace
-	testNamespace := "e2e-test-upgrade-compat"
-	createNamespace(t, k8sClient, testNamespace)
-	defer deleteNamespace(t, k8sClient, testNamespace)
-
-	// Create CR with minimal spec (backward compatible)
-	cr := loadCRFixture(t, "minimal_cr.yaml")
-	cr.SetNamespace(testNamespace)
-	cr.SetName("test-upgrade-compat-instance")
-
-	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
-	require.NoError(t, err, "should be able to create minimal CR")
-
-	// Verify CR is accepted and processed
-	time.Sleep(20 * time.Second)
-
-	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "test-upgrade-compat-instance", metav1.GetOptions{})
-	require.NoError(t, err, "minimal CR should be processed successfully")
-	assert.NotNil(t, retrieved, "CR should exist")
+	// Create CR with minimal spec (backward compatible) and verify
+	// it is accepted and processed after upgrade.
+	retrieved := createCRAndVerifyExists(
+		t, ctx, getDynamicClient(t), getKubernetesClient(t),
+		"e2e-test-upgrade-compat", "test-upgrade-compat-instance",
+		fixtureMinimalCR, 20*time.Second,
+		"should be able to create minimal CR",
+		"minimal CR should be processed successfully",
+	)
+	assert.NotNil(t, retrieved, msgCRExist)
 }
 
 func TestOperatorUpgradeRBACPermissions(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx := context.Background()
 	k8sClient := getKubernetesClient(t)
 
 	// Verify RBAC resources exist after upgrade
-	sa, err := k8sClient.CoreV1().ServiceAccounts(operatorNamespace).Get(ctx, "rhtpa-operator-controller-manager", metav1.GetOptions{})
+	saClient := k8sClient.CoreV1().ServiceAccounts(operatorNamespace)
+	sa, err := saClient.Get(
+		ctx, "rhtpa-operator-controller-manager", metav1.GetOptions{},
+	)
 	require.NoError(t, err, "service account should exist after upgrade")
 	assert.NotNil(t, sa, "service account should not be nil")
 
@@ -308,7 +309,7 @@ func TestOperatorUpgradeRBACPermissions(t *testing.T) {
 
 func TestOperatorUpgradeWithExistingResources(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -323,22 +324,25 @@ func TestOperatorUpgradeWithExistingResources(t *testing.T) {
 	defer deleteNamespace(t, k8sClient, testNamespace)
 
 	// Create CR
-	cr := loadCRFixture(t, "valid_cr.yaml")
+	cr := loadCRFixture(t, fixtureValidCR)
 	cr.SetNamespace(testNamespace)
 	cr.SetName("test-upgrade-resources-instance")
 
-	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
-	require.NoError(t, err, "should be able to create CR")
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+	_, err := res.Create(ctx, cr, metav1.CreateOptions{})
+	require.NoError(t, err, msgCreateCR)
 
 	// Wait for resources to be created
 	time.Sleep(30 * time.Second)
 
 	// Count resources before "upgrade"
-	configMapsBefore, err := k8sClient.CoreV1().ConfigMaps(testNamespace).List(ctx, metav1.ListOptions{})
+	cmClient := k8sClient.CoreV1().ConfigMaps(testNamespace)
+	configMapsBefore, err := cmClient.List(ctx, metav1.ListOptions{})
 	require.NoError(t, err, "should be able to list ConfigMaps")
 	configMapCountBefore := len(configMapsBefore.Items)
 
-	secretsBefore, err := k8sClient.CoreV1().Secrets(testNamespace).List(ctx, metav1.ListOptions{})
+	secClient := k8sClient.CoreV1().Secrets(testNamespace)
+	secretsBefore, err := secClient.List(ctx, metav1.ListOptions{})
 	require.NoError(t, err, "should be able to list Secrets")
 	secretCountBefore := len(secretsBefore.Items)
 
@@ -346,20 +350,24 @@ func TestOperatorUpgradeWithExistingResources(t *testing.T) {
 	time.Sleep(20 * time.Second)
 
 	// Verify resources are preserved
-	configMapsAfter, err := k8sClient.CoreV1().ConfigMaps(testNamespace).List(ctx, metav1.ListOptions{})
+	configMapsAfter, err := cmClient.List(ctx, metav1.ListOptions{})
 	require.NoError(t, err, "should be able to list ConfigMaps after upgrade")
 
-	secretsAfter, err := k8sClient.CoreV1().Secrets(testNamespace).List(ctx, metav1.ListOptions{})
+	secretsAfter, err := secClient.List(ctx, metav1.ListOptions{})
 	require.NoError(t, err, "should be able to list Secrets after upgrade")
 
 	// Resources should be preserved (or recreated by Helm)
-	t.Logf("ConfigMaps before: %d, after: %d", configMapCountBefore, len(configMapsAfter.Items))
-	t.Logf("Secrets before: %d, after: %d", secretCountBefore, len(secretsAfter.Items))
+	t.Logf("ConfigMaps before: %d, after: %d",
+		configMapCountBefore, len(configMapsAfter.Items))
+	t.Logf("Secrets before: %d, after: %d",
+		secretCountBefore, len(secretsAfter.Items))
 
 	// Verify CR still exists
-	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "test-upgrade-resources-instance", metav1.GetOptions{})
-	require.NoError(t, err, "CR should exist after upgrade")
-	assert.NotNil(t, retrieved, "CR should not be nil")
+	retrieved, err := res.Get(
+		ctx, "test-upgrade-resources-instance", metav1.GetOptions{},
+	)
+	require.NoError(t, err, msgCRExistUpgrade)
+	assert.NotNil(t, retrieved, msgCRNotNil)
 }
 
 // Helper functions
@@ -374,7 +382,7 @@ func getHelmReleases(t *testing.T, k8sClient *kubernetes.Clientset, namespace st
 	configMaps, err := k8sClient.CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{})
 	if err == nil {
 		for _, cm := range configMaps.Items {
-			if cm.Labels["owner"] == "helm" {
+			if cm.Labels["owner"] == fieldHelm {
 				releases = append(releases, cm.Labels["name"])
 			}
 		}
@@ -384,7 +392,7 @@ func getHelmReleases(t *testing.T, k8sClient *kubernetes.Clientset, namespace st
 	secrets, err := k8sClient.CoreV1().Secrets(namespace).List(ctx, metav1.ListOptions{})
 	if err == nil {
 		for _, secret := range secrets.Items {
-			if secret.Type == "helm.sh/release.v1" || secret.Labels["owner"] == "helm" {
+			if secret.Type == "helm.sh/release.v1" || secret.Labels["owner"] == fieldHelm {
 				if name, ok := secret.Labels["name"]; ok {
 					releases = append(releases, name)
 				}

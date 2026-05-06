@@ -155,7 +155,9 @@ func verifyCRDInstalled() error {
 		return err
 	}
 
-	_, err = apiextensionsClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, "trustedprofileanalyzers.rhtpa.io", metav1.GetOptions{})
+	crdName := "trustedprofileanalyzers.rhtpa.io"
+	crdClient := apiextensionsClient.ApiextensionsV1().CustomResourceDefinitions()
+	_, err = crdClient.Get(ctx, crdName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("CRD trustedprofileanalyzers.rhtpa.io not found: %w", err)
 	}

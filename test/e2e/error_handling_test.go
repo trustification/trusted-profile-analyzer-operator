@@ -26,9 +26,17 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
+const (
+	crAPIVersion     = "rhtpa.io/v1"
+	crKind           = "TrustedProfileAnalyzer"
+	errAppDomain     = "test.example.com"
+	crRapidUpdates   = "test-rapid-updates"
+	logExpectedError = "Got expected error: %v"
+)
+
 func TestCRCreationWithMissingAppDomain(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -45,20 +53,21 @@ func TestCRCreationWithMissingAppDomain(t *testing.T) {
 	// Create CR without appDomain
 	cr := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": "rhtpa.io/v1",
-			"kind":       "TrustedProfileAnalyzer",
-			"metadata": map[string]interface{}{
-				"name":      "test-missing-domain",
-				"namespace": testNamespace,
+			fieldAPIVersion: crAPIVersion,
+			fieldKind:       crKind,
+			fieldMetadata: map[string]interface{}{
+				fieldName:      "test-missing-domain",
+				fieldNamespace: testNamespace,
 			},
-			"spec": map[string]interface{}{
+			fieldSpec: map[string]interface{}{
 				// Missing appDomain - should fail validation if schema validation is enabled
-				"replicas": 1,
+				fieldReplicas: 1,
 			},
 		},
 	}
 
-	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+	_, err := res.Create(ctx, cr, metav1.CreateOptions{})
 
 	// Depending on CRD validation, this might fail or succeed
 	// If validation is enabled, it should fail
@@ -71,7 +80,7 @@ func TestCRCreationWithMissingAppDomain(t *testing.T) {
 
 func TestCRCreationWithInvalidValues(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -88,18 +97,18 @@ func TestCRCreationWithInvalidValues(t *testing.T) {
 		{
 			name: "negative replicas",
 			spec: map[string]interface{}{
-				"appDomain": "test.example.com",
-				"replicas":  -1,
+				fieldAppDomain: errAppDomain,
+				fieldReplicas:  -1,
 			},
 			expectError: true,
 		},
 		{
 			name: "invalid module config",
 			spec: map[string]interface{}{
-				"appDomain": "test.example.com",
-				"modules": map[string]interface{}{
-					"server": map[string]interface{}{
-						"replicas": -5,
+				fieldAppDomain: errAppDomain,
+				fieldModules: map[string]interface{}{
+					fieldServer: map[string]interface{}{
+						fieldReplicas: -5,
 					},
 				},
 			},
@@ -108,7 +117,7 @@ func TestCRCreationWithInvalidValues(t *testing.T) {
 		{
 			name: "empty appDomain",
 			spec: map[string]interface{}{
-				"appDomain": "",
+				fieldAppDomain: "",
 			},
 			expectError: true,
 		},
@@ -122,22 +131,23 @@ func TestCRCreationWithInvalidValues(t *testing.T) {
 
 			cr := &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": "rhtpa.io/v1",
-					"kind":       "TrustedProfileAnalyzer",
-					"metadata": map[string]interface{}{
-						"name":      "test-invalid",
-						"namespace": testNamespace,
+					fieldAPIVersion: crAPIVersion,
+					fieldKind:       crKind,
+					fieldMetadata: map[string]interface{}{
+						fieldName:      "test-invalid",
+						fieldNamespace: testNamespace,
 					},
-					"spec": tc.spec,
+					fieldSpec: tc.spec,
 				},
 			}
 
-			_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+			res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+			_, err := res.Create(ctx, cr, metav1.CreateOptions{})
 
 			if tc.expectError {
 				// Validation may or may not be enforced depending on CRD configuration
 				if err != nil {
-					t.Logf("Got expected error: %v", err)
+					t.Logf(logExpectedError, err)
 				} else {
 					t.Logf("Warning: expected error but creation succeeded - validation may not be enforced")
 				}
@@ -150,7 +160,7 @@ func TestCRCreationWithInvalidValues(t *testing.T) {
 
 func TestCRUpdateWithInvalidSpec(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -165,23 +175,24 @@ func TestCRUpdateWithInvalidSpec(t *testing.T) {
 	defer deleteNamespace(t, k8sClient, testNamespace)
 
 	// Create valid CR
-	cr := loadCRFixture(t, "minimal_cr.yaml")
+	cr := loadCRFixture(t, fixtureMinimalCR)
 	cr.SetNamespace(testNamespace)
 	cr.SetName("test-invalid-update")
 
-	created, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+	created, err := res.Create(ctx, cr, metav1.CreateOptions{})
 	require.NoError(t, err, "should be able to create valid CR")
 
 	// Try to update with invalid spec
 	spec := map[string]interface{}{
-		"appDomain": "",  // Invalid empty appDomain
-		"replicas":  -10, // Invalid negative replicas
+		fieldAppDomain: "",  // Invalid empty appDomain
+		fieldReplicas:  -10, // Invalid negative replicas
 	}
 
-	err = unstructured.SetNestedField(created.Object, spec, "spec")
-	require.NoError(t, err, "should be able to set spec field")
+	err = unstructured.SetNestedField(created.Object, spec, fieldSpec)
+	require.NoError(t, err, msgSetField)
 
-	_, err = dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Update(ctx, created, metav1.UpdateOptions{})
+	_, err = res.Update(ctx, created, metav1.UpdateOptions{})
 
 	// Depending on validation, this may or may not fail
 	if err != nil {
@@ -193,7 +204,7 @@ func TestCRUpdateWithInvalidSpec(t *testing.T) {
 
 func TestCRDeletionOfNonExistentResource(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -208,15 +219,16 @@ func TestCRDeletionOfNonExistentResource(t *testing.T) {
 	defer deleteNamespace(t, k8sClient, testNamespace)
 
 	// Try to delete a resource that doesn't exist
-	err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Delete(ctx, "nonexistent-resource", metav1.DeleteOptions{})
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+	err := res.Delete(ctx, "nonexistent-resource", metav1.DeleteOptions{})
 
 	assert.Error(t, err, "should error when deleting non-existent resource")
-	t.Logf("Got expected error: %v", err)
+	t.Logf(logExpectedError, err)
 }
 
 func TestCRCreationInNonExistentNamespace(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -227,19 +239,20 @@ func TestCRCreationInNonExistentNamespace(t *testing.T) {
 	// Try to create CR in a namespace that doesn't exist
 	nonExistentNamespace := "e2e-test-nonexistent-ns-12345"
 
-	cr := loadCRFixture(t, "minimal_cr.yaml")
+	cr := loadCRFixture(t, fixtureMinimalCR)
 	cr.SetNamespace(nonExistentNamespace)
 	cr.SetName("test-in-nonexistent-ns")
 
-	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(nonExistentNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(nonExistentNamespace)
+	_, err := res.Create(ctx, cr, metav1.CreateOptions{})
 
 	assert.Error(t, err, "should error when creating CR in non-existent namespace")
-	t.Logf("Got expected error: %v", err)
+	t.Logf(logExpectedError, err)
 }
 
 func TestCRWithMalformedSpec(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -256,23 +269,24 @@ func TestCRWithMalformedSpec(t *testing.T) {
 	// Create CR with type mismatches
 	cr := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": "rhtpa.io/v1",
-			"kind":       "TrustedProfileAnalyzer",
-			"metadata": map[string]interface{}{
-				"name":      "test-malformed",
-				"namespace": testNamespace,
+			fieldAPIVersion: crAPIVersion,
+			fieldKind:       crKind,
+			fieldMetadata: map[string]interface{}{
+				fieldName:      "test-malformed",
+				fieldNamespace: testNamespace,
 			},
-			"spec": map[string]interface{}{
-				"appDomain": "test.example.com",
-				"replicas":  "not-a-number", // Wrong type - should be int
-				"modules": map[string]interface{}{
-					"server": "not-an-object", // Wrong type - should be object
+			fieldSpec: map[string]interface{}{
+				fieldAppDomain: errAppDomain,
+				fieldReplicas:  "not-a-number", // Wrong type - should be int
+				fieldModules: map[string]interface{}{
+					fieldServer: "not-an-object", // Wrong type - should be object
 				},
 			},
 		},
 	}
 
-	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+	_, err := res.Create(ctx, cr, metav1.CreateOptions{})
 
 	// This should fail if type validation is enforced
 	if err != nil {
@@ -284,7 +298,7 @@ func TestCRWithMalformedSpec(t *testing.T) {
 
 func TestOperatorHandlesRapidCRUpdates(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -299,32 +313,35 @@ func TestOperatorHandlesRapidCRUpdates(t *testing.T) {
 	defer deleteNamespace(t, k8sClient, testNamespace)
 
 	// Create CR
-	cr := loadCRFixture(t, "minimal_cr.yaml")
+	cr := loadCRFixture(t, fixtureMinimalCR)
 	cr.SetNamespace(testNamespace)
-	cr.SetName("test-rapid-updates")
+	cr.SetName(crRapidUpdates)
 
-	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
-	require.NoError(t, err, "should be able to create CR")
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+	_, err := res.Create(ctx, cr, metav1.CreateOptions{})
+	require.NoError(t, err, msgCreateCR)
 
 	// Perform rapid updates
 	for i := 0; i < 5; i++ {
 		// Get latest version
-		latest, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "test-rapid-updates", metav1.GetOptions{})
-		require.NoError(t, err, "should be able to get CR")
+		latest, err := res.Get(ctx, crRapidUpdates, metav1.GetOptions{})
+		require.NoError(t, err, msgGetCR)
 
 		// Update spec
 		newDomain := "test" + string(rune('0'+i)) + ".example.com"
-		err = unstructured.SetNestedField(latest.Object, newDomain, "spec", "appDomain")
-		require.NoError(t, err, "should be able to set field")
+		err = unstructured.SetNestedField(
+			latest.Object, newDomain, fieldSpec, fieldAppDomain,
+		)
+		require.NoError(t, err, msgSetField)
 
-		_, err = dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Update(ctx, latest, metav1.UpdateOptions{})
+		_, err = res.Update(ctx, latest, metav1.UpdateOptions{})
 		if err != nil {
 			t.Logf("Update %d failed (may be expected due to conflicts): %v", i, err)
 		}
 	}
 
 	// Verify final state
-	final, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "test-rapid-updates", metav1.GetOptions{})
+	final, err := res.Get(ctx, crRapidUpdates, metav1.GetOptions{})
 	require.NoError(t, err, "should be able to get final CR state")
 	assert.NotNil(t, final, "final CR should exist")
 }

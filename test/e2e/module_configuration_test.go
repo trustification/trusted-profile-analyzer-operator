@@ -26,9 +26,16 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
+const (
+	fixtureFullCR   = "full_cr.yaml"
+	msgRetrievedNil = "retrieved CR should not be nil"
+	msgGetAppDomain = "should be able to get appDomain"
+	msgGetModules   = "should be able to get modules"
+)
+
 func TestServerModuleConfiguration(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -47,18 +54,19 @@ func TestServerModuleConfiguration(t *testing.T) {
 	cr.SetNamespace(testNamespace)
 	cr.SetName("server-module-test")
 
-	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+	_, err := res.Create(ctx, cr, metav1.CreateOptions{})
 	require.NoError(t, err, "should be able to create server-only CR")
 
 	// Verify CR was created
-	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "server-module-test", metav1.GetOptions{})
-	require.NoError(t, err, "should be able to get CR")
-	assert.NotNil(t, retrieved, "retrieved CR should not be nil")
+	retrieved, err := res.Get(ctx, "server-module-test", metav1.GetOptions{})
+	require.NoError(t, err, msgGetCR)
+	assert.NotNil(t, retrieved, msgRetrievedNil)
 }
 
 func TestImporterModuleConfiguration(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -77,18 +85,19 @@ func TestImporterModuleConfiguration(t *testing.T) {
 	cr.SetNamespace(testNamespace)
 	cr.SetName("importer-module-test")
 
-	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+	_, err := res.Create(ctx, cr, metav1.CreateOptions{})
 	require.NoError(t, err, "should be able to create importer-only CR")
 
 	// Verify CR was created
-	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "importer-module-test", metav1.GetOptions{})
-	require.NoError(t, err, "should be able to get CR")
-	assert.NotNil(t, retrieved, "retrieved CR should not be nil")
+	retrieved, err := res.Get(ctx, "importer-module-test", metav1.GetOptions{})
+	require.NoError(t, err, msgGetCR)
+	assert.NotNil(t, retrieved, msgRetrievedNil)
 }
 
 func TestFullConfiguration(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -103,38 +112,39 @@ func TestFullConfiguration(t *testing.T) {
 	defer deleteNamespace(t, k8sClient, testNamespace)
 
 	// Create CR with full configuration
-	cr := loadCRFixture(t, "full_cr.yaml")
+	cr := loadCRFixture(t, fixtureFullCR)
 	cr.SetNamespace(testNamespace)
 	cr.SetName("full-config-test")
 
-	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+	_, err := res.Create(ctx, cr, metav1.CreateOptions{})
 	require.NoError(t, err, "should be able to create full configuration CR")
 
 	// Verify CR was created with all fields
-	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "full-config-test", metav1.GetOptions{})
-	require.NoError(t, err, "should be able to get CR")
+	retrieved, err := res.Get(ctx, "full-config-test", metav1.GetOptions{})
+	require.NoError(t, err, msgGetCR)
 
 	// Verify spec fields
-	spec, found, err := unstructured.NestedMap(retrieved.Object, "spec")
-	require.NoError(t, err, "should be able to get spec")
-	require.True(t, found, "spec should exist")
+	spec, found, err := unstructured.NestedMap(retrieved.Object, fieldSpec)
+	require.NoError(t, err, msgGetSpec)
+	require.True(t, found, msgSpecExist)
 
 	// Check appDomain
-	appDomain, found, err := unstructured.NestedString(spec, "appDomain")
-	require.NoError(t, err, "should be able to get appDomain")
+	appDomain, found, err := unstructured.NestedString(spec, fieldAppDomain)
+	require.NoError(t, err, msgGetAppDomain)
 	require.True(t, found, "appDomain should exist")
 	assert.Equal(t, "full.example.com", appDomain, "appDomain should match")
 
 	// Check modules
-	modules, found, err := unstructured.NestedMap(spec, "modules")
-	require.NoError(t, err, "should be able to get modules")
+	modules, found, err := unstructured.NestedMap(spec, fieldModules)
+	require.NoError(t, err, msgGetModules)
 	require.True(t, found, "modules should exist")
 	assert.NotEmpty(t, modules, "modules should not be empty")
 }
 
 func TestModuleReplicasConfiguration(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -171,39 +181,40 @@ func TestModuleReplicasConfiguration(t *testing.T) {
 			createNamespace(t, k8sClient, testNamespace)
 			defer deleteNamespace(t, k8sClient, testNamespace)
 
-			cr := loadCRFixture(t, "valid_cr.yaml")
+			cr := loadCRFixture(t, fixtureValidCR)
 			cr.SetNamespace(testNamespace)
 			cr.SetName("replicas-test")
 
 			// Set replica counts
-			spec, _, _ := unstructured.NestedMap(cr.Object, "spec")
+			spec, _, _ := unstructured.NestedMap(cr.Object, fieldSpec)
 			modules := map[string]interface{}{
-				"server": map[string]interface{}{
-					"enabled":  true,
-					"replicas": tc.serverReplicas,
+				fieldServer: map[string]interface{}{
+					fieldEnabled:  true,
+					fieldReplicas: tc.serverReplicas,
 				},
-				"importer": map[string]interface{}{
-					"enabled":  true,
-					"replicas": tc.importerReplicas,
+				fieldImporter: map[string]interface{}{
+					fieldEnabled:  true,
+					fieldReplicas: tc.importerReplicas,
 				},
 			}
-			spec["modules"] = modules
-			unstructured.SetNestedMap(cr.Object, spec, "spec")
+			spec[fieldModules] = modules
+			_ = unstructured.SetNestedMap(cr.Object, spec, fieldSpec)
 
-			_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
-			require.NoError(t, err, "should be able to create CR with replica configuration")
+			res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+			_, err := res.Create(ctx, cr, metav1.CreateOptions{})
+			require.NoError(t, err, "should be able to create CR with replica config")
 
 			// Verify CR was created
-			retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "replicas-test", metav1.GetOptions{})
-			require.NoError(t, err, "should be able to get CR")
-			assert.NotNil(t, retrieved, "retrieved CR should not be nil")
+			retrieved, err := res.Get(ctx, "replicas-test", metav1.GetOptions{})
+			require.NoError(t, err, msgGetCR)
+			assert.NotNil(t, retrieved, msgRetrievedNil)
 		})
 	}
 }
 
 func TestOIDCConfiguration(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -217,18 +228,19 @@ func TestOIDCConfiguration(t *testing.T) {
 	createNamespace(t, k8sClient, testNamespace)
 	defer deleteNamespace(t, k8sClient, testNamespace)
 
-	cr := loadCRFixture(t, "full_cr.yaml")
+	cr := loadCRFixture(t, fixtureFullCR)
 	cr.SetNamespace(testNamespace)
 	cr.SetName("oidc-test")
 
-	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+	_, err := res.Create(ctx, cr, metav1.CreateOptions{})
 	require.NoError(t, err, "should be able to create CR with OIDC configuration")
 
 	// Verify OIDC configuration
-	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "oidc-test", metav1.GetOptions{})
-	require.NoError(t, err, "should be able to get CR")
+	retrieved, err := res.Get(ctx, "oidc-test", metav1.GetOptions{})
+	require.NoError(t, err, msgGetCR)
 
-	oidc, found, err := unstructured.NestedMap(retrieved.Object, "spec", "oidc")
+	oidc, found, err := unstructured.NestedMap(retrieved.Object, fieldSpec, "oidc")
 	require.NoError(t, err, "should be able to get OIDC config")
 	if found {
 		assert.NotEmpty(t, oidc, "OIDC configuration should not be empty")
@@ -238,7 +250,7 @@ func TestOIDCConfiguration(t *testing.T) {
 
 func TestDatabaseConfiguration(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -252,18 +264,19 @@ func TestDatabaseConfiguration(t *testing.T) {
 	createNamespace(t, k8sClient, testNamespace)
 	defer deleteNamespace(t, k8sClient, testNamespace)
 
-	cr := loadCRFixture(t, "full_cr.yaml")
+	cr := loadCRFixture(t, fixtureFullCR)
 	cr.SetNamespace(testNamespace)
 	cr.SetName("database-test")
 
-	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+	_, err := res.Create(ctx, cr, metav1.CreateOptions{})
 	require.NoError(t, err, "should be able to create CR with database configuration")
 
 	// Verify database configuration
-	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "database-test", metav1.GetOptions{})
-	require.NoError(t, err, "should be able to get CR")
+	retrieved, err := res.Get(ctx, "database-test", metav1.GetOptions{})
+	require.NoError(t, err, msgGetCR)
 
-	database, found, err := unstructured.NestedMap(retrieved.Object, "spec", "database")
+	database, found, err := unstructured.NestedMap(retrieved.Object, fieldSpec, "database")
 	require.NoError(t, err, "should be able to get database config")
 	if found {
 		assert.NotEmpty(t, database, "database configuration should not be empty")
@@ -277,7 +290,7 @@ func TestDatabaseConfiguration(t *testing.T) {
 
 func TestStorageConfiguration(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -291,18 +304,19 @@ func TestStorageConfiguration(t *testing.T) {
 	createNamespace(t, k8sClient, testNamespace)
 	defer deleteNamespace(t, k8sClient, testNamespace)
 
-	cr := loadCRFixture(t, "full_cr.yaml")
+	cr := loadCRFixture(t, fixtureFullCR)
 	cr.SetNamespace(testNamespace)
 	cr.SetName("storage-test")
 
-	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+	_, err := res.Create(ctx, cr, metav1.CreateOptions{})
 	require.NoError(t, err, "should be able to create CR with storage configuration")
 
 	// Verify storage configuration
-	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "storage-test", metav1.GetOptions{})
-	require.NoError(t, err, "should be able to get CR")
+	retrieved, err := res.Get(ctx, "storage-test", metav1.GetOptions{})
+	require.NoError(t, err, msgGetCR)
 
-	storage, found, err := unstructured.NestedMap(retrieved.Object, "spec", "storage")
+	storage, found, err := unstructured.NestedMap(retrieved.Object, fieldSpec, "storage")
 	require.NoError(t, err, "should be able to get storage config")
 	if found {
 		assert.NotEmpty(t, storage, "storage configuration should not be empty")
@@ -312,7 +326,7 @@ func TestStorageConfiguration(t *testing.T) {
 
 func TestMetricsAndTracingConfiguration(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -326,20 +340,21 @@ func TestMetricsAndTracingConfiguration(t *testing.T) {
 	createNamespace(t, k8sClient, testNamespace)
 	defer deleteNamespace(t, k8sClient, testNamespace)
 
-	cr := loadCRFixture(t, "full_cr.yaml")
+	cr := loadCRFixture(t, fixtureFullCR)
 	cr.SetNamespace(testNamespace)
 	cr.SetName("metrics-tracing-test")
 
-	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
-	require.NoError(t, err, "should be able to create CR with metrics/tracing configuration")
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+	_, err := res.Create(ctx, cr, metav1.CreateOptions{})
+	require.NoError(t, err, "should be able to create CR with metrics/tracing config")
 
 	// Verify metrics and tracing configuration
-	retrieved, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Get(ctx, "metrics-tracing-test", metav1.GetOptions{})
-	require.NoError(t, err, "should be able to get CR")
+	retrieved, err := res.Get(ctx, "metrics-tracing-test", metav1.GetOptions{})
+	require.NoError(t, err, msgGetCR)
 
-	spec, found, err := unstructured.NestedMap(retrieved.Object, "spec")
-	require.NoError(t, err, "should be able to get spec")
-	require.True(t, found, "spec should exist")
+	spec, found, err := unstructured.NestedMap(retrieved.Object, fieldSpec)
+	require.NoError(t, err, msgGetSpec)
+	require.True(t, found, msgSpecExist)
 
 	if metrics, found, _ := unstructured.NestedMap(spec, "metrics"); found {
 		t.Logf("Metrics configuration present")

@@ -38,7 +38,79 @@ const (
 	testTimeout       = 5 * time.Minute
 	operatorNamespace = "trusted-profile-analyzer-operator-system"
 	operatorName      = "trusted-profile-analyzer-operator-controller-manager"
+
+	// Label selector for operator pods.
+	controlPlaneLabel         = "control-plane"
+	controlPlaneValue         = "controller-manager"
+	controlPlaneLabelSelector = "control-plane=controller-manager"
+
+	// Fixture file names.
+	fixtureMinimalCR = "minimal_cr.yaml"
+	fixtureValidCR   = "valid_cr.yaml"
+	fieldSpec        = "spec"
+	fieldAPIVersion  = "apiVersion"
+	fieldKind        = "kind"
+	fieldMetadata    = "metadata"
+	fieldName        = "name"
+	fieldNamespace   = "namespace"
+	fieldAppDomain   = "appDomain"
+	fieldReplicas    = "replicas"
+	fieldModules     = "modules"
+	fieldServer      = "server"
+	fieldEnabled     = "enabled"
+	fieldImporter    = "importer"
+	fieldHelm        = "helm"
+
+	// Common test skip messages.
+	skipE2ETest         = "skipping e2e test in short mode"
+	skipPerformanceTest = "skipping performance test in short mode"
+
+	// Common assertion / error messages.
+	msgCreateCR       = "should be able to create CR"
+	msgGetCR          = "should be able to get CR"
+	msgUpdateCR       = "should be able to update CR"
+	msgDeleteCR       = "should be able to delete CR"
+	msgGetSpec        = "should be able to get spec"
+	msgSetField       = "should be able to set field"
+	msgSpecExist      = "spec should exist"
+	msgCRExist        = "CR should exist"
+	msgCRNotNil       = "CR should not be nil"
+	msgCRExistUpgrade = "CR should exist after upgrade"
 )
+
+// createCRAndVerifyExists creates a CR from a fixture in the given
+// namespace, waits for reconciliation, and verifies it still exists.
+// It returns the retrieved CR.
+func createCRAndVerifyExists(
+	t *testing.T,
+	ctx context.Context,
+	dynamicClient dynamic.Interface,
+	k8sClient *kubernetes.Clientset,
+	namespace, crName, fixture string,
+	waitDuration time.Duration,
+	createMsg, verifyMsg string,
+) *unstructured.Unstructured {
+	t.Helper()
+
+	createNamespace(t, k8sClient, namespace)
+	t.Cleanup(func() { deleteNamespace(t, k8sClient, namespace) })
+
+	cr := loadCRFixture(t, fixture)
+	cr.SetNamespace(namespace)
+	cr.SetName(crName)
+
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).
+		Namespace(namespace)
+	_, err := res.Create(ctx, cr, metav1.CreateOptions{})
+	require.NoError(t, err, createMsg)
+
+	time.Sleep(waitDuration)
+
+	retrieved, err := res.Get(ctx, crName, metav1.GetOptions{})
+	require.NoError(t, err, verifyMsg)
+
+	return retrieved
+}
 
 // getKubernetesClient returns a Kubernetes clientset for testing
 func getKubernetesClient(t *testing.T) *kubernetes.Clientset {

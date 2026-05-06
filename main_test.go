@@ -35,9 +35,9 @@ func TestWatchesFileLoad(t *testing.T) {
 	assert.Equal(t, 1, len(ws), "should have exactly one watch")
 
 	w := ws[0]
-	assert.Equal(t, "rhtpa.io", w.GroupVersionKind.Group, "group should be rhtpa.io")
-	assert.Equal(t, "v1", w.GroupVersionKind.Version, "version should be v1")
-	assert.Equal(t, "TrustedProfileAnalyzer", w.GroupVersionKind.Kind, "kind should be TrustedProfileAnalyzer")
+	assert.Equal(t, "rhtpa.io", w.Group, "group should be rhtpa.io")
+	assert.Equal(t, "v1", w.Version, "version should be v1")
+	assert.Equal(t, "TrustedProfileAnalyzer", w.Kind, "kind should be TrustedProfileAnalyzer")
 	assert.Equal(t, "helm-charts/redhat-trusted-profile-analyzer", w.ChartPath, "chart path should be correct")
 }
 

@@ -27,8 +27,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const watchesFile = "watches.yaml"
+
 func TestWatchesFileStructure(t *testing.T) {
-	watchesPath := "watches.yaml"
+	watchesPath := watchesFile
 
 	data, err := os.ReadFile(watchesPath)
 	require.NoError(t, err, "watches.yaml should be readable")
@@ -42,20 +44,20 @@ func TestWatchesFileStructure(t *testing.T) {
 }
 
 func TestWatchesGVKConfiguration(t *testing.T) {
-	ws, err := watches.Load("watches.yaml")
+	ws, err := watches.Load(watchesFile)
 	require.NoError(t, err, "watches.yaml should load successfully")
 	require.Len(t, ws, 1, "should have exactly one watch configured")
 
 	w := ws[0]
 
 	// Verify GVK
-	assert.Equal(t, "rhtpa.io", w.GroupVersionKind.Group, "group should be rhtpa.io")
-	assert.Equal(t, "v1", w.GroupVersionKind.Version, "version should be v1")
-	assert.Equal(t, "TrustedProfileAnalyzer", w.GroupVersionKind.Kind, "kind should be TrustedProfileAnalyzer")
+	assert.Equal(t, "rhtpa.io", w.Group, "group should be rhtpa.io")
+	assert.Equal(t, "v1", w.Version, "version should be v1")
+	assert.Equal(t, "TrustedProfileAnalyzer", w.Kind, "kind should be TrustedProfileAnalyzer")
 }
 
 func TestWatchesChartConfiguration(t *testing.T) {
-	ws, err := watches.Load("watches.yaml")
+	ws, err := watches.Load(watchesFile)
 	require.NoError(t, err)
 	require.Len(t, ws, 1)
 
@@ -75,7 +77,7 @@ func TestWatchesChartConfiguration(t *testing.T) {
 }
 
 func TestWatchesReconcilePeriod(t *testing.T) {
-	ws, err := watches.Load("watches.yaml")
+	ws, err := watches.Load(watchesFile)
 	require.NoError(t, err)
 	require.Len(t, ws, 1)
 
@@ -84,14 +86,14 @@ func TestWatchesReconcilePeriod(t *testing.T) {
 	// Check if reconcile period is set
 	if w.ReconcilePeriod != nil {
 		t.Logf("Reconcile period: %v", w.ReconcilePeriod.Duration)
-		assert.Greater(t, w.ReconcilePeriod.Duration.Seconds(), float64(0), "reconcile period should be positive")
+		assert.Greater(t, w.ReconcilePeriod.Seconds(), float64(0), "reconcile period should be positive")
 	} else {
 		t.Log("Reconcile period not explicitly set, will use default")
 	}
 }
 
 func TestWatchesMaxConcurrentReconciles(t *testing.T) {
-	ws, err := watches.Load("watches.yaml")
+	ws, err := watches.Load(watchesFile)
 	require.NoError(t, err)
 	require.Len(t, ws, 1)
 
@@ -104,7 +106,7 @@ func TestWatchesMaxConcurrentReconciles(t *testing.T) {
 }
 
 func TestWatchesDependentResourcesConfiguration(t *testing.T) {
-	ws, err := watches.Load("watches.yaml")
+	ws, err := watches.Load(watchesFile)
 	require.NoError(t, err)
 	require.Len(t, ws, 1)
 
@@ -116,7 +118,7 @@ func TestWatchesDependentResourcesConfiguration(t *testing.T) {
 }
 
 func TestWatchesSelectorConfiguration(t *testing.T) {
-	ws, err := watches.Load("watches.yaml")
+	ws, err := watches.Load(watchesFile)
 	require.NoError(t, err)
 	require.Len(t, ws, 1)
 
@@ -131,14 +133,14 @@ func TestWatchesSelectorConfiguration(t *testing.T) {
 }
 
 func TestWatchesOverrideValues(t *testing.T) {
-	ws, err := watches.Load("watches.yaml")
+	ws, err := watches.Load(watchesFile)
 	require.NoError(t, err)
 	require.Len(t, ws, 1)
 
 	w := ws[0]
 
 	// Check if override values are set
-	if w.OverrideValues != nil && len(w.OverrideValues) > 0 {
+	if len(w.OverrideValues) > 0 {
 		t.Logf("Override values configured: %+v", w.OverrideValues)
 
 		// Verify override values are valid
@@ -152,7 +154,7 @@ func TestWatchesOverrideValues(t *testing.T) {
 }
 
 func TestWatchesFileValidYAMLSyntax(t *testing.T) {
-	watchesPath := "watches.yaml"
+	watchesPath := watchesFile
 
 	// Read file
 	_, err := os.ReadFile(watchesPath)
@@ -165,15 +167,15 @@ func TestWatchesFileValidYAMLSyntax(t *testing.T) {
 
 	// Verify required fields are present
 	for i, w := range ws {
-		assert.NotEmpty(t, w.GroupVersionKind.Group, "watch %d should have group", i)
-		assert.NotEmpty(t, w.GroupVersionKind.Version, "watch %d should have version", i)
-		assert.NotEmpty(t, w.GroupVersionKind.Kind, "watch %d should have kind", i)
+		assert.NotEmpty(t, w.Group, "watch %d should have group", i)
+		assert.NotEmpty(t, w.Version, "watch %d should have version", i)
+		assert.NotEmpty(t, w.Kind, "watch %d should have kind", i)
 		assert.NotEmpty(t, w.ChartPath, "watch %d should have chart path", i)
 	}
 }
 
 func TestWatchesFileNoTrailingSpaces(t *testing.T) {
-	watchesPath := "watches.yaml"
+	watchesPath := watchesFile
 
 	data, err := os.ReadFile(watchesPath)
 	require.NoError(t, err, "watches.yaml should be readable")

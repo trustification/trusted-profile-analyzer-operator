@@ -87,7 +87,7 @@ func TestOperatorPodRunning(t *testing.T) {
 
 	// Get pods with operator label
 	labelSelector := labels.Set{
-		"control-plane": "controller-manager",
+		controlPlaneLabel: controlPlaneValue,
 	}.AsSelector()
 
 	require.Eventually(t, func() bool {
@@ -138,7 +138,7 @@ func TestOperatorPodPhase(t *testing.T) {
 
 	// Get operator pod
 	labelSelector := labels.Set{
-		"control-plane": "controller-manager",
+		controlPlaneLabel: controlPlaneValue,
 	}.AsSelector()
 
 	pods, err := clientset.CoreV1().Pods(operatorNamespace).List(ctx, metav1.ListOptions{
@@ -184,18 +184,24 @@ func TestOperatorRBAC(t *testing.T) {
 	clientset := getKubernetesClient(t)
 
 	// Check if ServiceAccount exists
-	sa, err := clientset.CoreV1().ServiceAccounts(operatorNamespace).Get(ctx, "rhtpa-operator-controller-manager", metav1.GetOptions{})
+	saName := "rhtpa-operator-controller-manager"
+	sa, err := clientset.CoreV1().ServiceAccounts(operatorNamespace).Get(
+		ctx, saName, metav1.GetOptions{})
 	require.NoError(t, err, "operator service account should exist")
 	assert.NotNil(t, sa, "service account should not be nil")
 
 	// Check if ClusterRole exists
-	cr, err := clientset.RbacV1().ClusterRoles().Get(ctx, "rhtpa-operator-manager-role", metav1.GetOptions{})
+	crName := "rhtpa-operator-manager-role"
+	cr, err := clientset.RbacV1().ClusterRoles().Get(
+		ctx, crName, metav1.GetOptions{})
 	require.NoError(t, err, "operator cluster role should exist")
 	assert.NotNil(t, cr, "cluster role should not be nil")
 	assert.NotEmpty(t, cr.Rules, "cluster role should have rules")
 
 	// Check if ClusterRoleBinding exists
-	crb, err := clientset.RbacV1().ClusterRoleBindings().Get(ctx, "rhtpa-operator-manager-rolebinding", metav1.GetOptions{})
+	crbName := "rhtpa-operator-manager-rolebinding"
+	crb, err := clientset.RbacV1().ClusterRoleBindings().Get(
+		ctx, crbName, metav1.GetOptions{})
 	require.NoError(t, err, "operator cluster role binding should exist")
 	assert.NotNil(t, crb, "cluster role binding should not be nil")
 }
@@ -259,7 +265,7 @@ func TestOperatorLogs(t *testing.T) {
 
 	// Get operator pod
 	labelSelector := labels.Set{
-		"control-plane": "controller-manager",
+		controlPlaneLabel: controlPlaneValue,
 	}.AsSelector()
 
 	pods, err := clientset.CoreV1().Pods(operatorNamespace).List(ctx, metav1.ListOptions{
@@ -278,7 +284,7 @@ func TestOperatorLogs(t *testing.T) {
 	logs := clientset.CoreV1().Pods(operatorNamespace).GetLogs(pod.Name, logOptions)
 	logStream, err := logs.Stream(ctx)
 	require.NoError(t, err, "should be able to get operator logs")
-	defer logStream.Close()
+	defer func() { _ = logStream.Close() }()
 
 	// Just verify we can read logs
 	buf := make([]byte, 1024)

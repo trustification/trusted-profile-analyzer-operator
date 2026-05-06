@@ -58,27 +58,27 @@ func createTempYAMLFile(t *testing.T, content string) (*os.File, error) {
 	}
 
 	if _, err := tmpfile.Write([]byte(content)); err != nil {
-		tmpfile.Close()
-		os.Remove(tmpfile.Name())
+		_ = tmpfile.Close()
+		_ = os.Remove(tmpfile.Name())
 		return nil, err
 	}
 
 	if err := tmpfile.Close(); err != nil {
-		os.Remove(tmpfile.Name())
+		_ = os.Remove(tmpfile.Name())
 		return nil, err
 	}
 
 	// Reopen for reading
 	tmpfile, err = os.Open(tmpfile.Name())
 	if err != nil {
-		os.Remove(tmpfile.Name())
+		_ = os.Remove(tmpfile.Name())
 		return nil, err
 	}
 
 	// Clean up on test completion
 	t.Cleanup(func() {
-		tmpfile.Close()
-		os.Remove(tmpfile.Name())
+		_ = tmpfile.Close()
+		_ = os.Remove(tmpfile.Name())
 	})
 
 	return tmpfile, nil

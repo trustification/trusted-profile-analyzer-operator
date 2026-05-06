@@ -33,16 +33,21 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
+const (
+	testAppDomain  = "test.example.com"
+	kindDeployment = "kind: Deployment"
+)
+
 func TestHelmChartRenderWithMinimalValues(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	chartPath := getChartPath(t)
 
 	// Create minimal values file
 	values := map[string]interface{}{
-		"appDomain": "test.example.com",
+		fieldAppDomain: testAppDomain,
 	}
 
 	// Render chart with minimal values
@@ -50,20 +55,20 @@ func TestHelmChartRenderWithMinimalValues(t *testing.T) {
 	assert.NotEmpty(t, rendered, "chart should render with minimal values")
 
 	// Verify rendered output contains expected resources
-	assert.Contains(t, rendered, "kind: Deployment", "should contain Deployment")
+	assert.Contains(t, rendered, kindDeployment, "should contain Deployment")
 	assert.Contains(t, rendered, "kind: Service", "should contain Service")
 }
 
 func TestHelmChartRenderWithFullValues(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	chartPath := getChartPath(t)
 
 	// Load full values from fixture
-	cr := loadCRFixture(t, "valid_cr.yaml")
-	spec, found, err := unstructured.NestedMap(cr.Object, "spec")
+	cr := loadCRFixture(t, fixtureValidCR)
+	spec, found, err := unstructured.NestedMap(cr.Object, fieldSpec)
 	require.NoError(t, err, "should be able to get spec")
 	require.True(t, found, "spec should exist")
 
@@ -72,25 +77,25 @@ func TestHelmChartRenderWithFullValues(t *testing.T) {
 	assert.NotEmpty(t, rendered, "chart should render with full values")
 
 	// Verify modules are rendered
-	assert.Contains(t, rendered, "kind: Deployment", "should contain Deployments")
+	assert.Contains(t, rendered, kindDeployment, "should contain Deployments")
 }
 
 func TestHelmChartRenderServerModule(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	chartPath := getChartPath(t)
 
 	values := map[string]interface{}{
-		"appDomain": "test.example.com",
-		"modules": map[string]interface{}{
-			"server": map[string]interface{}{
-				"enabled":  true,
-				"replicas": 2,
+		fieldAppDomain: testAppDomain,
+		fieldModules: map[string]interface{}{
+			fieldServer: map[string]interface{}{
+				fieldEnabled:  true,
+				fieldReplicas: 2,
 			},
-			"importer": map[string]interface{}{
-				"enabled": false,
+			fieldImporter: map[string]interface{}{
+				fieldEnabled: false,
 			},
 		},
 	}
@@ -103,16 +108,16 @@ func TestHelmChartRenderServerModule(t *testing.T) {
 	serverDeploymentFound := false
 
 	for _, doc := range docs {
-		if strings.Contains(doc, "kind: Deployment") && strings.Contains(doc, "server") {
+		if strings.Contains(doc, kindDeployment) && strings.Contains(doc, "server") {
 			serverDeploymentFound = true
 
 			// Verify replicas
 			var deployment map[string]interface{}
 			err := yaml.Unmarshal([]byte(doc), &deployment)
 			if err == nil {
-				spec, ok := deployment["spec"].(map[string]interface{})
+				spec, ok := deployment[fieldSpec].(map[string]interface{})
 				if ok {
-					replicas, ok := spec["replicas"].(int)
+					replicas, ok := spec[fieldReplicas].(int)
 					if ok {
 						assert.Equal(t, 2, replicas, "server deployment should have 2 replicas")
 					}
@@ -126,20 +131,20 @@ func TestHelmChartRenderServerModule(t *testing.T) {
 
 func TestHelmChartRenderImporterModule(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	chartPath := getChartPath(t)
 
 	values := map[string]interface{}{
-		"appDomain": "test.example.com",
-		"modules": map[string]interface{}{
-			"server": map[string]interface{}{
-				"enabled": false,
+		fieldAppDomain: testAppDomain,
+		fieldModules: map[string]interface{}{
+			fieldServer: map[string]interface{}{
+				fieldEnabled: false,
 			},
-			"importer": map[string]interface{}{
-				"enabled":  true,
-				"replicas": 1,
+			fieldImporter: map[string]interface{}{
+				fieldEnabled:  true,
+				fieldReplicas: 1,
 			},
 		},
 	}
@@ -152,7 +157,7 @@ func TestHelmChartRenderImporterModule(t *testing.T) {
 	importerDeploymentFound := false
 
 	for _, doc := range docs {
-		if strings.Contains(doc, "kind: Deployment") && strings.Contains(doc, "importer") {
+		if strings.Contains(doc, kindDeployment) && strings.Contains(doc, "importer") {
 			importerDeploymentFound = true
 			break
 		}
@@ -163,19 +168,19 @@ func TestHelmChartRenderImporterModule(t *testing.T) {
 
 func TestHelmChartRenderDatabaseJobs(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	chartPath := getChartPath(t)
 
 	values := map[string]interface{}{
-		"appDomain": "test.example.com",
-		"modules": map[string]interface{}{
+		fieldAppDomain: testAppDomain,
+		fieldModules: map[string]interface{}{
 			"createDatabase": map[string]interface{}{
-				"enabled": true,
+				fieldEnabled: true,
 			},
 			"migrateDatabase": map[string]interface{}{
-				"enabled": true,
+				fieldEnabled: true,
 			},
 		},
 	}
@@ -198,13 +203,13 @@ func TestHelmChartRenderDatabaseJobs(t *testing.T) {
 
 func TestHelmChartRenderWithOIDCConfig(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	chartPath := getChartPath(t)
 
 	values := map[string]interface{}{
-		"appDomain": "test.example.com",
+		fieldAppDomain: testAppDomain,
 		"oidc": map[string]interface{}{
 			"clients": map[string]interface{}{
 				"frontend": map[string]interface{}{
@@ -227,16 +232,16 @@ func TestHelmChartRenderWithOIDCConfig(t *testing.T) {
 
 func TestHelmChartRenderWithResourceLimits(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	chartPath := getChartPath(t)
 
 	values := map[string]interface{}{
-		"appDomain": "test.example.com",
-		"modules": map[string]interface{}{
-			"server": map[string]interface{}{
-				"enabled": true,
+		fieldAppDomain: testAppDomain,
+		fieldModules: map[string]interface{}{
+			fieldServer: map[string]interface{}{
+				fieldEnabled: true,
 				"resources": map[string]interface{}{
 					"requests": map[string]interface{}{
 						"cpu":    "500m",
@@ -261,16 +266,16 @@ func TestHelmChartRenderWithResourceLimits(t *testing.T) {
 
 func TestHelmChartRenderWithIngress(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	chartPath := getChartPath(t)
 
 	values := map[string]interface{}{
-		"appDomain": "test.example.com",
-		"modules": map[string]interface{}{
-			"server": map[string]interface{}{
-				"enabled": true,
+		fieldAppDomain: testAppDomain,
+		fieldModules: map[string]interface{}{
+			fieldServer: map[string]interface{}{
+				fieldEnabled: true,
 			},
 		},
 	}
@@ -285,7 +290,7 @@ func TestHelmChartRenderWithIngress(t *testing.T) {
 	for _, doc := range docs {
 		if strings.Contains(doc, "kind: Ingress") || strings.Contains(doc, "kind: Route") {
 			ingressFound = true
-			assert.Contains(t, doc, "test.example.com", "ingress should use appDomain")
+			assert.Contains(t, doc, testAppDomain, "ingress should use appDomain")
 			break
 		}
 	}
@@ -298,7 +303,7 @@ func TestHelmChartRenderWithIngress(t *testing.T) {
 
 func TestHelmChartRenderInCRContext(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -313,12 +318,13 @@ func TestHelmChartRenderInCRContext(t *testing.T) {
 	defer deleteNamespace(t, k8sClient, testNamespace)
 
 	// Create CR with specific configuration
-	cr := loadCRFixture(t, "valid_cr.yaml")
+	cr := loadCRFixture(t, fixtureValidCR)
 	cr.SetNamespace(testNamespace)
 	cr.SetName("test-helm-render-instance")
 
-	_, err := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace).Create(ctx, cr, metav1.CreateOptions{})
-	require.NoError(t, err, "should be able to create CR")
+	res := dynamicClient.Resource(trustedProfileAnalyzerGVR).Namespace(testNamespace)
+	_, err := res.Create(ctx, cr, metav1.CreateOptions{})
+	require.NoError(t, err, msgCreateCR)
 
 	// Wait for Helm to render and create resources
 	time.Sleep(45 * time.Second)
@@ -329,7 +335,7 @@ func TestHelmChartRenderInCRContext(t *testing.T) {
 
 	helmReleaseFound := false
 	for _, cm := range configMaps.Items {
-		if cm.Labels["owner"] == "helm" {
+		if cm.Labels["owner"] == fieldHelm {
 			helmReleaseFound = true
 			t.Logf("Found Helm release ConfigMap: %s", cm.Name)
 			break
@@ -342,7 +348,7 @@ func TestHelmChartRenderInCRContext(t *testing.T) {
 		require.NoError(t, err, "should be able to list Secrets")
 
 		for _, secret := range secrets.Items {
-			if secret.Type == "helm.sh/release.v1" || secret.Labels["owner"] == "helm" {
+			if secret.Type == "helm.sh/release.v1" || secret.Labels["owner"] == fieldHelm {
 				helmReleaseFound = true
 				t.Logf("Found Helm release Secret: %s", secret.Name)
 				break
@@ -355,7 +361,7 @@ func TestHelmChartRenderInCRContext(t *testing.T) {
 
 func TestHelmChartLint(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip(skipE2ETest)
 	}
 
 	chartPath := getChartPath(t)
@@ -412,7 +418,9 @@ func renderHelmChart(t *testing.T, chartPath string, values map[string]interface
 	if err != nil {
 		t.Logf("helm template stderr: %s", stderr.String())
 		// Helm might not be available in test environment
-		if strings.Contains(stderr.String(), "helm: not found") || strings.Contains(stderr.String(), "executable file not found") {
+		stderrStr := stderr.String()
+		if strings.Contains(stderrStr, "helm: not found") ||
+			strings.Contains(stderrStr, "executable file not found") {
 			t.Skip("helm command not available in test environment")
 		}
 		require.NoError(t, err, "helm template should succeed")

@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	//+kubebuilder:scaffold:imports
+	//nolint:revive //+kubebuilder:scaffold:imports
 )
 
 var (
@@ -45,7 +45,7 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	//+kubebuilder:scaffold:scheme
+	//nolint:revive //+kubebuilder:scaffold:scheme
 }
 
 func main() {
@@ -64,7 +64,8 @@ func main() {
 	flag.StringVar(&watchesPath, "watches-file", "watches.yaml", "path to watches file")
 	flag.StringVar(&leaderElectionID, "leader-election-id", "195237d9.rhtpa-operator", "provide leader election")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+		"Enable leader election for controller manager. "+
+			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&development, "development", false, "Enable development log")
 	opts := zap.Options{
 		Development: development,
@@ -87,7 +88,7 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
-	//+kubebuilder:scaffold:builder
+	//nolint:revive //+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
@@ -135,7 +136,13 @@ func main() {
 			setupLog.Error(err, "unable to create controller", "controller", "Helm")
 			os.Exit(1)
 		}
-		setupLog.Info("configured watch", "gvk", w.GroupVersionKind, "chartPath", w.ChartPath, "maxConcurrentReconciles", maxConcurrentReconciles, "reconcilePeriod", reconcilePeriod, "development", development)
+		setupLog.Info("configured watch",
+			"gvk", w.GroupVersionKind,
+			"chartPath", w.ChartPath,
+			"maxConcurrentReconciles", maxConcurrentReconciles,
+			"reconcilePeriod", reconcilePeriod,
+			"development", development,
+		)
 	}
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

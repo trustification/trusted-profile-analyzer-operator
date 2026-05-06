@@ -25,7 +25,6 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: '1.26'
-          go-version-file: go.mod
           cache: true
 
       - name: Run go vet
@@ -47,7 +46,6 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: '1.26'
-          go-version-file: go.mod
           cache: true
 
       - name: Verify generated code is up-to-date
