@@ -61,6 +61,89 @@
         }
       }
     },
+    "ccoMode": {
+      "type": "string",
+      "enum": [
+        "default",
+        "mint",
+        "passthrough",
+        "manual"
+      ],
+      "description": "Cloud Credential Operator mode. Controls how cloud credentials are provisioned.\n- default: CCO auto-determines the provisioning method\n- mint: CCO creates new IAM credentials from permissions in CredentialsRequest\n- passthrough: CCO copies admin credentials to the target namespace\n- manual: Credentials are pre-provisioned via ccoctl (STS/WIF). Pods are\n  automatically configured with projected SA token volumes and SDK env vars.\n"
+    },
+    "cloudProvider": {
+      "type": "string",
+      "enum": [
+        "aws",
+        "gcp"
+      ],
+      "description": "Set the cloud provider to enable Cloud Credentials Operator (CCO) integration.\nWhen set, a CredentialsRequest will be created and the resulting secret will be\nused for S3 storage credentials (accessKey and secretKey become optional).\n"
+    },
+    "ccoRds": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Enable RDS IAM authentication via Cloud Credential Operator.\nWhen enabled, the database password is not required \u2014 pods authenticate\nto RDS using IAM credentials provisioned by CCO.\nRequires cloudProvider to be set.\n",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable RDS IAM authentication. When true, database password is\nomitted and SSL mode is forced to 'require'.\n"
+        },
+        "region": {
+          "type": "string",
+          "description": "AWS region of the RDS instance. Used by the application to\ngenerate RDS IAM auth tokens.\n"
+        }
+      }
+    },
+    "cloudCredentials": {
+      "type": "object",
+      "description": "Cloud-specific credential configuration for the Cloud Credentials Operator.\n",
+      "properties": {
+        "aws": {
+          "type": "object",
+          "properties": {
+            "statementEntries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "effect": {
+                    "type": "string",
+                    "enum": [
+                      "Allow",
+                      "Deny"
+                    ]
+                  },
+                  "action": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "resource": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "stsIAMRoleARN": {
+              "type": "string",
+              "description": "The ARN of the IAM role for STS-based authentication (manual mode only).\n"
+            }
+          }
+        },
+        "gcp": {
+          "type": "object",
+          "properties": {
+            "permissions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
     "oidc": {
       "$ref": "#/definitions/Oidc"
     },
@@ -820,7 +903,11 @@
         },
         "loadUser": {
           "type": "boolean",
+<<<<<<< HEAD
           "description": "Value for the `UI_LOAD_USER` environment variable in the server deployment\n",
+=======
+          "description": "Value for the `OIDC_USER_INFO` environment variable in the server deployment\n",
+>>>>>>> e36cbbc (rds)
           "default": true
         },
         "clients": {
@@ -1038,12 +1125,10 @@
       }
     },
     "S3StorageConfig": {
-      "description": "Configure an S3 compatible object storage.\n",
+      "description": "Configure an S3 compatible object storage.\nWhen cloudProvider is set, accessKey and secretKey are automatically populated\nfrom the CCO-provisioned secret and do not need to be specified.\n",
       "type": "object",
       "required": [
         "type",
-        "accessKey",
-        "secretKey",
         "bucket",
         "region"
       ],
@@ -1056,11 +1141,11 @@
           ]
         },
         "accessKey": {
-          "description": "The access key/username to the storage resource\n",
+          "description": "The access key/username to the storage resource.\nOptional when cloudProvider is set (auto-populated from CCO secret).\n",
           "$ref": "#/definitions/ValueOrRef"
         },
         "secretKey": {
-          "description": "The secret key/password to the storage resource\n",
+          "description": "The secret key/password to the storage resource.\nOptional when cloudProvider is set (auto-populated from CCO secret).\n",
           "$ref": "#/definitions/ValueOrRef"
         },
         "bucket": {
@@ -1103,8 +1188,7 @@
       "required": [
         "host",
         "name",
-        "username",
-        "password"
+        "username"
       ],
       "properties": {
         "host": {
