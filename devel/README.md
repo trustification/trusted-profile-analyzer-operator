@@ -55,8 +55,10 @@ update the operator sha and then run
   operator-sdk run bundle -n trustify quay.io/<your_username>/rhtpa-rhel10-operator-bundle:v2.0.0
 ```
 
-# Deploy an instance
+# Deploy an instance for development or demo
 From the UI or from cli with the values of trustify of namespace and services configured from helm-chart infrastructure
+Note: Storage filesystem is only for development/demo installation purposes, storage filesystem isn't designed for production or upgrades between different versions
+
 ```console
 kubectl apply -f trusted-profile-analyzer-demo.yaml
 ```

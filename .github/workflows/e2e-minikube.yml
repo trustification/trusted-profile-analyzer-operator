@@ -1,0 +1,280 @@
+name: E2E Minikube
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 'release/**'
+  push:
+    branches:
+      - main
+      - 'release/**'
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: E2E Minikube Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APP_IMAGE: quay.io/redhat-user-workloads/trusted-content-tenant/rhtpa-product-0-4-z@sha256:066cc03f014d3a76b6b2b4a584516e30504904523bb65b2d99ccb85041aef3c3 # @TODO replace with quay.io/redhat-user-workloads/trusted-content-tenant/rhtpa-product-0-5-z:v3.0.0-rc when ready
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Start Minikube
+        uses: medyagh/setup-minikube@latest
+        with:
+          minikube-version: 1.34.0
+          kubernetes-version: v1.32.0
+          driver: docker
+          cpus: 4
+          memory: 6144
+          addons: 'ingress'
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Build operator image
+        run: |
+          eval $(minikube docker-env)
+          make docker-build IMG=localhost/rhtpa-operator:e2e BUILDER=docker
+
+      - name: Pre-pull application image
+        run: |
+          echo "Pre-pulling application image: ${APP_IMAGE}"
+          eval $(minikube docker-env)
+          docker pull "${APP_IMAGE}"
+          echo "Successfully pre-pulled: ${APP_IMAGE}"
+
+      - name: Create e2e-test namespace
+        run: kubectl create namespace e2e-test
+
+      - name: Deploy PostgreSQL
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo update
+          helm install postgresql bitnami/postgresql \
+            --namespace e2e-test \
+            --set auth.postgresPassword=postgres123 \
+            --set auth.username=trustify \
+            --set auth.password=trustify1234 \
+            --set auth.database=trustify \
+            --set primary.persistence.enabled=false \
+            --wait --timeout 5m
+
+      - name: Deploy Keycloak
+        run: |
+          kubectl apply -f test/e2e/fixtures/keycloak-dev.yaml
+          kubectl -n e2e-test wait --for=condition=available deployment/keycloak --timeout=300s
+
+      - name: Run database migration
+        run: |
+          cat <<EOF | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: manual-db-migrate
+            namespace: e2e-test
+          spec:
+            backoffLimit: 3
+            completions: 1
+            parallelism: 1
+            ttlSecondsAfterFinished: 600
+            template:
+              spec:
+                restartPolicy: OnFailure
+                containers:
+                  - name: migrate
+                    image: ${APP_IMAGE}
+                    imagePullPolicy: IfNotPresent
+                    command: ["trustd", "db", "migrate"]
+                    env:
+                      - name: TRUSTD_DB_HOST
+                        value: postgresql
+                      - name: TRUSTD_DB_PORT
+                        value: "5432"
+                      - name: TRUSTD_DB_NAME
+                        value: trustify
+                      - name: TRUSTD_DB_USER
+                        value: trustify
+                      - name: TRUSTD_DB_PASSWORD
+                        value: trustify1234
+                      - name: TRUSTD_DB_SSLMODE
+                        value: allow
+          EOF
+          echo "Waiting for database migration to complete..."
+          kubectl -n e2e-test wait --for=condition=complete job/manual-db-migrate --timeout=300s
+          echo "Database migration completed successfully"
+
+      - name: Verify database migration completed
+        run: |
+          echo "Verifying manual database migration job completed..."
+          kubectl -n e2e-test get job/manual-db-migrate
+          SUCCEEDED=$(kubectl -n e2e-test get job/manual-db-migrate -o jsonpath='{.status.succeeded}')
+          if [ "${SUCCEEDED}" != "1" ]; then
+            echo "WARNING: Migration job status - succeeded: ${SUCCEEDED}"
+            kubectl -n e2e-test logs job/manual-db-migrate --tail=20 || true
+          else
+            echo "Database migration verified - job completed successfully"
+          fi    
+
+      - name: Install CRDs
+        run: make install
+
+      - name: Deploy operator
+        run: |
+          make deploy IMG=localhost/rhtpa-operator:e2e
+          kubectl -n rhtpa-operator-system patch deployment rhtpa-operator-controller-manager \
+            --type='json' \
+            -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/imagePullPolicy", "value": "Never"}]'
+          kubectl -n rhtpa-operator-system rollout status deployment/rhtpa-operator-controller-manager --timeout=120s
+
+      - name: Verify operator readiness
+        run: |
+          kubectl -n rhtpa-operator-system wait --for=condition=available \
+            deployment/rhtpa-operator-controller-manager --timeout=60s
+          sleep 5
+          echo "Operator ready"
+
+      - name: Grant operator ingress RBAC for e2e namespace
+        run: |
+          cat <<'EOF' | kubectl apply -f -
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: RoleBinding
+          metadata:
+            name: e2e-allow-operator-ingress
+            namespace: e2e-test
+          roleRef:
+            apiGroup: rbac.authorization.k8s.io
+            kind: ClusterRole
+            name: rhtpa-operator-allow-get-ingress-cluster
+          subjects:
+          - kind: ServiceAccount
+            name: rhtpa-operator-controller-manager
+            namespace: rhtpa-operator-system
+          EOF
+
+      - name: Create TrustedProfileAnalyzer CR
+        run: envsubst < test/e2e/fixtures/e2e-minikube-cr.yaml | kubectl apply -f -
+
+      - name: Wait for operator reconciliation
+        run: |
+          echo "Waiting for operator to reconcile and create child resources..."
+          MAX_ATTEMPTS=60
+          for i in $(seq 1 ${MAX_ATTEMPTS}); do
+            if kubectl -n e2e-test get deployment server &>/dev/null; then
+              echo "Server deployment created by operator after $((i * 5))s"
+              break
+            fi
+
+            RESTARTS=$(kubectl -n rhtpa-operator-system get pods -l control-plane=controller-manager \
+              -o jsonpath='{.items[0].status.containerStatuses[0].restartCount}' 2>/dev/null || echo "0")
+            if [ "${RESTARTS}" -gt 3 ]; then
+              echo "ERROR: Operator pod has restarted ${RESTARTS} times"
+              kubectl -n rhtpa-operator-system logs deployment/rhtpa-operator-controller-manager --all-containers --tail=50 || true
+              exit 1
+            fi
+
+            if [ "$i" -eq "${MAX_ATTEMPTS}" ]; then
+              echo "ERROR: Server deployment not created after $((MAX_ATTEMPTS * 5))s"
+              echo "=== Operator logs ==="
+              kubectl -n rhtpa-operator-system logs deployment/rhtpa-operator-controller-manager --all-containers --tail=100 || true
+              echo "=== E2E namespace resources ==="
+              kubectl -n e2e-test get all || true
+              echo "=== E2E namespace events ==="
+              kubectl -n e2e-test get events --sort-by='.lastTimestamp' || true
+              exit 1
+            fi
+            echo "Waiting for reconciliation... ($i/${MAX_ATTEMPTS})"
+            sleep 5
+          done
+
+      
+
+      - name: Wait for server deployment
+        run: |
+          echo "Waiting for server deployment to become available..."
+          kubectl -n e2e-test wait --for=condition=available deployment/server --timeout=300s
+          echo "Server deployment is available"
+
+      - name: Verify child resources
+        run: |
+          echo "=== CR Status ==="
+          kubectl -n e2e-test get trustedprofileanalyzers.rhtpa.io e2e-test-instance
+
+          echo "=== Server Deployment ==="
+          kubectl -n e2e-test get deployment server
+          AVAILABLE=$(kubectl -n e2e-test get deployment server -o jsonpath='{.status.availableReplicas}')
+          if [ "${AVAILABLE}" -lt 1 ]; then
+            echo "ERROR: Server deployment has no available replicas"
+            exit 1
+          fi
+          echo "Server has ${AVAILABLE} available replica(s)"
+
+          echo "=== Service ==="
+          kubectl -n e2e-test get service server
+
+          echo "=== ConfigMap ==="
+          kubectl -n e2e-test get configmap server-auth
+
+          echo "=== PVC ==="
+          kubectl -n e2e-test get pvc storage
+          PVC_STATUS=$(kubectl -n e2e-test get pvc storage -o jsonpath='{.status.phase}')
+          echo "PVC status: ${PVC_STATUS}"
+
+          echo "=== Operator pod health ==="
+          RESTARTS=$(kubectl -n rhtpa-operator-system get pods -l control-plane=controller-manager -o jsonpath='{.items[0].status.containerStatuses[0].restartCount}')
+          echo "Operator restart count: ${RESTARTS}"
+          if [ "${RESTARTS}" -gt 0 ]; then
+            echo "ERROR: Operator has restarted ${RESTARTS} times"
+            exit 1
+          fi
+
+          echo "=== All verification checks passed ==="
+
+      - name: Collect diagnostics
+        if: failure()
+        run: |
+          echo "=== Operator Logs ==="
+          kubectl -n rhtpa-operator-system logs deployment/rhtpa-operator-controller-manager --all-containers --tail=200 || true
+
+          echo "=== Operator Pod Status ==="
+          kubectl -n rhtpa-operator-system get pods -o wide || true
+          kubectl -n rhtpa-operator-system describe pods || true
+
+          echo "=== CR Status ==="
+          kubectl -n e2e-test get trustedprofileanalyzers.rhtpa.io -o yaml || true
+
+          echo "=== E2E Namespace Resources ==="
+          kubectl -n e2e-test get all || true
+
+          echo "=== Server Deployment Details ==="
+          kubectl -n e2e-test describe deployment server || true
+
+          echo "=== Server Pod Logs ==="
+          kubectl -n e2e-test logs deployment/server --all-containers --tail=50 || true
+
+          echo "=== Migration Job Details ==="
+          kubectl -n e2e-test describe job/manual-db-migrate || true
+          kubectl -n e2e-test logs job/manual-db-migrate --tail=50 || true
+
+          echo "=== PVC Status ==="
+          kubectl -n e2e-test get pvc || true
+
+          echo "=== E2E Namespace Events ==="
+          kubectl -n e2e-test get events --sort-by='.lastTimestamp' || true
+
+          echo "=== Operator Namespace Events ==="
+          kubectl -n rhtpa-operator-system get events --sort-by='.lastTimestamp' || true
+
+          echo "=== PostgreSQL Logs ==="
+          kubectl -n e2e-test logs statefulset/postgresql --tail=50 || true

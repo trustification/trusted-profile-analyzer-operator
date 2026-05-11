@@ -114,6 +114,17 @@ test: manifests generate fmt vet envtest ## Run tests.
 test-ci: manifests generate fmt vet envtest ## Run tests excluding e2e (for CI).
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test $$(go list ./... | grep -v /test/e2e) -v -race -coverprofile cover.out
 
+.PHONY: e2e-minikube
+e2e-minikube: ## Deploy operator on Minikube for e2e testing (requires running Minikube). See also .github/workflows/e2e-minikube.yml
+	@minikube status > /dev/null 2>&1 || { echo "Error: Minikube is not running. Start it with 'minikube start'"; exit 1; }
+	eval $$(minikube docker-env) && $(MAKE) docker-build IMG=localhost/rhtpa-operator:e2e BUILDER=docker
+	$(MAKE) install
+	$(MAKE) deploy IMG=localhost/rhtpa-operator:e2e
+	kubectl -n rhtpa-operator-system patch deployment rhtpa-operator-controller-manager \
+		--type='json' -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/imagePullPolicy", "value": "Never"}]'
+	kubectl -n rhtpa-operator-system rollout status deployment/rhtpa-operator-controller-manager --timeout=120s
+	@echo "Operator deployed. Deploy infrastructure and apply test CR to complete e2e setup."
+
 ##@ Build
 
 .PHONY: run
