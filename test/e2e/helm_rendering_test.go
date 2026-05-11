@@ -34,8 +34,9 @@ import (
 )
 
 const (
-	testAppDomain  = "test.example.com"
-	kindDeployment = "kind: Deployment"
+	testAppDomain          = "test.example.com"
+	kindDeployment         = "kind: Deployment"
+	kindDeploymentResource = "Deployment"
 )
 
 func TestHelmChartRenderWithMinimalValues(t *testing.T) {
@@ -111,7 +112,7 @@ func TestHelmChartRenderServerModule(t *testing.T) {
 		if err := yaml.Unmarshal([]byte(doc), &obj.Object); err != nil {
 			continue
 		}
-		if obj.GetKind() != "Deployment" || obj.GetName() != fieldServer {
+		if obj.GetKind() != kindDeploymentResource || obj.GetName() != fieldServer {
 			continue
 		}
 		serverDeploymentFound = true

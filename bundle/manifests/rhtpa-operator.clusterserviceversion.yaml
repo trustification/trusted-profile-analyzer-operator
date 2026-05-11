@@ -103,7 +103,7 @@ metadata:
     features.operators.openshift.io/fips-compliant: "false"
     features.operators.openshift.io/proxy-aware: "false"
     features.operators.openshift.io/tls-profiles: "false"
-    features.operators.openshift.io/token-auth-aws: "false"
+    features.operators.openshift.io/token-auth-aws: "true"
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
     operators.openshift.io/valid-subscription: '["Red Hat Trusted Profile Analyzer"]'
@@ -148,6 +148,18 @@ spec:
     spec:
       clusterPermissions:
         - rules:
+            - apiGroups:
+                - cloudcredential.openshift.io
+              resources:
+                - credentialsrequests
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
             - apiGroups:
                 - networking.k8s.io
               resources:
