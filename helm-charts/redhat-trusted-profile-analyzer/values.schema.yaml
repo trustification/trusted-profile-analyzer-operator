@@ -64,6 +64,85 @@ properties:
         description: |
           Control the usage of the OpenShift service CA.
 
+  ccoMode:
+    type: string
+    enum:
+      - default
+      - mint
+      - passthrough
+      - manual
+    description: |
+      Cloud Credential Operator mode. Controls how cloud credentials are provisioned.
+      - default: CCO auto-determines the provisioning method
+      - mint: CCO creates new IAM credentials from permissions in CredentialsRequest
+      - passthrough: CCO copies admin credentials to the target namespace
+      - manual: Credentials are pre-provisioned via ccoctl (STS/WIF). Pods are
+        automatically configured with projected SA token volumes and SDK env vars.
+
+  cloudProvider:
+    type: string
+    enum:
+      - aws
+      - gcp
+    description: |
+      Set the cloud provider to enable Cloud Credentials Operator (CCO) integration.
+      When set, a CredentialsRequest will be created and the resulting secret will be
+      used for S3 storage credentials (accessKey and secretKey become optional).
+
+  ccoRds:
+    type: object
+    additionalProperties: false
+    description: |
+      Enable RDS IAM authentication via Cloud Credential Operator.
+      When enabled, the database password is not required — pods authenticate
+      to RDS using IAM credentials provisioned by CCO.
+      Requires cloudProvider to be set.
+    properties:
+      enabled:
+        type: boolean
+        description: |
+          Enable RDS IAM authentication. When true, database password is
+          omitted and SSL mode is forced to 'require'.
+      region:
+        type: string
+        description: |
+          AWS region of the RDS instance. Used by the application to
+          generate RDS IAM auth tokens.
+
+  cloudCredentials:
+    type: object
+    description: |
+      Cloud-specific credential configuration for the Cloud Credentials Operator.
+    properties:
+      aws:
+        type: object
+        properties:
+          statementEntries:
+            type: array
+            items:
+              type: object
+              properties:
+                effect:
+                  type: string
+                  enum: [Allow, Deny]
+                action:
+                  type: array
+                  items:
+                    type: string
+                resource:
+                  type: string
+          stsIAMRoleARN:
+            type: string
+            description: |
+              The ARN of the IAM role for STS-based authentication (manual mode only).
+      gcp:
+        type: object
+        properties:
+          permissions:
+            type: array
+            items:
+              type: string
+
   oidc:
     $ref: "#/definitions/Oidc"
 
@@ -801,11 +880,11 @@ definitions:
   S3StorageConfig:
     description: |
       Configure an S3 compatible object storage.
+      When cloudProvider is set, accessKey and secretKey are automatically populated
+      from the CCO-provisioned secret and do not need to be specified.
     type: object
     required:
       - type
-      - accessKey
-      - secretKey
       - bucket
       - region
     additionalProperties: false
@@ -816,11 +895,13 @@ definitions:
           - s3
       accessKey:
         description: |
-          The access key/username to the storage resource
+          The access key/username to the storage resource.
+          Optional when cloudProvider is set (auto-populated from CCO secret).
         $ref: "#/definitions/ValueOrRef"
       secretKey:
         description: |
-          The secret key/password to the storage resource
+          The secret key/password to the storage resource.
+          Optional when cloudProvider is set (auto-populated from CCO secret).
         $ref: "#/definitions/ValueOrRef"
       bucket:
         type: string
@@ -859,7 +940,6 @@ definitions:
       - host
       - name
       - username
-      - password
     properties:
       host:
         $ref: "#/definitions/ValueOrRef"

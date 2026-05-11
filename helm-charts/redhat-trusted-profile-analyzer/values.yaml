@@ -3,7 +3,7 @@ partOf: trustify
 replicas: 1
 
 image:
-  fullName: registry.redhat.io/rhtpa/rhtpa-rhel10@sha256:928477e2a2310b523f942878801d02cea419aadd0ad94df7ee94ee5c76ffb848
+  fullName: quay.io/redhat-user-workloads/trusted-content-tenant/rhtpa-product-0-6-z@sha256:4cb7027e3500d478fb766251e460526f8f67e9c1af3b8651cf7388de672d362f
   pullPolicy: IfNotPresent
 
 rust: {}
@@ -20,6 +20,24 @@ tls: {}
 storage: {}
 
 database: {}
+
+# ccoMode: ""  # default | mint | passthrough | manual
+
+# cloudProvider: # aws | gcp — set to enable CCO-managed credentials for S3 storage
+cloudCredentials: {}
+
+# ccoRds:         # Uncomment to enable RDS IAM authentication via CCO
+#   enabled: false
+#   region: ""    # AWS region of the RDS instance
+  #aws:
+  #  statementEntries:
+  #    - effect: Allow
+  #      action: [ "s3:*" ]
+  #      resource: "*"
+  #  stsIAMRoleARN: ""   # Required for manual mode (STS)
+  #gcp:
+  #  permissions:
+  #    - storage.objects.get
 
 openshift:
   useServiceCa: true

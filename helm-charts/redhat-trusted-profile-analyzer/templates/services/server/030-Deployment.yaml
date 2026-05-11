@@ -52,6 +52,8 @@ spec:
             {{- include "trustification.application.readOnly.envVars" $mod | nindent 12 }}
             {{- include "trustification.postgres.envVars" (dict "root" . "database" .Values.database) | nindent 12 }}
             {{- include "trustification.storage.envVars" $mod | nindent 12 }}
+            {{- include "trustification.cco.envVars" $mod | nindent 12 }}
+            {{- include "trustification.cco.rds.envVars" $mod | nindent 12 }}
             {{- include "trustification.oidc.swaggerUi" $mod | nindent 12 }}
             {{- include "trustification.exploit-intelligence.envVars" $mod | nindent 12 }}
 
@@ -100,12 +102,14 @@ spec:
             {{- include "trustification.application.httpServerVolumesMounts" $mod | nindent 12 }}
             {{- include "trustification.authenticator.volumeMount" $mod | nindent 12 }}
             {{- include "trustification.storage.volumeMount" $mod | nindent 12 }}
+            {{- include "trustification.cco.volumeMounts" $mod | nindent 12 }}
             {{- include "trustification.application.extraVolumeMounts" $mod | nindent 12 }}
 
       volumes:
         {{- include "trustification.application.httpServerVolumes" $mod | nindent 8 }}
         {{- include "trustification.authenticator.volume" $mod | nindent 8 }}
         {{- include "trustification.storage.volume" $mod | nindent 8 }}
+        {{- include "trustification.cco.volumes" $mod | nindent 8 }}
         {{- include "trustification.application.extraVolumes" $mod | nindent 8 }}
 
 {{ end }}
