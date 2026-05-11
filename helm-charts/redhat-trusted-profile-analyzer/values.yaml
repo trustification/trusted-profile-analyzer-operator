@@ -21,6 +21,24 @@ storage: {}
 
 database: {}
 
+# ccoMode: ""  # default | mint | passthrough | manual
+
+# cloudProvider: # aws | gcp — set to enable CCO-managed credentials for S3 storage
+cloudCredentials: {}
+
+# ccoRds:         # Uncomment to enable RDS IAM authentication via CCO
+#   enabled: false
+#   region: ""    # AWS region of the RDS instance
+  #aws:
+  #  statementEntries:
+  #    - effect: Allow
+  #      action: [ "s3:*" ]
+  #      resource: "*"
+  #  stsIAMRoleARN: ""   # Required for manual mode (STS)
+  #gcp:
+  #  permissions:
+  #    - storage.objects.get
+
 openshift:
   useServiceCa: true
 
