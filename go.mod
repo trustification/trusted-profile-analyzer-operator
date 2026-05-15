@@ -3,7 +3,7 @@ module github.com/trustification/trusted-profile-analyzer-operator
 go 1.25.0
 
 require (
-	github.com/operator-framework/helm-operator-plugins v0.8.0
+	github.com/operator-framework/helm-operator-plugins v0.9.0
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.35.1
