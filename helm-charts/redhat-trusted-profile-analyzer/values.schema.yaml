@@ -67,6 +67,14 @@ properties:
   oidc:
     $ref: "#/definitions/Oidc"
 
+  readOnly:
+    type: boolean
+    default: false
+    description: |
+      Global default for read-only mode. When true, the server rejects all mutating API
+      requests with 503 and the importer suspends all import jobs.
+      Can be overridden per module via modules.server.readOnly / modules.importer.readOnly.
+
   replicas:
     type: integer
     minimum: 0
@@ -208,6 +216,11 @@ properties:
                 description: |
                   The maximum number of the bytes the analysis cache will hold before evicting entries.
                 $ref: "#/definitions/ByteSize"
+              readOnly:
+                type: boolean
+                description: |
+                  Enable read-only mode. When true, the server rejects all mutating API
+                  requests with 503 and the importer suspends all import jobs.
 
       importer:
         description: |
@@ -237,6 +250,11 @@ properties:
                   The max number of import jobs that may run concurrently
               storageClassName:
                 type: string
+              readOnly:
+                type: boolean
+                description: |
+                  Enable read-only mode. When true, the server rejects all mutating API
+                  requests with 503 and the importer suspends all import jobs.
 
       createDatabase:
         description: |

@@ -8,6 +8,8 @@ image:
 
 rust: {}
 
+readOnly: false
+
 ingress:
   enabled: true
 
@@ -42,7 +44,6 @@ collector: {}
 modules:
   server:
     enabled: true
-    replicas: 1
     ingress: {}
     image: {}
     infrastructure: {}
@@ -56,7 +57,6 @@ modules:
 
   importer:
     enabled: true
-    replicas: 1
     image: {}
     infrastructure: {}
     tracing: {}
@@ -67,6 +67,7 @@ modules:
         cpu: 1
         memory: 8Gi
     concurrency: 1
+    # readOnly: false
     workingDirectory:
       size: 32Gi
 

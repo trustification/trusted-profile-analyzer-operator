@@ -64,6 +64,11 @@
     "oidc": {
       "$ref": "#/definitions/Oidc"
     },
+    "readOnly": {
+      "type": "boolean",
+      "default": false,
+      "description": "Global default for read-only mode. When true, the server rejects all mutating API\nrequests with 503 and the importer suspends all import jobs.\nCan be overridden per module via modules.server.readOnly / modules.importer.readOnly.\n"
+    },
     "replicas": {
       "type": "integer",
       "minimum": 0,
@@ -238,6 +243,10 @@
                 "maximumCacheSize": {
                   "description": "The maximum number of the bytes the analysis cache will hold before evicting entries.\n",
                   "$ref": "#/definitions/ByteSize"
+                },
+                "readOnly": {
+                  "type": "boolean",
+                  "description": "Enable read-only mode. When true, the server rejects all mutating API\nrequests with 503 and the importer suspends all import jobs.\n"
                 }
               }
             }
@@ -291,6 +300,10 @@
                 },
                 "storageClassName": {
                   "type": "string"
+                },
+                "readOnly": {
+                  "type": "boolean",
+                  "description": "Enable read-only mode. When true, the server rejects all mutating API\nrequests with 503 and the importer suspends all import jobs.\n"
                 }
               }
             }

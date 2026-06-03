@@ -6,7 +6,7 @@ Arguments (dict):
   * module - module object
 */}}
 {{- define "trustification.application.replicas" }}
-{{- .module.replicas | default .root.Values.replicas | default 1 }}
+{{- if hasKey .module "replicas" }}{{ .module.replicas }}{{- else if hasKey .root.Values "replicas" }}{{ .root.Values.replicas }}{{- else }}1{{- end }}
 {{- end }}
 
 {{/*
