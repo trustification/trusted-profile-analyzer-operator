@@ -135,7 +135,7 @@ require (
 	k8s.io/cli-runtime v0.35.1 // indirect
 	k8s.io/component-base v0.35.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20260502001324-b7f5293f4787 // indirect
+	k8s.io/kube-openapi v0.0.0-20260603220949-865597e52e25 // indirect
 	k8s.io/kubectl v0.35.1 // indirect
 	k8s.io/utils v0.0.0-20260319190234-28399d86e0b5 // indirect
 	oras.land/oras-go/v2 v2.6.0 // indirect
