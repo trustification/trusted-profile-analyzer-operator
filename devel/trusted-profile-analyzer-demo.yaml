@@ -115,10 +115,12 @@ spec:
       rust: {}
       tracing: {}
   oidc:
+    uiScope: ""
+    loadUser: true
     clients:
+      frontend: { }
       cli:
-        clientSecret: null
-      frontend: {}
+        clientSecret:
   openshift:
     useServiceCa: true
   partOf: trustify
