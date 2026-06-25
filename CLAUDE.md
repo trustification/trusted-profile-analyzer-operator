@@ -65,7 +65,7 @@ make podman-build
 make podman-push
 
 # Override image tag
-make podman-build IMG=quay.io/yourusername/rhtpa-rhel9-operator:latest
+make podman-build IMG=quay.io/yourusername/rhtpa-rhel10-operator:latest
 ```
 
 ### Bundle Management (OLM)
