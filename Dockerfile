@@ -41,7 +41,7 @@ LABEL release=2.0.0
 LABEL maintainer="Red Hat"
 LABEL operators.operatorframework.io.index.configs.v1=/config
 
-RUN microdnf update -y && microdnf clean all -y
+#RUN microdnf update -y && microdnf clean all -y
 
 ENV HOME=/opt/helm \
     USER_NAME=helm \
