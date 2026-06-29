@@ -42,7 +42,7 @@ spec:
       containers:
         - name: job
           {{- include "trustification.common.defaultImage" $mod | nindent 10 }}
-          {{- include "trustification.application.container" $mod | nindent 6 }}
+          {{- include "trustification.application.container" $mod | nindent 10 }}
 
           env:
             # connect using the `createDatabase` settings
