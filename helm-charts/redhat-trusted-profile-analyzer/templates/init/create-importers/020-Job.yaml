@@ -39,7 +39,7 @@ spec:
       containers:
         - name: job
           {{- include "trustification.common.defaultImage" $mod | nindent 10 }}
-          {{- include "trustification.application.container" $mod | nindent 6 }}
+          {{- include "trustification.application.container" $mod | nindent 10 }}
 
           env:
             {{- include "trustification.psql.envVars" ( dict "root" . "database" ( merge ( deepCopy (.Values.modules.createImporters.database | default dict ) ) (deepCopy .Values.database) ) ) | nindent 12 }}

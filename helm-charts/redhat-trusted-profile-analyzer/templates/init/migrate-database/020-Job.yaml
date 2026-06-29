@@ -40,7 +40,7 @@ spec:
       containers:
         - name: job
           {{- include "trustification.common.defaultImage" $mod | nindent 10 }}
-          {{- include "trustification.application.container" $mod | nindent 6 }}
+          {{- include "trustification.application.container" $mod | nindent 10 }}
 
           env:
             {{- include "trustification.postgres.envVars" ( dict "root" . "database" ( merge ( required "Using migrateDatabase requires setting .Values.migrateDatabase" (deepCopy .Values.migrateDatabase) ) ( deepCopy .Values.database ) ) ) | nindent 12 }}
