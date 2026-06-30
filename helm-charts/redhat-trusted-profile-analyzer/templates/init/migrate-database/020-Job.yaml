@@ -34,7 +34,6 @@ spec:
       {{- include "trustification.application.pod" $mod | nindent 6 }}
 
       volumes:
-        {{- include "trustification.storage.volume" $mod | nindent 8 }}
         {{- include "trustification.application.extraVolumes" $mod | nindent 8 }}
 
       containers:
@@ -44,10 +43,8 @@ spec:
 
           env:
             {{- include "trustification.postgres.envVars" ( dict "root" . "database" ( merge ( required "Using migrateDatabase requires setting .Values.migrateDatabase" (deepCopy .Values.migrateDatabase) ) ( deepCopy .Values.database ) ) ) | nindent 12 }}
-            {{- include "trustification.storage.envVars" $mod | nindent 12 }}
 
           volumeMounts:
-            {{- include "trustification.storage.volumeMount" $mod | nindent 12 }}
             {{- include "trustification.application.extraVolumeMounts" $mod | nindent 12 }}
 
           command:
