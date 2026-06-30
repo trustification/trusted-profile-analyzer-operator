@@ -3,9 +3,9 @@
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
-VERSION ?= 2.0.0
-IMAGE_TAG ?= 2.0.0
-REDUCED_VERSION ?= 2.0.0-snapshot
+VERSION ?= 3.0.0
+IMAGE_TAG ?= 3.0.0
+REDUCED_VERSION ?= 3.0.0-snapshot
 CONTROLLER_TOOLS_VERSION ?= v0.18.0
 
 # CHANNELS define the bundle channels used in the bundle.
@@ -13,7 +13,7 @@ CONTROLLER_TOOLS_VERSION ?= v0.18.0
 # To re-generate a bundle for other specific channels without changing the standard setup, you can:
 # - use the CHANNELS as arg of the bundle target (e.g make bundle CHANNELS=candidate,fast,stable)
 # - use environment variables to overwrite this value (e.g export CHANNELS="candidate,fast,stable")
-CHANNELS="stable,stable-v1.0,stable-v1.1,stable-v2.0"
+CHANNELS="stable,stable-v1.0,stable-v1.1,stable-v3"
 ifneq ($(origin CHANNELS), undefined)
 BUNDLE_CHANNELS := --channels=$(CHANNELS)
 endif
@@ -23,7 +23,7 @@ endif
 # To re-generate a bundle for any other default channel without changing the default setup, you can:
 # - use the DEFAULT_CHANNEL as arg of the bundle target (e.g make bundle DEFAULT_CHANNEL=stable)
 # - use environment variables to overwrite this value (e.g export DEFAULT_CHANNEL="stable")
-DEFAULT_CHANNEL="stable-v2.0"
+DEFAULT_CHANNEL="stable-v3"
 ifneq ($(origin DEFAULT_CHANNEL), undefined)
 BUNDLE_DEFAULT_CHANNEL := --default-channel=$(DEFAULT_CHANNEL)
 endif
@@ -57,7 +57,7 @@ endif
 
 # Set the Operator SDK version to use. By default, what is installed on the system is used.
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
-OPERATOR_SDK_VERSION ?= v1.42.0
+OPERATOR_SDK_VERSION ?= v1.42.2
 OPM_VERSION = v1.55.0
 
 # Image URL to use all building/pushing image targets
