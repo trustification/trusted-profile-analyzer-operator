@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      APP_IMAGE: quay.io/redhat-user-workloads/trusted-content-tenant/rhtpa-product-0-4-z@sha256:066cc03f014d3a76b6b2b4a584516e30504904523bb65b2d99ccb85041aef3c3 # @TODO replace with quay.io/redhat-user-workloads/trusted-content-tenant/rhtpa-product-0-5-z:v3.0.0-rc when ready
+      APP_IMAGE: quay.io/redhat-user-workloads/trusted-content-tenant/rhtpa-product-0-5-z:v3.0.0-rc
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,8 +33,8 @@ jobs:
       - name: Start Minikube
         uses: medyagh/setup-minikube@latest
         with:
-          minikube-version: 1.34.0
-          kubernetes-version: v1.32.0
+          minikube-version: 1.38.1
+          kubernetes-version: stable #v1.32.0
           driver: docker
           cpus: 4
           memory: 6144
