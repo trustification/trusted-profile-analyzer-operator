@@ -29,7 +29,7 @@ spec:
   - name: output-image
     value: quay.io/redhat-user-workloads/trusted-content-tenant/operator-3-y-z:{{revision}}
   - name: dockerfile
-    value: ./Dockerfile
+    value: ./Dockerfile.rhtpa-operator.rh
   - name: path-context
     value: .
   pipelineSpec:
