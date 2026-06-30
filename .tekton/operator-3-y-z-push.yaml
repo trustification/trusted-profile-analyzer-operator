@@ -5,11 +5,10 @@ metadata:
     build.appstudio.openshift.io/repo: https://github.com/trustification/trusted-profile-analyzer-operator?rev={{revision}}
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
-    build.appstudio.openshift.io/build-nudge-files: ".*Dockerfile.*, .*.yaml, .*Containerfile.*, .*.json"
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "release/3.y.z" && !files.all.all(f, f.matches('bundle/'))   
+      == "release/3.y.z"
   labels:
     appstudio.openshift.io/application: rhtpa-operator-3-y-z
     appstudio.openshift.io/component: operator-3-y-z
@@ -18,10 +17,6 @@ metadata:
   namespace: trusted-content-tenant
 spec:
   params:
-  - name: version
-    value: "v3.0.0"
-  - name: version-postfix-qe
-    value: "-rc"
   - name: git-url
     value: '{{source_url}}'
   - name: revision
@@ -29,7 +24,7 @@ spec:
   - name: output-image
     value: quay.io/redhat-user-workloads/trusted-content-tenant/operator-3-y-z:{{revision}}
   - name: dockerfile
-    value: ./Dockerfile.rhtpa-operator.rh
+    value: Dockerfile.rhtpa-operator.rh
   - name: path-context
     value: .
   pipelineSpec:
@@ -462,8 +457,6 @@ spec:
         value: $(tasks.build-image-index.results.IMAGE_URL)
       - name: IMAGE_DIGEST
         value: $(tasks.build-image-index.results.IMAGE_DIGEST)
-      - name: ADDITIONAL_TAGS
-        value: ['$(params.version)$(params.version-postfix-qe)', '{{revision}}']      
       runAfter:
       - build-image-index
       taskRef:
