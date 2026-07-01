@@ -33,7 +33,7 @@ LABEL operators.operatorframework.io.bundle.metadata.v1=metadata/
 LABEL operators.operatorframework.io.bundle.package.v1=rhtpa-operator
 LABEL operators.operatorframework.io.bundle.channels.v1=stable,stable-v1.0,stable-v1.1,stable-v3
 LABEL operators.operatorframework.io.bundle.channel.default.v1=stable-v1.1
-LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.42.2
+LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.42.3
 LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
 LABEL operators.operatorframework.io.metrics.project_layout=helm.sdk.operatorframework.io/v1
 

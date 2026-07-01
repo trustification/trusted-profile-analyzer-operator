@@ -1,5 +1,5 @@
 # Build the manager binary 1.26.3
-FROM registry.redhat.io/ubi10/go-toolset:1.26.3-1781732400 AS builder
+FROM registry.redhat.io/ubi10/go-toolset:1.26.4-1782881130 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -60,7 +60,7 @@ LABEL operators.operatorframework.io.bundle.manifests.v1=manifests/
 LABEL operators.operatorframework.io.bundle.metadata.v1=metadata/
 LABEL operators.operatorframework.io.bundle.package.v1=rhtpa-operator
 LABEL operators.operatorframework.io.bundle.channels.v1=stable,stable-v1.0,stable-v1.1,stable-v3
-LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.42.2
+LABEL operators.operatorframework.io.metrics.builder=operator-sdk-v1.42.3
 LABEL operators.operatorframework.io.metrics.mediatype.v1=metrics+v1
 LABEL operators.operatorframework.io.metrics.project_layout=helm.sdk.operatorframework.io/v1
 LABEL operators.operatorframework.io.index.configs.v1=/config
