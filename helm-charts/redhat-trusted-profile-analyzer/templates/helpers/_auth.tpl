@@ -102,6 +102,7 @@ authentication:
         - "read.importer"
         - "read.metadata"
         - "read.sbom"
+        - "read.sbomGroup"
         - "read.weakness"
 
       groupSelector: "$['cognito:groups'][*]"
@@ -112,6 +113,7 @@ authentication:
           - "create.importer"
           - "create.metadata"
           - "create.sbom"
+          - "create.sbomGroup"
           - "create.weakness"
 
           - "upload.dataset"
@@ -119,12 +121,14 @@ authentication:
           - "update.importer"
           - "update.metadata"
           - "update.sbom"
+          - "update.sbomGroup"
           - "update.weakness"
 
           - "delete.advisory"
           - "delete.importer"
           - "delete.metadata"
           - "delete.sbom"
+          - "delete.sbomGroup"
           - "delete.vulnerability"
           - "delete.weakness"
 
@@ -155,9 +159,13 @@ authentication:
           - "read.systemInformation"
         "trustify/sbom":
           - "create.sbom"
+          - "create.sbomGroup"
           - "read.sbom"
+          - "read.sbomGroup"
           - "update.sbom"
+          - "update.sbomGroup"
           - "delete.sbom"
+          - "delete.sbomGroup"
         "trustify/ai":
           - "ai"
         "trustify/admin":
@@ -172,10 +180,10 @@ authentication:
     - clientId: {{ include "trustification.oidc.clientId" (dict "root" .root "clientId" "frontend" ) }}
       issuerUrl: {{ include "trustification.oidc.issuerUrlForClient" (dict "root" .root "clientId" "frontend" ) }}
       scopeMappings: &keycloakScopeMappings
-        "create:document": [ "create.advisory", "create.importer", "create.metadata", "create.sbom", "create.weakness", "upload.dataset" ]
-        "read:document": [ "ai", "read.advisory", "read.importer", "read.metadata", "read.sbom", "read.weakness", "read.systemInformation" ]
-        "update:document": [ "update.advisory", "update.importer", "update.metadata", "update.sbom", "update.weakness" ]
-        "delete:document": [ "delete.advisory", "delete.importer", "delete.metadata", "delete.sbom", "delete.vulnerability", "delete.weakness" ]
+        "create:document": [ "create.advisory", "create.importer", "create.metadata", "create.sbom", "create.sbomGroup", "create.weakness", "upload.dataset" ]
+        "read:document": [ "ai", "read.advisory", "read.importer", "read.metadata", "read.sbom", "read.sbomGroup", "read.weakness", "read.systemInformation" ]
+        "update:document": [ "update.advisory", "update.importer", "update.metadata", "update.sbom", "update.sbomGroup", "update.weakness" ]
+        "delete:document": [ "delete.advisory", "delete.importer", "delete.metadata", "delete.sbom", "delete.sbomGroup", "delete.vulnerability", "delete.weakness" ]
       {{- with .root.Values.tls.additionalTrustAnchor }}
       tlsCaCertificates:
         - {{ . | quote }}
