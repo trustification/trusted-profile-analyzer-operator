@@ -1,6 +1,16 @@
 name: E2E Minikube
 
 on:
+  workflow_dispatch:
+    inputs:
+      storage_type:
+        description: 'Storage backend:  rustfs (default S3-compatible) or filesystem'
+        required: false
+        default: 'rustfs'
+        type: choice
+        options:
+          - filesystem
+          - rustfs
   pull_request:
     branches:
       - main
@@ -20,6 +30,7 @@ jobs:
     timeout-minutes: 30
     env:
       APP_IMAGE: quay.io/redhat-user-workloads/trusted-content-tenant/rhtpa-product-0-4-z@sha256:066cc03f014d3a76b6b2b4a584516e30504904523bb65b2d99ccb85041aef3c3
+      STORAGE_TYPE: ${{ github.event.inputs.storage_type || 'rustfs' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,6 +86,23 @@ jobs:
         run: |
           kubectl apply -f test/e2e/fixtures/keycloak-dev.yaml
           kubectl -n e2e-test wait --for=condition=available deployment/keycloak --timeout=300s
+
+      # TODO: Replace MinIO mc client with RustFS-native tooling once available
+      # Using mc only as a generic S3 client to create the RustFS test bucket
+      - name: Deploy RustFS
+        if: env.STORAGE_TYPE == 'rustfs'
+        run: |
+          echo "Deploying RustFS S3-compatible storage..."
+          kubectl apply -f test/e2e/fixtures/rustfs.yaml
+          kubectl -n e2e-test wait --for=condition=available deployment/rustfs --timeout=120s
+          echo "RustFS is ready, creating bucket..."
+          kubectl -n e2e-test run create-bucket --rm -i --restart=Never \
+            --image=minio/mc:latest \
+            --command -- sh -c '
+              mc alias set rustfs http://rustfs.e2e-test.svc.cluster.local:9000 rustfsadmin rustfsadmin &&
+              mc mb --ignore-existing rustfs/trustify &&
+              echo "Bucket trustify created successfully"
+            '
 
       - name: Run database migration
         run: |
@@ -164,7 +192,14 @@ jobs:
           EOF
 
       - name: Create TrustedProfileAnalyzer CR
-        run: envsubst < test/e2e/fixtures/e2e-minikube-cr.yaml | kubectl apply -f -
+        run: |
+          if [ "$STORAGE_TYPE" = "rustfs" ]; then
+            CR_FILE=test/e2e/fixtures/e2e-minikube-rustfs-cr.yaml
+          else
+            CR_FILE=test/e2e/fixtures/e2e-minikube-cr.yaml
+          fi
+          echo "Using CR fixture: $CR_FILE (storage type: $STORAGE_TYPE)"
+          envsubst < "$CR_FILE" | kubectl apply -f -
 
       - name: Wait for operator reconciliation
         run: |
@@ -226,10 +261,17 @@ jobs:
           echo "=== ConfigMap ==="
           kubectl -n e2e-test get configmap server-auth
 
-          echo "=== PVC ==="
-          kubectl -n e2e-test get pvc storage
-          PVC_STATUS=$(kubectl -n e2e-test get pvc storage -o jsonpath='{.status.phase}')
-          echo "PVC status: ${PVC_STATUS}"
+          if [ "$STORAGE_TYPE" != "rustfs" ]; then
+            echo "=== PVC ==="
+            kubectl -n e2e-test get pvc storage
+            PVC_STATUS=$(kubectl -n e2e-test get pvc storage -o jsonpath='{.status.phase}')
+            echo "PVC status: ${PVC_STATUS}"
+          else
+            echo "=== RustFS Storage ==="
+            echo "Using RustFS S3 storage (no PVC expected)"
+            kubectl -n e2e-test get deployment rustfs
+            echo "RustFS deployment verified"
+          fi
 
           echo "=== Operator pod health ==="
           RESTARTS=$(kubectl -n rhtpa-operator-system get pods -l control-plane=controller-manager -o jsonpath='{.items[0].status.containerStatuses[0].restartCount}')
@@ -267,8 +309,14 @@ jobs:
           kubectl -n e2e-test describe job/manual-db-migrate || true
           kubectl -n e2e-test logs job/manual-db-migrate --tail=50 || true
 
-          echo "=== PVC Status ==="
-          kubectl -n e2e-test get pvc || true
+          if [ "$STORAGE_TYPE" != "rustfs" ]; then
+            echo "=== PVC Status ==="
+            kubectl -n e2e-test get pvc || true
+          else
+            echo "=== RustFS Status ==="
+            kubectl -n e2e-test get deployment rustfs || true
+            kubectl -n e2e-test logs deployment/rustfs --tail=50 || true
+          fi
 
           echo "=== E2E Namespace Events ==="
           kubectl -n e2e-test get events --sort-by='.lastTimestamp' || true

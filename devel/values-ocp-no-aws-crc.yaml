@@ -7,8 +7,12 @@ ingress:
 
 
 storage:
-  type: filesystem
-  size: 32Gi
+  type: s3
+  region: http://rustfs.trustify.svc.cluster.local:9000
+  bucket: trustify
+  accessKey: rustfsadmin
+  secretKey: rustfsadmin
+  pathStyle: true
 
 database:
   host: infrastructure-postgresql

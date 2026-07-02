@@ -28,7 +28,11 @@ spec:
 
   storage:
     type: s3
-    size: 1Gi
+    region: http://rustfs.e2e-test.svc.cluster.local:9000
+    bucket: trustify
+    accessKey: rustfsadmin
+    secretKey: rustfsadmin
+    pathStyle: true
 
   oidc:
     issuerUrl: http://keycloak.e2e-test.svc.cluster.local:8080/realms/master

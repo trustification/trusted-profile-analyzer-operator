@@ -23,6 +23,30 @@ or if you want to enable metrics and tracing
   helm upgrade --install --dependency-update -n $NAMESPACE infrastructure charts/trustify-infrastructure --values values-ocp-no-aws-crc.yaml  --set-string keycloak.ingress.hostname=sso$APP_DOMAIN --set-string appDomain=$APP_DOMAIN --set tracing.enabled=true --set metrics.enabled=true --set-string collector.endpoint="http://infrastructure-otelcol:4317"
 ```
 
+# RustFS (S3-compatible storage)
+RustFS is an S3-compatible object storage used as the storage backend. It replaces the local filesystem storage, which is not suitable for production or upgrades between versions.
+
+Deploy RustFS into the trustify namespace:
+```console
+  kubectl apply -f rustfs.yaml -n trustify
+  kubectl wait --for=condition=ready pod -l app=rustfs -n trustify --timeout=120s
+```
+
+Create the storage bucket using the MinIO mc client:
+```console
+  kubectl run rustfs-mc --rm -i --restart=Never --image=minio/mc:latest -- sh -c \
+    "mc alias set rustfs http://rustfs.trustify.svc.cluster.local:9000 rustfsadmin rustfsadmin && \
+     mc mb --ignore-existing rustfs/trustify"
+```
+
+The RustFS service will be available at `http://rustfs.trustify.svc.cluster.local:9000` with:
+- Access key: `rustfsadmin`
+- Secret key: `rustfsadmin`
+- Bucket: `trustify`
+- Console: port 9001 (accessible via port-forward for debugging)
+
+Note: RustFS uses `emptyDir` for data storage, meaning data is lost when the pod restarts. This is acceptable for development and demo purposes.
+
 # Container repository
 - Replace ```registry.redhat.io/rhtpa/rhtpa-rhel10-operator``` occurrences with your registry like quay.io/<your_username>/rhtpa-rhel10-operator 
   or map on the crc/ocp with a registry mirroring 
@@ -56,8 +80,8 @@ update the operator sha and then run
 ```
 
 # Deploy an instance for development or demo
-From the UI or from cli with the values of trustify of namespace and services configured from helm-chart infrastructure
-Note: Storage filesystem is only for development/demo installation purposes, storage filesystem isn't designed for production or upgrades between different versions
+From the UI or from cli with the values of trustify of namespace and services configured from helm-chart infrastructure.
+Make sure RustFS is deployed and the bucket is created (see RustFS section above) before applying:
 
 ```console
 kubectl apply -f trusted-profile-analyzer-demo.yaml

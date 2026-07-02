@@ -128,10 +128,13 @@ spec:
     enabled: true
   replicas: 1
   rust: {}
-  storage: {
-    type: filesystem,
-    size: 32Gi
-  }
+  storage:
+    type: s3
+    region: http://rustfs.trustify.svc.cluster.local:9000
+    bucket: trustify
+    accessKey: rustfsadmin
+    secretKey: rustfsadmin
+    pathStyle: true
   tls: {
     additionalTrustAnchor: /etc/trust-anchor/tls.crt
   }
