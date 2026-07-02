@@ -92,11 +92,17 @@ jobs:
             template:
               spec:
                 restartPolicy: OnFailure
+                volumes:
+                  - name: storage
+                    emptyDir: {}
                 containers:
                   - name: migrate
                     image: ${APP_IMAGE}
                     imagePullPolicy: IfNotPresent
                     command: ["trustd", "db", "migrate"]
+                    volumeMounts:
+                      - name: storage
+                        mountPath: /data/storage
                     env:
                       - name: TRUSTD_DB_HOST
                         value: postgresql
@@ -110,6 +116,10 @@ jobs:
                         value: trustify1234
                       - name: TRUSTD_DB_SSLMODE
                         value: allow
+                      - name: TRUSTD_STORAGE_STRATEGY
+                        value: fs
+                      - name: TRUSTD_STORAGE_FS_PATH
+                        value: /data/storage
           EOF
           echo "Waiting for database migration to complete..."
           kubectl -n e2e-test wait --for=condition=complete job/manual-db-migrate --timeout=300s
