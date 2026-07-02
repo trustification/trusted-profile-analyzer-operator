@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      APP_IMAGE: quay.io/redhat-user-workloads/trusted-content-tenant/rhtpa-product-0-5-z:v3.0.0-rc
+      APP_IMAGE: quay.io/redhat-user-workloads/trusted-content-tenant/rhtpa-product-0-5-z@sha256:f7ec76d28722133c347a52db747540583f779001ffa9ca83da29d94f1dd468ad
     steps:
       - name: Checkout
         uses: actions/checkout@v4
