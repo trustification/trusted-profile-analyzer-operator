@@ -49,6 +49,7 @@ spec:
             {{- include "trustification.application.infrastructure.envVars" $mod | nindent 12 }}
             {{- include "trustification.postgres.envVars" (dict "root" . "database" .Values.database) | nindent 12 }}
             {{- include "trustification.storage.envVars" $mod | nindent 12 }}
+            {{- include "trustification.cco.envVars" $mod | nindent 12 }}
 
           ports:
             {{- include "trustification.application.infrastructure.podPorts" $mod | nindent 12 }}
@@ -57,6 +58,7 @@ spec:
             - name: workdir
               mountPath: /data/workdir
             {{- include "trustification.storage.volumeMount" $mod | nindent 12 }}
+            {{- include "trustification.cco.volumeMounts" $mod | nindent 12 }}
             {{- include "trustification.application.extraVolumeMounts" $mod | nindent 12 }}
 
       volumes:
@@ -75,6 +77,7 @@ spec:
                   requests:
                     storage: {{ $mod.module.workingDirectory.size | quote }}
         {{- include "trustification.storage.volume" $mod | nindent 8 }}
+        {{- include "trustification.cco.volumes" $mod | nindent 8 }}
         {{- include "trustification.application.extraVolumes" $mod | nindent 8 }}
 
 {{ end }}
