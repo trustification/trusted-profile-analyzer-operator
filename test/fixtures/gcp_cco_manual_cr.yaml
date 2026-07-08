@@ -1,0 +1,52 @@
+apiVersion: rhtpa.io/v1
+kind: TrustedProfileAnalyzer
+metadata:
+  name: gcp-cco-manual-instance
+  namespace: test-namespace
+spec:
+  appDomain: test.example.com
+  replicas: 1
+  cloudProvider: gcp
+  ccoMode: manual
+  cloudCredentials:
+    gcp:
+      permissions:
+        - storage.objects.get
+        - storage.objects.create
+        - storage.objects.delete
+        - storage.buckets.get
+      serviceAccountEmail: "trustify-sa@my-project.iam.gserviceaccount.com"
+  storage:
+    type: s3
+    bucket: trustify-storage
+    region: us-central1
+  modules:
+    server:
+      enabled: true
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+    importer:
+      enabled: true
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+  oidc:
+    clients:
+      frontend:
+        clientId: test-frontend
+      cli:
+        clientSecret: test-secret
+  database:
+    host: postgres.test.svc
+    name: testdb
+    username: testuser
+    password: testpass
+  metrics:
+    enabled: false
+  tracing:
+    enabled: false

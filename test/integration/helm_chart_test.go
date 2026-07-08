@@ -178,3 +178,71 @@ func TestHelmIgnoreExists(t *testing.T) {
 	_, err := os.Stat(helmignorePath)
 	assert.NoError(t, err, ".helmignore should exist")
 }
+
+func TestValuesSchemaContainsCCOFields(t *testing.T) {
+	schemaPath := filepath.Join("helm-charts", "redhat-trusted-profile-analyzer", "values.schema.json")
+
+	data, err := os.ReadFile(schemaPath)
+	require.NoError(t, err, "values.schema.json should be readable")
+
+	var schema map[string]interface{}
+	err = yaml.Unmarshal(data, &schema)
+	require.NoError(t, err, "values.schema.json should be valid JSON")
+
+	properties, ok := schema["properties"].(map[string]interface{})
+	require.True(t, ok, "schema should have properties")
+
+	assert.Contains(t, properties, "cloudProvider", "schema should define cloudProvider")
+	assert.Contains(t, properties, "ccoMode", "schema should define ccoMode")
+	assert.Contains(t, properties, "cloudCredentials", "schema should define cloudCredentials")
+
+	cloudProvider, ok := properties["cloudProvider"].(map[string]interface{})
+	require.True(t, ok, "cloudProvider should be an object")
+	assert.Equal(t, "string", cloudProvider["type"], "cloudProvider should be a string type")
+
+	cpEnum, ok := cloudProvider["enum"].([]interface{})
+	require.True(t, ok, "cloudProvider should have enum values")
+	assert.Contains(t, cpEnum, "aws", "cloudProvider enum should include aws")
+	assert.Contains(t, cpEnum, "gcp", "cloudProvider enum should include gcp")
+	assert.Contains(t, cpEnum, "azure", "cloudProvider enum should include azure")
+
+	ccoMode, ok := properties["ccoMode"].(map[string]interface{})
+	require.True(t, ok, "ccoMode should be an object")
+	assert.Equal(t, "string", ccoMode["type"], "ccoMode should be a string type")
+
+	modeEnum, ok := ccoMode["enum"].([]interface{})
+	require.True(t, ok, "ccoMode should have enum values")
+	assert.Contains(t, modeEnum, "default", "ccoMode enum should include default")
+	assert.Contains(t, modeEnum, "mint", "ccoMode enum should include mint")
+	assert.Contains(t, modeEnum, "passthrough", "ccoMode enum should include passthrough")
+	assert.Contains(t, modeEnum, "manual", "ccoMode enum should include manual")
+
+	cloudCreds, ok := properties["cloudCredentials"].(map[string]interface{})
+	require.True(t, ok, "cloudCredentials should be an object")
+	ccProps, ok := cloudCreds["properties"].(map[string]interface{})
+	require.True(t, ok, "cloudCredentials should have properties")
+	assert.Contains(t, ccProps, "aws", "cloudCredentials should have aws")
+	assert.Contains(t, ccProps, "gcp", "cloudCredentials should have gcp")
+
+	awsCreds, ok := ccProps["aws"].(map[string]interface{})
+	require.True(t, ok, "aws credentials should be an object")
+	awsProps, ok := awsCreds["properties"].(map[string]interface{})
+	require.True(t, ok, "aws should have properties")
+	assert.Contains(t, awsProps, "stsIAMRoleARN", "aws should have stsIAMRoleARN property")
+
+	gcpCreds, ok := ccProps["gcp"].(map[string]interface{})
+	require.True(t, ok, "gcp credentials should be an object")
+	gcpProps, ok := gcpCreds["properties"].(map[string]interface{})
+	require.True(t, ok, "gcp should have properties")
+	assert.Contains(t, gcpProps, "serviceAccountEmail", "gcp should have serviceAccountEmail property")
+
+	azureCreds, ok := ccProps["azure"].(map[string]interface{})
+	require.True(t, ok, "azure credentials should be an object")
+	azureProps, ok := azureCreds["properties"].(map[string]interface{})
+	require.True(t, ok, "azure should have properties")
+	assert.Contains(t, azureProps, "roleBindings", "azure should have roleBindings property")
+	assert.Contains(t, azureProps, "azureClientID", "azure should have azureClientID property")
+	assert.Contains(t, azureProps, "azureTenantID", "azure should have azureTenantID property")
+	assert.Contains(t, azureProps, "azureSubscriptionID", "azure should have azureSubscriptionID property")
+	assert.Contains(t, azureProps, "azureRegion", "azure should have azureRegion property")
+}

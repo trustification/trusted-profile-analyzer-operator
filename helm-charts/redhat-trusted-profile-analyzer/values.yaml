@@ -17,6 +17,29 @@ storage: {}
 
 database: {}
 
+# ccoMode: ""  # default | mint | passthrough | manual
+
+# cloudProvider: aws   # aws | gcp | azure — set to enable CCO-managed credentials for S3 storage
+cloudCredentials: {}
+  #aws:
+  #  statementEntries:
+  #    - effect: Allow
+  #      action: [ "s3:*" ]
+  #      resource: "*"
+  #  stsIAMRoleARN: ""   # Required for manual mode (STS)
+  #gcp:
+  #  permissions:
+  #    - storage.objects.get
+  #  serviceAccountEmail: ""   # Required for manual mode (WIF)
+  #azure:
+  #  roleBindings:
+  #    - role: Contributor
+  #      scope: /subscriptions/<subscription-id>
+  #  azureClientID: ""          # Required for manual mode
+  #  azureTenantID: ""          # Required for manual mode
+  #  azureSubscriptionID: ""
+  #  azureRegion: ""
+
 openshift:
   useServiceCa: true
 

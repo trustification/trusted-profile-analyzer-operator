@@ -1,0 +1,51 @@
+apiVersion: rhtpa.io/v1
+kind: TrustedProfileAnalyzer
+metadata:
+  name: azure-cco-instance
+  namespace: test-namespace
+spec:
+  appDomain: test.example.com
+  replicas: 1
+  cloudProvider: azure
+  ccoMode: mint
+  cloudCredentials:
+    azure:
+      roleBindings:
+        - role: Contributor
+          scope: /subscriptions/00000000-0000-0000-0000-000000000000
+      azureSubscriptionID: "00000000-0000-0000-0000-000000000000"
+      azureRegion: eastus
+  storage:
+    type: s3
+    bucket: trustify-storage
+    region: eastus
+  modules:
+    server:
+      enabled: true
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+    importer:
+      enabled: true
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+  oidc:
+    clients:
+      frontend:
+        clientId: test-frontend
+      cli:
+        clientSecret: test-secret
+  database:
+    host: postgres.test.svc
+    name: testdb
+    username: testuser
+    password: testpass
+  metrics:
+    enabled: false
+  tracing:
+    enabled: false

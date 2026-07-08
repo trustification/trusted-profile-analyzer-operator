@@ -385,6 +385,110 @@
     },
     "prometheus": {
       "$ref": "#/definitions/Feature"
+    },
+    "ccoMode": {
+      "type": "string",
+      "enum": [
+        "default",
+        "mint",
+        "passthrough",
+        "manual"
+      ],
+      "description": "Cloud Credential Operator mode. Controls how cloud credentials are provisioned.\n- default: CCO auto-determines the provisioning method\n- mint: CCO creates new IAM credentials from permissions in CredentialsRequest\n- passthrough: CCO copies admin credentials to the target namespace\n- manual: Credentials are pre-provisioned via ccoctl (STS/WIF). Pods are automatically configured with projected SA token volumes and SDK env vars.\n"
+    },
+    "cloudProvider": {
+      "type": "string",
+      "enum": [
+        "aws",
+        "gcp",
+        "azure"
+      ],
+      "description": "Set the cloud provider to enable Cloud Credentials Operator (CCO) integration.\nWhen set, a CredentialsRequest will be created and the resulting secret will be\nused for S3 storage credentials (accessKey and secretKey become optional).\n"
+    },
+    "cloudCredentials": {
+      "type": "object",
+      "description": "Cloud-specific credential configuration for the Cloud Credentials Operator.\n",
+      "properties": {
+        "aws": {
+          "type": "object",
+          "properties": {
+            "statementEntries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "effect": {
+                    "type": "string"
+                  },
+                  "action": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "resource": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "stsIAMRoleARN": {
+              "type": "string",
+              "description": "The ARN of the IAM role for STS-based authentication (manual mode only).\n"
+            }
+          }
+        },
+        "gcp": {
+          "type": "object",
+          "properties": {
+            "permissions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "serviceAccountEmail": {
+              "type": "string",
+              "description": "The GCP service account email for Workload Identity Federation (manual mode only).\n"
+            }
+          }
+        },
+        "azure": {
+          "type": "object",
+          "properties": {
+            "roleBindings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "type": "string"
+                  },
+                  "scope": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "azureClientID": {
+              "type": "string",
+              "description": "Azure managed identity client ID (manual mode only).\n"
+            },
+            "azureTenantID": {
+              "type": "string",
+              "description": "Azure tenant ID (manual mode only).\n"
+            },
+            "azureSubscriptionID": {
+              "type": "string",
+              "description": "Azure subscription ID.\n"
+            },
+            "azureRegion": {
+              "type": "string",
+              "description": "Azure region for the resources.\n"
+            }
+          }
+        }
+      }
     }
   },
   "allOf": [
@@ -971,12 +1075,10 @@
       }
     },
     "S3StorageConfig": {
-      "description": "Configure an S3 compatible object storage.\n",
+      "description": "Configure an S3 compatible object storage.\nWhen cloudProvider is set, accessKey and secretKey are automatically populated\nfrom the CCO-provisioned secret and do not need to be specified.\n",
       "type": "object",
       "required": [
         "type",
-        "accessKey",
-        "secretKey",
         "bucket",
         "region"
       ],
