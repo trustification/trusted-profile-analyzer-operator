@@ -50,6 +50,7 @@ spec:
             {{- include "trustification.application.readOnly.envVars" $mod | nindent 12 }}
             {{- include "trustification.postgres.envVars" (dict "root" . "database" .Values.database) | nindent 12 }}
             {{- include "trustification.storage.envVars" $mod | nindent 12 }}
+            {{- include "trustification.application.proxy.envVars" $mod | nindent 12 }}
 
           ports:
             {{- include "trustification.application.infrastructure.podPorts" $mod | nindent 12 }}

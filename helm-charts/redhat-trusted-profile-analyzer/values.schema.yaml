@@ -177,6 +177,9 @@ properties:
         description: |
           OpenTelemetry collector endpoint for tracing and metrics.
 
+  proxy:
+    $ref: "#/definitions/ProxyConfig"
+
   rust:
     $ref: "#/definitions/RustApplicationConfig"
 
@@ -345,6 +348,23 @@ allOf:
 # all the definitions
 
 definitions:
+
+  ProxyConfig:
+    type: object
+    additionalProperties: false
+    description: |
+      HTTP proxy configuration. When set, the corresponding environment variables
+      (HTTP_PROXY, HTTPS_PROXY, NO_PROXY) are injected into the importer container.
+    properties:
+      httpProxy:
+        type: string
+        description: HTTP proxy URL (sets HTTP_PROXY)
+      httpsProxy:
+        type: string
+        description: HTTPS proxy URL (sets HTTPS_PROXY)
+      noProxy:
+        type: string
+        description: Comma-separated list of hosts to bypass the proxy (sets NO_PROXY)
 
   Scalable:
     description: |

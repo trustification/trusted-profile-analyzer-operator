@@ -6,6 +6,8 @@ image:
   fullName: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel9@sha256:4d024a6b748997b2cc757f53a7f0c3fe7f80789b74f7325837d93ecd0273bb58
   pullPolicy: IfNotPresent
 
+proxy: {}
+
 rust: {}
 
 readOnly: false

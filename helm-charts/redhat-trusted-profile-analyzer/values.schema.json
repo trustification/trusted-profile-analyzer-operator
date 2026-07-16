@@ -179,6 +179,9 @@
         }
       }
     },
+    "proxy": {
+      "$ref": "#/definitions/ProxyConfig"
+    },
     "rust": {
       "$ref": "#/definitions/RustApplicationConfig"
     },
@@ -449,6 +452,25 @@
     }
   ],
   "definitions": {
+    "ProxyConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "HTTP proxy configuration. When set, the corresponding environment variables\n(HTTP_PROXY, HTTPS_PROXY, NO_PROXY) are injected into the importer container.\n",
+      "properties": {
+        "httpProxy": {
+          "type": "string",
+          "description": "HTTP proxy URL (sets HTTP_PROXY)"
+        },
+        "httpsProxy": {
+          "type": "string",
+          "description": "HTTPS proxy URL (sets HTTPS_PROXY)"
+        },
+        "noProxy": {
+          "type": "string",
+          "description": "Comma-separated list of hosts to bypass the proxy (sets NO_PROXY)"
+        }
+      }
+    },
     "Scalable": {
       "description": "Configuration options for a scalable deployment.\n",
       "allOf": [
