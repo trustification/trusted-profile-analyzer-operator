@@ -67,6 +67,9 @@ properties:
   oidc:
     $ref: "#/definitions/Oidc"
 
+  exploitIntelligence:
+    $ref: "#/definitions/ExploitIntelligence"
+
   readOnly:
     type: boolean
     default: false
@@ -349,6 +352,19 @@ allOf:
         collector:
           required:
             - endpoint
+  - if:
+      properties:
+        exploitIntelligence:
+          properties:
+            enabled:
+              const: true
+          required:
+            - enabled
+    then:
+      properties:
+        exploitIntelligence:
+          required:
+            - url
 
 # all the definitions
 
@@ -910,3 +926,75 @@ definitions:
           The number of HTTP workers of the Actix application.
 
           Also see: <https://actix.rs/docs/server/#multi-threading>
+
+  ExploitIntelligence:
+    type: object
+    additionalProperties: false
+    description: |
+      Configuration for the Exploit Intelligence integration. When enabled, trustify can submit
+      SBOMs and CVEs to an external EI client service (agent-morpheus-client) for automated
+      vulnerability analysis and VEX document generation.
+    properties:
+      enabled:
+        type: boolean
+        description: |
+          Enable the Exploit Intelligence integration.
+        default: false
+      url:
+        $ref: "#/definitions/ValueOrRef"
+        description: |
+          Base URL of the EI client service (agent-morpheus-client).
+      uiUrl:
+        $ref: "#/definitions/ValueOrRef"
+        description: |
+          Base URL of the EI web UI for deep-linking to reports. Fallsback to base URL of the EI client service if unset.
+      maxRetries:
+        type: integer
+        minimum: 0
+        description: |
+          Maximum number of retry attempts before a job is marked as failed.
+      workerPollInterval:
+        type: string
+        description: |
+          How often the background worker checks for new EI jobs (humantime, e.g. "5s").
+      concurrency:
+        type: integer
+        minimum: 1
+        description: |
+          Number of concurrent worker loops processing EI jobs.
+      oidc:
+        $ref: "#/definitions/ExploitIntelligenceOidc"
+
+  ExploitIntelligenceOidc:
+    type: object
+    additionalProperties: false
+    description: |
+      OIDC credentials for authenticating with the EI service using client credentials flow.
+      All three of clientId, clientSecret, and issuerUrl must be set together.
+    dependencies:
+      clientId: [ "clientSecret", "issuerUrl" ]
+      clientSecret: [ "clientId", "issuerUrl" ]
+      issuerUrl: [ "clientId", "clientSecret" ]
+    properties:
+      clientId:
+        $ref: "#/definitions/ValueOrRef"
+        description: |
+          OIDC client ID for EI service authentication.
+      clientSecret:
+        $ref: "#/definitions/ValueOrRef"
+        description: |
+          OIDC client secret for EI service authentication.
+      issuerUrl:
+        $ref: "#/definitions/ValueOrRef"
+        description: |
+          OIDC issuer URL for EI service authentication (client credentials flow with discovery).
+      refreshBefore:
+        type: string
+        description: |
+          Duration an access token must still be valid before requesting a new one (humantime).
+      tlsInsecure:
+        type: boolean
+        default: false
+        description: |
+          Allow insecure TLS connections with the EI OIDC issuer.
+
