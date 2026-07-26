@@ -52,7 +52,7 @@ update the operator sha and then run
 ```console
   make bundle-build
   make bundle-push
-  operator-sdk run bundle -n trustify quay.io/<your_username>/rhtpa-rhel10-operator-bundle:v3.0.0
+  operator-sdk run bundle -n trustify quay.io/<your_username>/rhtpa-rhel10-operator-bundle:v3.1.0
 ```
 
 # Deploy an instance for development or demo

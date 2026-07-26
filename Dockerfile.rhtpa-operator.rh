@@ -39,8 +39,8 @@ LABEL io.openshift.tags="RHTPA, rhtpa-operator, Red Hat Trusted Profile Analyzer
 LABEL name="rhtpa/rhtpa-rhel10-operator"
 LABEL org.opencontainers.image.source="https://github.com/trustification/trusted-profile-analyzer-operator"
 LABEL summary="RHTPA Operator"
-LABEL version="3.0.0"
-LABEL release=3.0.0
+LABEL version="3.1.0"
+LABEL release=3.1.0
 LABEL maintainer="Red Hat"
 LABEL cpe="cpe:/a:redhat:trusted_profile_analyzer:3.0::el10"
 
