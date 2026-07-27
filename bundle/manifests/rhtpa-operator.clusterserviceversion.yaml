@@ -111,7 +111,7 @@ metadata:
     operators.operatorframework.io/project_layout: helm.sdk.operatorframework.io/v1
     repository: https://github.com/trustification/trusted-profile-analyzer-operator
     support: Red Hat
-  name: rhtpa-operator.v3.0.0
+  name: rhtpa-operator.v3.1.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -121,7 +121,7 @@ spec:
         name: trustedprofileanalyzers.rhtpa.io
         version: v1
   description: |
-    Red Hat Trusted Profile Analyzer (RHTPA) 3.0.0 provides a single source of truth for your software inventory across all your environments. You can verify the integrity of your in-house and third-party applications against their respective Software Bill of Materials (SBOM) document.  Trusted Profile Analyzer provides vulnerability, component and license transparency, strengthens your software supply chain security, and enables an accurate, up-to-date understanding of your software inventory.
+    Red Hat Trusted Profile Analyzer (RHTPA) 3.1.0 provides a single source of truth for your software inventory across all your environments. You can verify the integrity of your in-house and third-party applications against their respective Software Bill of Materials (SBOM) document.  Trusted Profile Analyzer provides vulnerability, component and license transparency, strengthens your software supply chain security, and enables an accurate, up-to-date understanding of your software inventory.
 
     Features and Benefits:
 
@@ -262,7 +262,7 @@ spec:
                       - --metrics-bind-address=:8443
                       - --leader-elect
                       - --health-probe-bind-address=:8081
-                    image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:77e5cb300f5bdc8121157e171e582fff4fd2c0f793508046ac267596dd461991
+                    image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:390681564a7104b0a9065ac4604128fd84a06f5980d0e3d418e447ddc421933a
                     livenessProbe:
                       httpGet:
                         path: /healthz
@@ -371,6 +371,6 @@ spec:
     name: Red Hat
     url: https://github.com/trustification/trusted-profile-analyzer-operator
   relatedImages:
-    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:77e5cb300f5bdc8121157e171e582fff4fd2c0f793508046ac267596dd461991
+    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:390681564a7104b0a9065ac4604128fd84a06f5980d0e3d418e447ddc421933a
       name: manager
-  version: 3.0.0
+  version: 3.1.0
