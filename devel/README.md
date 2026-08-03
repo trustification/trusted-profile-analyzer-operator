@@ -36,12 +36,12 @@ spec:
   imageDigestMirrors:
     - mirrorSourcePolicy: AllowContactingSource
       mirrors:
-        - quay.io/<your_username>/rhtpa-trustification-service-rhel10
-      source: registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel10
+        - quay.io/<your_username>/rhtpa-rhel10
+      source: registry.redhat.io/rhtpa/rhtpa-rhel10
  ```
   
 
-- Replace IF NEEDED the image ```registry.redhat.io/rhtpa/rhtpa-trustification-service-rhel10``` in the makefile 
+- Replace IF NEEDED the image ```registry.redhat.io/rhtpa/rhtpa-rhel10``` in the makefile 
 
 # Builds the operator
 ```console

@@ -33,11 +33,11 @@ LABEL description="Red Hat Trusted Profile Analyzer Operator"
 LABEL io.k8s.description="Red Hat Trusted Profile Analyzer Operator"
 LABEL io.k8s.display-name="RHTPA operator for Red Hat Trusted Profile Analyzer"
 LABEL io.openshift.tags="RHTPA, rhtpa-operator, Red Hat Trusted Profile Analyzer"
-LABEL name="rhtpa/rhtpa-rhel9-operator"
+LABEL name="rhtpa/rhtpa-rhel10-operator"
 LABEL org.opencontainers.image.source="https://github.com/trustification/trusted-profile-analyzer-operator"
 LABEL summary="RHTPA Operator"
-LABEL version="3.0.0"
-LABEL release=3.0.0
+LABEL version="3.1.0"
+LABEL release=3.1.0
 LABEL maintainer="Red Hat"
 LABEL operators.operatorframework.io.index.configs.v1=/config
 

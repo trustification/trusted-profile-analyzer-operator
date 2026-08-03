@@ -14,7 +14,7 @@ LABEL distribution-scope="public"
 LABEL url="https://www.redhat.com"
 LABEL version="3.1.0"
 LABEL release=3.1.0
-LABEL cpe="cpe:/a:redhat:trusted_profile_analyzer:3.0::el10"
+LABEL cpe="cpe:/a:redhat:trusted_profile_analyzer:3.1::el10"
 
 LABEL features.operators.openshift.io/cni="false"
 LABEL features.operators.openshift.io/disconnected="false"
