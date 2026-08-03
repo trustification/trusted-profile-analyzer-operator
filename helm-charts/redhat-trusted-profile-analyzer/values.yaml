@@ -43,6 +43,9 @@ tracing:
 
 collector: {}
 
+exploitIntelligence:
+  enabled: false
+
 modules:
   server:
     enabled: true

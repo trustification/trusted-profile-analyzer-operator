@@ -53,6 +53,7 @@ spec:
             {{- include "trustification.postgres.envVars" (dict "root" . "database" .Values.database) | nindent 12 }}
             {{- include "trustification.storage.envVars" $mod | nindent 12 }}
             {{- include "trustification.oidc.swaggerUi" $mod | nindent 12 }}
+            {{- include "trustification.exploit-intelligence.envVars" $mod | nindent 12 }}
 
             {{- with (include "trustification.application.cache.ttl" . | trim) }}
             - name: TRUSTD_PAGINATION_TOTAL_CACHE_TTL

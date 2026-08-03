@@ -7,6 +7,8 @@ spec:
   appDomain: change-me
   collector: {}
   database: {}
+  exploitIntelligence:
+    enabled: false
   infrastructure:
     port: 9010
   ingress: {}
@@ -65,5 +67,3 @@ spec:
   tls: {}
   tracing:
     enabled: false
-  
-  

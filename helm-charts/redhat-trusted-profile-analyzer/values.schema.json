@@ -64,6 +64,9 @@
     "oidc": {
       "$ref": "#/definitions/Oidc"
     },
+    "exploitIntelligence": {
+      "$ref": "#/definitions/ExploitIntelligence"
+    },
     "readOnly": {
       "type": "boolean",
       "default": false,
@@ -253,7 +256,7 @@
                 },
                 "cacheTTL": {
                   "type": "string",
-                  "description": "the time a cache is allowed to live (in s) before forcing a reload.\n"
+                  "description": "Enable read-only mode. When true, the server rejects all mutating API\nrequests with 503 and the importer suspends all import jobs.\nthe time a cache is allowed to live (in s) before forcing a reload.\n"
                 }
               }
             }
@@ -449,6 +452,31 @@
           "collector": {
             "required": [
               "endpoint"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "exploitIntelligence": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exploitIntelligence": {
+            "required": [
+              "url"
             ]
           }
         }
@@ -1156,6 +1184,85 @@
           "type": "number",
           "minimum": 1,
           "description": "The number of HTTP workers of the Actix application.\n\nAlso see: <https://actix.rs/docs/server/#multi-threading>\n"
+        }
+      }
+    },
+    "ExploitIntelligence": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Configuration for the Exploit Intelligence integration. When enabled, trustify can submit\nSBOMs and CVEs to an external EI client service (agent-morpheus-client) for automated\nvulnerability analysis and VEX document generation.\n",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable the Exploit Intelligence integration.\n",
+          "default": false
+        },
+        "url": {
+          "$ref": "#/definitions/ValueOrRef",
+          "description": "Base URL of the EI client service (agent-morpheus-client).\n"
+        },
+        "uiUrl": {
+          "$ref": "#/definitions/ValueOrRef",
+          "description": "Base URL of the EI web UI for deep-linking to reports. Fallsback to base URL of the EI client service if unset.\n"
+        },
+        "maxRetries": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of retry attempts before a job is marked as failed.\n"
+        },
+        "workerPollInterval": {
+          "type": "string",
+          "description": "How often the background worker checks for new EI jobs (humantime, e.g. \"5s\").\n"
+        },
+        "concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of concurrent worker loops processing EI jobs.\n"
+        },
+        "oidc": {
+          "$ref": "#/definitions/ExploitIntelligenceOidc"
+        }
+      }
+    },
+    "ExploitIntelligenceOidc": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "OIDC credentials for authenticating with the EI service using client credentials flow.\nAll three of clientId, clientSecret, and issuerUrl must be set together.\n",
+      "dependencies": {
+        "clientId": [
+          "clientSecret",
+          "issuerUrl"
+        ],
+        "clientSecret": [
+          "clientId",
+          "issuerUrl"
+        ],
+        "issuerUrl": [
+          "clientId",
+          "clientSecret"
+        ]
+      },
+      "properties": {
+        "clientId": {
+          "$ref": "#/definitions/ValueOrRef",
+          "description": "OIDC client ID for EI service authentication.\n"
+        },
+        "clientSecret": {
+          "$ref": "#/definitions/ValueOrRef",
+          "description": "OIDC client secret for EI service authentication.\n"
+        },
+        "issuerUrl": {
+          "$ref": "#/definitions/ValueOrRef",
+          "description": "OIDC issuer URL for EI service authentication (client credentials flow with discovery).\n"
+        },
+        "refreshBefore": {
+          "type": "string",
+          "description": "Duration an access token must still be valid before requesting a new one (humantime).\n"
+        },
+        "tlsInsecure": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow insecure TLS connections with the EI OIDC issuer.\n"
         }
       }
     }
