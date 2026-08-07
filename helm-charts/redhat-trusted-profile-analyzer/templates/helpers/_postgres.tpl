@@ -45,12 +45,13 @@ Arguments (dict):
 - name: {{ .prefix | default "TRUSTD_DB_" }}SSLMODE
   value: {{ .database.sslMode | default "allow" }}
 
+{{- $prefix := (.prefix | default "TRUSTD_DB_") }}
 {{- with .database.minimumConnections }}
-- name: {{ .prefix | default "TRUSTD_DB_" }}MIN_CONN
+- name: {{ $prefix }}MIN_CONN
   value: {{ . | quote }}
 {{- end }}
 {{- with .database.maximumConnections }}
-- name: {{ .prefix | default "TRUSTD_DB_" }}MAX_CONN
+- name: {{ $prefix }}MAX_CONN
   value: {{ . | quote }}
 {{- end }}
 
