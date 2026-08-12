@@ -237,6 +237,14 @@ spec:
                 - subjectaccessreviews
               verbs:
                 - create
+            - apiGroups:
+                - networking.k8s.io
+              resources:
+                - networkpolicies
+              verbs:
+                - create
+                - delete
+                - update
           serviceAccountName: rhtpa-operator-controller-manager
       deployments:
         - label:
@@ -345,6 +353,14 @@ spec:
               verbs:
                 - create
                 - patch
+            - apiGroups:
+                - networking.k8s.io
+              resources:
+                - networkpolicies
+              verbs:
+                - create
+                - delete
+                - update
           serviceAccountName: rhtpa-operator-controller-manager
     strategy: deployment
   installModes:
