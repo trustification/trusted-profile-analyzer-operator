@@ -121,24 +121,24 @@ spec:
         name: trustedprofileanalyzers.rhtpa.io
         version: v1
   description: |
-    Red Hat Trusted Profile Analyzer (RHTPA) 2.2.3 provides a single source of truth for your software inventory across all your environments. You can verify the integrity of your in-house and third-party applications against their respective Software Bill of Materials (SBOM) document.  Trusted Profile Analyzer provides vulnerability, component and license transparency, strengthens your software supply chain security, and enables an accurate, up-to-date understanding of your software inventory.
+    Red Hat Trusted Profile Analyzer (RHTPA) 2.2.7 provides a single source of truth for your software inventory across all your environments. You can verify the integrity of your in-house and third-party applications against their respective Software Bill of Materials (SBOM) document.  Trusted Profile Analyzer provides vulnerability, component and license transparency, strengthens your software supply chain security, and enables an accurate, up-to-date understanding of your software inventory.
 
     Features and Benefits:
 
     Enhanced Software Supply Chain Security: Offers critical transparency and integrity verification across the entire software lifecycle.
-    
+
     Reduced Operational Risk: Proactively identifies and helps remediate vulnerabilities minimizing risk and compliance violations.
-    
+
     Improved Compliance and Auditability: Simplifies the process of meeting regulatory requirements for software transparency and integrity by providing verifiable documentation and continuous monitoring.
-    
+
     Faster Remediation and Incident Response: Provides targeted, actionable insights to prioritize and accelerate the patching and remediation of vulnerabilities.
-    
+
     Increased Developer Productivity & Trust: Integrates security into existing workflows without significant overhead, allowing developers to build and deploy with greater confidence in the integrity of their code and components.
-    
+
     Centralized Visibility and Control: Consolidates disparate security information into a single pane of glass, offering a holistic view of your application security posture.
-  
+
     Red Hat Trusted Profile Analyzer is a crucial tool for any organization running applications on OpenShift that needs to confidently understand, verify, and secure the software they deploy, especially in an era of complex software supply chains and increasing regulatory scrutiny.
-    
+
     [Documentation](https://docs.redhat.com/en/documentation/red_hat_trusted_profile_analyzer/2.2).
   displayName: Red Hat Trusted Profile Analyzer
   icon:
