@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	github.com/operator-framework/helm-operator-plugins v0.9.1
-	github.com/stretchr/testify v1.11.1
+	github.com/stretchr/testify v1.12.1
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.36.3
 	k8s.io/apiextensions-apiserver v0.36.3
