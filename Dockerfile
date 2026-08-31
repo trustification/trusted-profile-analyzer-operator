@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM registry.access.redhat.com/hi/go:1.26.5 AS builder
+FROM registry.access.redhat.com/hi/go:1.26.7 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -36,8 +36,8 @@ LABEL io.openshift.tags="RHTPA, rhtpa-operator, Red Hat Trusted Profile Analyzer
 LABEL name="rhtpa/rhtpa-rhel10-operator"
 LABEL org.opencontainers.image.source="https://github.com/trustification/trusted-profile-analyzer-operator"
 LABEL summary="RHTPA Operator"
-LABEL version="3.1.0"
-LABEL release=3.1.0
+LABEL version="3.2.0"
+LABEL release=3.2.0
 LABEL maintainer="Red Hat"
 LABEL operators.operatorframework.io.index.configs.v1=/config
 
