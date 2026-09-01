@@ -2,10 +2,20 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: tls-configurator
+# NOTE: The Helm chart (templates/init/tls-configure/) now also creates a
+# ClusterRole named "tls-configurator" as a regular (non-hook) resource in the
+# release namespace's release. This static bundle copy is kept in sync but is a
+# potential name clash — see CLAUDE.md "TLS Configurator" for the follow-up.
 rules:
-- apiGroups: ["batch"]
-  resources: ["jobs"]
-  verbs: ["create", "get", "list", "watch", "delete", "patch"]
 - apiGroups: ["config.openshift.io"]
-  resources: ["ingresses", "clusterversions"]
-  verbs: ["get", "list", "watch", "patch", "update"]
+  resources: ["apiservers"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["config.openshift.io"]
+  resources: ["clusterversions"]
+  verbs: ["get", "list"]
+- apiGroups: ["operator.openshift.io"]
+  resources: ["ingresscontrollers"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "update", "patch"]

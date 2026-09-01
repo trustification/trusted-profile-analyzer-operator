@@ -285,11 +285,32 @@ properties:
 
       tlsConfigurator:
         description: |
-          TLS Configurator for Openshift
+          TLS Configurator for Openshift. Runs a long-lived reconciler that
+          watches the cluster-wide TLS profile and rolls target workloads when it
+          changes at runtime. Supports post-quantum (X25519MLKEM768) TLS 1.3.
         allOf:
           - $ref: "#/definitions/Feature"
           - $ref: "#/definitions/Image"
           - $ref: "#/definitions/Application"
+          - type: object
+            properties:
+              pqc:
+                type: object
+                description: Post-quantum cryptography settings
+                properties:
+                  enabled:
+                    type: boolean
+                    description: Enforce TLS 1.3 + X25519MLKEM768 key exchange
+              targetDeployments:
+                type: array
+                description: |
+                  Deployment names in the release namespace to roll out when the
+                  cluster-wide TLS configuration changes at runtime.
+                items:
+                  type: string
+              resyncPeriod:
+                type: string
+                description: Periodic drift-correction interval (e.g. "5m")
 
       createImporters:
         description: |
