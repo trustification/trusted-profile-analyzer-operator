@@ -9,9 +9,26 @@ rules:
 - apiGroups: ["batch"]
   resources: ["jobs"]
   verbs: ["create", "get", "list", "watch", "delete", "patch", "update"]
+# The TLS reconciler is now a long-running Deployment (was a hook Job); the
+# operator must be able to create/manage it.
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["create", "get", "list", "watch", "delete", "patch", "update"]
+# Namespaced roles/rolebindings were added (016/017) alongside the cluster ones,
+# so the operator must be able to create them too.
 - apiGroups: ["rbac.authorization.k8s.io"]
-  resources: ["clusterroles", "clusterrolebindings"]
+  resources: ["clusterroles", "clusterrolebindings", "roles", "rolebindings"]
   verbs: ["create", "get", "list", "watch", "delete", "patch", "update"]
 - apiGroups: ["config.openshift.io"]
   resources: ["ingresses", "clusterversions"]
   verbs: ["get", "list", "watch", "patch", "update"]
+# The reconciler watches the cluster-wide TLS profile (APIServer CR); the
+# operator must hold this permission to be able to grant it (RBAC escalation).
+- apiGroups: ["config.openshift.io"]
+  resources: ["apiservers"]
+  verbs: ["get", "list", "watch"]
+# The reconciler reads/updates the IngressController TLS profile; same escalation
+# requirement applies.
+- apiGroups: ["operator.openshift.io"]
+  resources: ["ingresscontrollers"]
+  verbs: ["get", "list", "watch", "update", "patch"]
