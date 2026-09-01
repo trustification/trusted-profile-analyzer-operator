@@ -17,8 +17,10 @@ limitations under the License.
 package integration
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -177,6 +179,40 @@ func TestHelmIgnoreExists(t *testing.T) {
 
 	_, err := os.Stat(helmignorePath)
 	assert.NoError(t, err, ".helmignore should exist")
+}
+
+// TestChartHasNoMergeConflictMarkers walks the entire Helm chart and fails if
+// any file contains an unresolved git merge conflict marker. A committed
+// conflict in values.schema.json once broke every `helm template` render, so
+// this guards the whole tree cheaply rather than relying on rendering coverage.
+func TestChartHasNoMergeConflictMarkers(t *testing.T) {
+	chartRoot := filepath.Join("helm-charts", "redhat-trusted-profile-analyzer")
+
+	// Line prefixes that unambiguously indicate a conflict marker.
+	markers := []string{"<<<<<<< ", ">>>>>>> "}
+
+	err := filepath.WalkDir(chartRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+
+		data, readErr := os.ReadFile(path)
+		require.NoError(t, readErr, "should be able to read %s", path)
+
+		for lineNum, line := range strings.Split(string(data), "\n") {
+			for _, marker := range markers {
+				if strings.HasPrefix(line, marker) {
+					t.Errorf("%s:%d contains a merge conflict marker: %q",
+						path, lineNum+1, line)
+				}
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err, "walking the chart directory should succeed")
 }
 
 func TestValuesSchemaContainsCCOFields(t *testing.T) {

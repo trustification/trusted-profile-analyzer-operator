@@ -693,3 +693,162 @@ func TestHelmRenderAWSDefaultCredentialsRequest(t *testing.T) {
 	assert.Contains(t, rendered, "TRUSTD_S3_ACCESS_KEY",
 		"default mode should set TRUSTD_S3_ACCESS_KEY from CCO secret")
 }
+
+// enableMigrateDatabase turns on the migrate-database Job for the given values.
+// The Job template requires both modules.migrateDatabase.enabled and a
+// top-level .migrateDatabase value.
+func enableMigrateDatabase(v map[string]interface{}) map[string]interface{} {
+	v[fieldModules] = map[string]interface{}{
+		"migrateDatabase": map[string]interface{}{fieldEnabled: true},
+	}
+	v["migrateDatabase"] = map[string]interface{}{}
+	return v
+}
+
+// firstContainerEnv returns the env list of the first container of the first
+// resource in docs whose kind matches and whose metadata.name contains
+// nameContains. It fails the test if the resource or its containers are absent.
+func firstContainerEnv(t *testing.T, docs []string, kind, nameContains string) []interface{} {
+	t.Helper()
+	for _, doc := range docs {
+		obj, err := parseYAMLDoc(doc)
+		if err != nil {
+			continue
+		}
+		if obj["kind"] != kind {
+			continue
+		}
+		metadata, _ := obj[fieldMetadata].(map[string]interface{})
+		name, _ := metadata[fieldName].(string)
+		if metadata == nil || !strings.Contains(name, nameContains) {
+			continue
+		}
+
+		spec, _ := obj[fieldSpec].(map[string]interface{})
+		template, _ := spec["template"].(map[string]interface{})
+		templateSpec, _ := template[fieldSpec].(map[string]interface{})
+		containers, _ := templateSpec["containers"].([]interface{})
+		require.NotEmpty(t, containers, "%s/%s should have containers", kind, nameContains)
+
+		container, _ := containers[0].(map[string]interface{})
+		envList, _ := container["env"].([]interface{})
+		require.NotEmpty(t, envList, "%s/%s container should have env vars", kind, nameContains)
+		return envList
+	}
+	t.Fatalf("%s with name containing %q not found in rendered output", kind, nameContains)
+	return nil
+}
+
+// envValue looks up the literal `value` of the named env var. The second
+// return reports whether an env var with that name was found at all.
+func envValue(envList []interface{}, name string) (string, bool) {
+	for _, e := range envList {
+		env, ok := e.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if n, _ := env[fieldName].(string); n == name {
+			v, _ := env["value"].(string)
+			return v, true
+		}
+	}
+	return "", false
+}
+
+// TestHelmRenderMigrateDbJobRdsIam guards the migrate-database Job — the init
+// job that runs `trustd db migrate` and is the only one supporting RDS IAM
+// auth. A committed merge conflict in this template previously dropped either
+// the storage or the CCO includes; this test asserts both are present.
+func TestHelmRenderMigrateDbJobRdsIam(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, enableMigrateDatabase(awsRdsValues()))
+	docs := splitYAMLDocs(rendered)
+
+	env := firstContainerEnv(t, docs, "Job", "migrate-db")
+
+	// Storage env vars must still be emitted alongside the CCO/RDS ones.
+	if _, ok := envValue(env, "TRUSTD_STORAGE_STRATEGY"); !ok {
+		t.Error("migrate-db job should include storage env vars")
+	}
+
+	// RDS IAM env vars.
+	iamAuth, ok := envValue(env, "TRUSTD_DB_IAM_AUTH")
+	assert.True(t, ok, "migrate-db job should set TRUSTD_DB_IAM_AUTH for RDS IAM")
+	assert.Equal(t, "true", iamAuth)
+
+	region, ok := envValue(env, "TRUSTD_DB_REGION")
+	assert.True(t, ok, "migrate-db job should set TRUSTD_DB_REGION for RDS IAM")
+	assert.Equal(t, testRegionUSEast1, region)
+
+	sslMode, ok := envValue(env, "TRUSTD_DB_SSLMODE")
+	assert.True(t, ok, "migrate-db job should set TRUSTD_DB_SSLMODE")
+	assert.Equal(t, "require", sslMode, "RDS IAM should force SSL mode to require")
+
+	// AWS credentials are injected for non-manual modes so the SDK can mint
+	// RDS auth tokens.
+	if _, ok := envValue(env, "AWS_ACCESS_KEY_ID"); !ok {
+		t.Error("migrate-db job should reference AWS_ACCESS_KEY_ID from the CCO secret in mint mode")
+	}
+
+	// Password must be omitted when RDS IAM auth is enabled.
+	if _, ok := envValue(env, "TRUSTD_DB_PASSWORD"); ok {
+		t.Error("migrate-db job should NOT set TRUSTD_DB_PASSWORD when RDS IAM is enabled")
+	}
+}
+
+// TestHelmRenderMigrateDbJobManualVolumes asserts the migrate-database Job gets
+// the CCO manual-mode volumes/mounts in addition to storage. This is the other
+// half of the merge conflict that was previously mis-resolved.
+func TestHelmRenderMigrateDbJobManualVolumes(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	rendered := renderHelmChart(t, chartPath, enableMigrateDatabase(awsManualRdsValues()))
+	docs := splitYAMLDocs(rendered)
+
+	// Locate the migrate-db Job and inspect its pod spec directly.
+	var found bool
+	for _, doc := range docs {
+		obj, err := parseYAMLDoc(doc)
+		if err != nil || obj["kind"] != "Job" {
+			continue
+		}
+		metadata, _ := obj[fieldMetadata].(map[string]interface{})
+		name, _ := metadata[fieldName].(string)
+		if !strings.Contains(name, "migrate-db") {
+			continue
+		}
+		found = true
+
+		spec, _ := obj[fieldSpec].(map[string]interface{})
+		template, _ := spec["template"].(map[string]interface{})
+		templateSpec, _ := template[fieldSpec].(map[string]interface{})
+		volumes, _ := templateSpec["volumes"].([]interface{})
+
+		names := map[string]bool{}
+		for _, v := range volumes {
+			vol, _ := v.(map[string]interface{})
+			if n, _ := vol[fieldName].(string); n != "" {
+				names[n] = true
+			}
+		}
+		assert.True(t, names["cloud-credentials"],
+			"migrate-db job should include cloud-credentials volume in manual mode")
+		assert.True(t, names["bound-sa-token"],
+			"migrate-db job should include bound-sa-token volume in manual mode")
+
+		// Manual mode omits static S3/DB keys; STS env vars are used instead.
+		env := firstContainerEnv(t, docs, "Job", "migrate-db")
+		if _, ok := envValue(env, "AWS_WEB_IDENTITY_TOKEN_FILE"); !ok {
+			t.Error("migrate-db job should set AWS_WEB_IDENTITY_TOKEN_FILE in manual mode")
+		}
+		break
+	}
+	require.True(t, found, "migrate-db job should be rendered")
+}
