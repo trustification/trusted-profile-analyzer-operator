@@ -903,11 +903,7 @@
         },
         "loadUser": {
           "type": "boolean",
-<<<<<<< HEAD
           "description": "Value for the `UI_LOAD_USER` environment variable in the server deployment\n",
-=======
-          "description": "Value for the `OIDC_USER_INFO` environment variable in the server deployment\n",
->>>>>>> e36cbbc (rds)
           "default": true
         },
         "clients": {
