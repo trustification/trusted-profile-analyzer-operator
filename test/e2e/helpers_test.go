@@ -61,6 +61,13 @@ const (
 	fieldImporter    = "importer"
 	fieldIngress     = "ingress"
 	fieldHelm        = "helm"
+	fieldStorage     = "storage"
+	fieldDatabase    = "database"
+	fieldMetrics     = "metrics"
+	fieldTracing     = "tracing"
+	fieldType        = "type"
+	fieldBucket      = "bucket"
+	fieldRegion      = "region"
 
 	// Common test skip messages.
 	skipE2ETest         = "skipping e2e test in short mode"

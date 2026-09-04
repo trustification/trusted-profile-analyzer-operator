@@ -16,10 +16,16 @@ Arguments (dict):
   {{- include "trustification.common.requiredEnvVarValue" (dict "value" .database.name "msg" "Missing value for database name" ) | nindent 2 }}
 - name: {{ .prefix | default "" }}PGUSER
   {{- include "trustification.common.requiredEnvVarValue" (dict "value" .database.username "msg" "Missing value for database username" ) | nindent 2 }}
+{{- if not (eq (include "trustification.cco.rds.isEnabled" (dict "root" .root)) "true") }}
 - name: {{ .prefix | default "" }}PGPASSWORD
   {{- include "trustification.common.requiredEnvVarValue" (dict "value" .database.password "msg" "Missing value for database password" ) | nindent 2 }}
+{{- end }}
 - name: {{ .prefix | default "" }}PGSSLMODE
+{{- if eq (include "trustification.cco.rds.isEnabled" (dict "root" .root)) "true" }}
+  value: require
+{{- else }}
   value: {{ .database.sslMode | default "allow" }}
+{{- end }}
 {{- end }}
 
 {{/*
@@ -40,10 +46,16 @@ Arguments (dict):
   {{- include "trustification.common.requiredEnvVarValue" (dict "value" .database.name "msg" "Missing value for database name" ) | nindent 2 }}
 - name: {{ .prefix | default "TRUSTD_DB_" }}USER
   {{- include "trustification.common.requiredEnvVarValue" (dict "value" .database.username "msg" "Missing value for database username" ) | nindent 2 }}
+{{- if not (eq (include "trustification.cco.rds.isEnabled" (dict "root" .root)) "true") }}
 - name: {{ .prefix | default "TRUSTD_DB_" }}PASSWORD
   {{- include "trustification.common.requiredEnvVarValue" (dict "value" .database.password "msg" "Missing value for database password" ) | nindent 2 }}
+{{- end }}
 - name: {{ .prefix | default "TRUSTD_DB_" }}SSLMODE
+{{- if eq (include "trustification.cco.rds.isEnabled" (dict "root" .root)) "true" }}
+  value: require
+{{- else }}
   value: {{ .database.sslMode | default "allow" }}
+{{- end }}
 
 {{- $prefix := (.prefix | default "TRUSTD_DB_") }}
 {{- with .database.minimumConnections }}
