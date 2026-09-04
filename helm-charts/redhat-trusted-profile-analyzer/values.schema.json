@@ -375,6 +375,20 @@
               }
             }
           ]
+        },
+        "tlsConfigurator": {
+          "description": "TLS Configuragtor for Openshift\n",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Feature"
+            },
+            {
+              "$ref": "#/definitions/Image"
+            },
+            {
+              "$ref": "#/definitions/Application"
+            }
+          ]
         }
       }
     },
