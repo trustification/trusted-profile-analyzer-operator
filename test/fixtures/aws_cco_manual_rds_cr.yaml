@@ -1,0 +1,58 @@
+apiVersion: rhtpa.io/v1
+kind: TrustedProfileAnalyzer
+metadata:
+  name: aws-cco-manual-rds-instance
+  namespace: test-namespace
+spec:
+  appDomain: test.example.com
+  replicas: 1
+  cloudProvider: aws
+  ccoMode: manual
+  ccoRds:
+    enabled: true
+    region: us-east-1
+  cloudCredentials:
+    aws:
+      statementEntries:
+        - effect: Allow
+          action:
+            - "s3:GetObject"
+            - "s3:PutObject"
+            - "s3:DeleteObject"
+            - "s3:ListBucket"
+            - "rds-db:connect"
+          resource: "*"
+      stsIAMRoleARN: "arn:aws:iam::123456789012:role/trustify-s3-rds-role"
+  storage:
+    type: s3
+    bucket: trustify-storage
+    region: us-east-1
+  modules:
+    server:
+      enabled: true
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+    importer:
+      enabled: true
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+  oidc:
+    clients:
+      frontend:
+        clientId: test-frontend
+      cli:
+        clientSecret: test-secret
+  database:
+    host: testdb.cluster-xyz.us-east-1.rds.amazonaws.com
+    name: testdb
+    username: testuser
+  metrics:
+    enabled: false
+  tracing:
+    enabled: false

@@ -275,7 +275,7 @@ func TestOperatorMetricsEndpoint(t *testing.T) {
 	assert.NotEmpty(t, service.Spec.Ports, "metrics service should have ports")
 
 	for _, port := range service.Spec.Ports {
-		if port.Name == "https" || port.Name == "metrics" {
+		if port.Name == "https" || port.Name == fieldMetrics {
 			t.Logf("Metrics port: %s -> %d", port.Name, port.Port)
 		}
 	}
