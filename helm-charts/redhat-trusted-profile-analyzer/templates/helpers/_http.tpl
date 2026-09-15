@@ -18,6 +18,8 @@ Arguments (dict):
   value: "/etc/tls/tls.crt"
 {{ end }}
 
+{{ include "trustification.tls.securityProfile.envVars" . }}
+
 {{- with .module.requestLimit }}
 - name: HTTP_SERVER_REQUEST_LIMIT
   value: {{ include "trustification.common.byteSizeValue" . }}
