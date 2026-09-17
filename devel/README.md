@@ -120,6 +120,38 @@ kubectl apply -f trusted-profile-analyzer-demo.yaml
 Use this when you want the operator to obtain S3 (and optionally RDS IAM) credentials
 through OpenShift CCO instead of static access keys in the CR.
 
+## CCO disabled (the default)
+
+CCO is entirely opt-in: `spec.cloudProvider` is the master toggle. Leave it unset — on a
+non-STS cluster, or on plain Kubernetes — and the whole feature renders to nothing:
+
+- No `CredentialsRequest` is created. The template is wrapped in
+  `{{- if .Values.cloudProvider }}`, which also keeps the chart installable on clusters
+  where the `cloudcredential.openshift.io` CRD does not exist.
+- No CCO volumes, mounts or environment variables are injected. `ccoMode: manual` alone
+  does nothing: the manual/STS path requires *both* `cloudProvider` and `ccoMode: manual`,
+  so there is no `cloud-credentials` volume, no projected `bound-sa-token`, and no
+  `AWS_SHARED_CREDENTIALS_FILE` / `AWS_WEB_IDENTITY_TOKEN_FILE` / `AWS_ROLE_ARN` /
+  `AWS_REGION`.
+- No RDS IAM auth. That path also requires both `cloudProvider` and `ccoRds.enabled`, so
+  no `TRUSTD_DB_IAM_AUTH` / `TRUSTD_DB_IAM_REGION` is set.
+
+The pre-CCO configuration contract is unchanged:
+
+- With `storage.type: s3` you must supply `storage.accessKey` / `storage.secretKey`
+  yourself (literal values or your own `valueFrom` secret reference); they are rendered
+  into `TRUSTD_S3_ACCESS_KEY` / `TRUSTD_S3_SECRET_KEY` as before.
+- `database.password` is still required — omitting it fails the render with
+  `Missing value for database password`.
+- `TRUSTD_DB_SSLMODE` follows `database.sslMode` (default `allow`); it is **not** forced
+  to `require`.
+
+Two pieces of the feature ship unconditionally in the bundle but stay inert: the
+ClusterRole granting access to `credentialsrequests` (an RBAC rule for an API group that
+is absent simply matches nothing) and the `features.operators.openshift.io/token-auth-aws`
+annotation (the console only renders the role-ARN field on clusters whose credentials mode
+is `Manual`).
+
 ## Check the cluster's CCO mode
 
 ```console
