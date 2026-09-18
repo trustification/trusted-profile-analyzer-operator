@@ -12,8 +12,8 @@ LABEL maintainer="Red Hat"
 LABEL vendor="Red Hat, Inc."
 LABEL distribution-scope="public"
 LABEL url="https://www.redhat.com"
-LABEL version="3.2.0"
-LABEL release=3.2.0
+LABEL version="3.1.1"
+LABEL release=3.1.1
 LABEL cpe="cpe:/a:redhat:trusted_profile_analyzer:3.2::el10"
 
 LABEL features.operators.openshift.io/cni="false"
