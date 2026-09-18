@@ -1,0 +1,207 @@
+# RHTPA on OpenShift with CCO manual/STS credentials for *both* S3 and RDS.
+#
+# Variant of trusted-profile-analyzer-ocp-cco.yaml: instead of an in-cluster
+# PostgreSQL with a static password, the database is an AWS RDS instance reached
+# with IAM authentication, using the same projected ServiceAccount token and IAM
+# role that already back the S3 access.
+#
+# Prerequisites (see devel/README.md for the ccoctl walk-through):
+#   1. devel/cco/credentialRequest.yaml must also list "rds-db:connect" in its
+#      statementEntries, otherwise the role ccoctl creates cannot log into RDS.
+#   2. The RDS instance has IAM database authentication enabled.
+#   3. The database, the login role and the schema grants already exist, and the
+#      role was granted IAM login:
+#        CREATE DATABASE trustify;
+#        CREATE USER trustify LOGIN;
+#        GRANT rds_iam TO trustify;
+#        GRANT ALL ON DATABASE trustify TO trustify;
+#      This is *not* optional — see the modules.createDatabase note below.
+kind: TrustedProfileAnalyzer
+apiVersion: rhtpa.io/v1
+metadata:
+  name: rhtpa-demo
+  namespace: trustify
+spec:
+  appDomain: -change-me
+  collector: {}
+
+  # --- CCO manual/STS integration, for S3 and RDS (see devel/README.md) ---
+  cloudProvider: aws
+  ccoMode: manual
+  ccoRds:
+    enabled: true
+    # Region of the RDS instance; used to sign the IAM auth token.
+    region: <your-region>
+  cloudCredentials:
+    aws:
+      statementEntries:
+        - effect: Allow
+          action:
+            - "s3:GetObject"
+            - "s3:PutObject"
+            - "s3:DeleteObject"
+            - "s3:ListBucket"
+            - "s3:GetBucketLocation"
+            - "s3:ListBucketMultipartUploads"
+            - "s3:AbortMultipartUpload"
+            - "s3:ListMultipartUploadParts"
+            # Required for RDS IAM auth. Narrow the resource to
+            # arn:aws:rds-db:<region>:<account>:dbuid:<db-resource-id>/<db-user>
+            # for a least-privilege policy.
+            - "rds-db:connect"
+          resource: "*"
+      # Fill in with the role ARN printed by `ccoctl aws create-iam-roles`
+      stsIAMRoleARN: "arn:aws:iam::<ACCOUNT_ID>:role/<role-name>"
+  # ------------------------------------------------------------------------
+
+  # No password: with ccoRds.enabled the chart omits TRUSTD_DB_PASSWORD, sets
+  # TRUSTD_DB_IAM_AUTH=true / TRUSTD_DB_IAM_REGION, and forces sslMode to
+  # "require" (RDS IAM auth mandates TLS).
+  database: {
+    host: <your-db>.<cluster-id>.<your-region>.rds.amazonaws.com,
+    port: "5432",
+    name: trustify,
+    username: trustify
+  }
+
+  # Runs `trustd db migrate`, which supports IAM auth. Left empty so it inherits
+  # the `database` settings above and connects as that user — which therefore
+  # must own (or be able to create) the schema objects.
+  migrateDatabase: {}
+
+  infrastructure:
+    port: 9010
+  ingress: {
+    className: openshift-default,
+    additionalAnnotations: {
+      haproxy.router.openshift.io/timeout: 5m
+    }
+  }
+  metrics:
+    enabled: false
+  modules:
+    # Disabled: both jobs shell out to `psql`, which cannot mint an RDS IAM
+    # token. With ccoRds.enabled the chart drops PGPASSWORD from every psql
+    # env block (helpers/_postgres.tpl), so these jobs would connect with no
+    # password and fail. Create the database/user out of band (see the header)
+    # and seed the importers below manually once the server is up.
+    createDatabase:
+      enabled: false
+      image: {}
+    createImporters:
+      enabled: false
+      image: {}
+      # Kept for reference: the importer set this deployment expects. Seed it
+      # with `psql` from a host that can reach the RDS instance, or via the
+      # RHTPA UI / API, after migrate-database has completed.
+      importers:
+        redhat-sboms:
+          sbom:
+            description: All Red Hat SBOMs
+            period: 1d
+            source: https://access.redhat.com/security/data/sbom/beta/
+            keys:
+              - https://access.redhat.com/security/data/97f5eac4.txt#77E79ABE93673533ED09EBE2DCE3823597F5EAC4
+            disabled: true
+            fetchRetries: 50
+        redhat-csaf:
+          csaf:
+            description: All Red Hat CSAF data
+            period: 1d
+            source: redhat.com
+            disabled: true
+            fetchRetries: 50
+        cve:
+          cve:
+            description: CVE list v5
+            period: 1d
+            source: https://github.com/CVEProject/cvelistV5
+            disabled: false
+        osv-github:
+          osv:
+            description: GitHub Advisory Database
+            period: 1d
+            source: https://github.com/github/advisory-database
+            path: advisories
+            disabled: false
+        quay-redhat-user-workloads:
+          quay:
+            description: SBOMs from konflux image attachments
+            period: 1d
+            source: quay.io
+            namespace: redhat-user-workloads
+            disabled: true
+    importer:
+      concurrency: 4
+      enabled: true
+      image: {}
+      infrastructure: {}
+      metrics: {}
+      replicas: 1
+      resources:
+        requests:
+          cpu: 1
+          memory: 8Gi
+      rust: {}
+      tracing: {}
+      workingDirectory:
+        size: 32Gi
+    migrateDatabase:
+      enabled: true
+      image: {}
+    server:
+      enabled: true
+      image: {}
+      infrastructure: {}
+      ingress: {}
+      metrics: {}
+      replicas: 1
+      resources:
+        requests:
+          cpu: 1
+          memory: 8Gi
+      rust: {}
+      tracing: {}
+  oidc:
+    uiScope: ""
+    loadUser: true
+    clients:
+      frontend: { }
+      cli:
+        clientSecret:
+  openshift:
+    useServiceCa: true
+  partOf: trustify
+  # The database is RDS, so the in-cluster PostgreSQL from the
+  # trustify-infrastructure chart is not used.
+  postgresql:
+    enabled: false
+  replicas: 1
+  rust: {}
+  # CCO manual/STS mode: no accessKey/secretKey — the AWS SDK uses the
+  # projected SA token + role injected by the operator.
+  storage: {
+    type: s3,
+    bucket: <your-bucket-name>,
+    region: <your-region>
+
+  }
+
+  # Trust the cluster's router CA so trustd can reach the Keycloak route over TLS.
+  # Requires the `ingress-trust-anchor` ConfigMap (see devel/README.md).
+  tls: {
+    additionalTrustAnchor: /etc/trust-anchor/tls.crt
+  }
+
+  tracing:
+    enabled: false
+
+  extraVolumes:
+  - name: trust-anchor
+    configMap:
+      name: ingress-trust-anchor
+
+  extraVolumeMounts:
+  - name: trust-anchor
+    readOnly: true
+    mountPath: /etc/trust-anchor

@@ -325,10 +325,26 @@ kubectl apply -f trusted-profile-analyzer-ocp.yaml
 3. Edit `trusted-profile-analyzer-ocp-cco.yaml` (add `cloudProvider`/`ccoMode`/`stsIAMRoleARN`, storage → s3).
 4. `kubectl apply` the CR.
 
-> Optional: to also use RDS IAM auth for the database, add `ccoRds.enabled: true` and
-> `ccoRds.region`, include `rds-db:connect` in the `statementEntries`, and drop the DB
-> password. Note the `create-database`/`create-importers` init jobs use `psql` and still
-> require a static DB password; only `migrate-database` (`trustd db migrate`) supports RDS IAM.
+## Optional: RDS IAM auth on the same role
+
+To reach an RDS database with IAM authentication instead of a static password, use
+`trusted-profile-analyzer-ocp-cco-rds.yaml` — a ready-made variant of the CR above. It
+adds `ccoRds.enabled: true` / `ccoRds.region`, includes `rds-db:connect` in the
+`statementEntries`, and drops `database.password`. Add `rds-db:connect` to
+`devel/cco/credentialRequest.yaml` as well, before running `ccoctl`, so the role can
+actually log in.
+
+Two things the chart does *not* handle, so the CR disables both jobs and you must do
+them yourself:
+
+- `create-database` and `create-importers` shell out to `psql`, which cannot mint an RDS
+  IAM token. `helpers/_postgres.tpl` drops `PGPASSWORD` from every `psql` env block as
+  soon as `ccoRds.enabled` is set — including the admin connection from
+  `createDatabase` — so these jobs would connect with no password at all and fail.
+  Create the database, the login role (`GRANT rds_iam TO trustify;`) and the schema
+  grants out of band, and seed the importers after the server is up.
+- `migrate-database` runs `trustd db migrate` and does support IAM auth, so it stays
+  enabled. It connects as `database.username`, which must therefore own the schema.
 
 # Cleanup an instance
 From the UI
