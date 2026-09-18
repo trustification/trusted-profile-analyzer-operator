@@ -29,7 +29,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -mod=rea
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM registry.access.redhat.com/ubi10/ubi-minimal:1782283191
+FROM registry.access.redhat.com/ubi10/ubi-minimal:1789456844
 
 LABEL com.redhat.component="rhtpa-operator"
 LABEL description="Red Hat Trusted Profile Analyzer Operator"
@@ -51,7 +51,7 @@ LABEL features.operators.openshift.io/proxy-aware="false"
 LABEL features.operators.openshift.io/cnf="false"
 LABEL features.operators.openshift.io/csi="false"
 LABEL features.operators.openshift.io/tls-profiles="false"
-LABEL features.operators.openshift.io/token-auth-aws="false"
+LABEL features.operators.openshift.io/token-auth-aws="true"
 LABEL features.operators.openshift.io/token-auth-azure="false"
 LABEL features.operators.openshift.io/token-auth-gcp="false"
 
