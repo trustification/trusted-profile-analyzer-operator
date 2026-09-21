@@ -19,6 +19,27 @@ spec:
     createImporters:
       enabled: false
       image: {}
+      # Example: Quay importer with K8s-managed credentials (env-based, production pattern)
+      # importers:
+      #   quay-example:
+      #     quay:
+      #       description: SBOMs from Quay
+      #       period: 1d
+      #       source: quay.io
+      #       namespace: my-namespace
+      #       auth:
+      #         method:
+      #           type: bearer
+      #           token:
+      #             # First, create the K8s Secret:
+      #             #   kubectl create secret generic quay-api-token --from-literal=QUAY_API_TOKEN=<token>
+      #             # Then patch the operator-generated importer Deployment to expose it
+      #             # (the operator does not support envFrom via CR spec — use Kustomize):
+      #             #   spec.template.spec.containers[name=importer].envFrom:
+      #             #     - secretRef:
+      #             #         name: quay-api-token
+      #             type: env
+      #             value: QUAY_API_TOKEN
       importers: {}
     importer:
       concurrency: 1
