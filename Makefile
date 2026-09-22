@@ -4,7 +4,7 @@
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 VERSION ?= 3.2.0
-IMAGE_TAG ?= 3.2.
+IMAGE_TAG ?= 3.2.0
 REDUCED_VERSION ?= 3.2.0-snapshot
 CONTROLLER_TOOLS_VERSION ?= v0.18.0
 
