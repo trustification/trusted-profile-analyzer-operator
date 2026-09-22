@@ -85,6 +85,11 @@ spec:
               value: {{ . | quote }}
             {{- end }}
 
+            {{- with $mod.module.recommendPatterns }}
+            - name: TRUSTD_RECOMMEND_PATTERNS
+              value: {{ join "," . | quote }}
+            {{- end }}
+
             {{- if eq ( include "trustification.openshift.useServiceCa" .root ) "true" }}
             - name: CLIENT_TLS_CA_CERTIFICATES
               value: /run/secrets/kubernetes.io/serviceaccount/service-ca.crt
