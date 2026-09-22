@@ -83,6 +83,27 @@ spec:
             source: quay.io
             namespace: redhat-user-workloads
             disabled: true
+        # Example: private Quay importer with K8s-managed credentials
+        # quay-private:
+        #   quay:
+        #     description: SBOMs from a private Quay namespace
+        #     period: 1d
+        #     source: quay.io
+        #     namespace: my-private-namespace
+        #     auth:
+        #       method:
+        #         type: bearer
+        #         token:
+        #           # Production: use External Secrets Operator + Vault (or AWS/GCP Secret Manager)
+        #           # to provision the K8s Secret automatically. For a quick test:
+        #           #   kubectl create secret generic quay-api-token --from-literal=QUAY_API_TOKEN=<token>
+        #           # Then patch the operator-generated importer Deployment to expose it
+        #           # (the operator does not support envFrom via CR spec — use Kustomize):
+        #           #   spec.template.spec.containers[name=importer].envFrom:
+        #           #     - secretRef:
+        #           #         name: quay-api-token
+        #           type: env
+        #           value: QUAY_API_TOKEN
     importer:
       concurrency: 4
       enabled: true
