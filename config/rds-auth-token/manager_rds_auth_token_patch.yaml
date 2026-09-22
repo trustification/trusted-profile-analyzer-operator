@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          env:
+            # Placeholder only: the replacement in this component's
+            # kustomization.yaml rewrites the value to the manager image, which
+            # is the image that actually carries the `rds-auth-token` helper.
+            # watches.yaml feeds the resulting value to the chart as
+            # ccoRds.defaultTokenImage.
+            - name: RELATED_IMAGE_RDS_AUTH_TOKEN
+              value: controller:latest

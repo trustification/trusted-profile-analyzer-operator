@@ -27,7 +27,22 @@ spec:
     type: s3
     bucket: trustify-storage
     region: us-east-1
+  # Bootstrap connection for the create-database job. The RDS master user still
+  # authenticates with a password, so it opts out of IAM auth per connection;
+  # the role it creates is granted rds_iam instead.
+  createDatabase:
+    name: postgres
+    username: postgres
+    password: test-admin-password
+    iamAuth: false
+    sslMode: require
   modules:
+    # Both jobs shell out to psql. create-importers connects as the IAM-auth
+    # user, so the chart gives it an rds-auth-token init container.
+    createDatabase:
+      enabled: true
+    createImporters:
+      enabled: true
     server:
       enabled: true
       replicas: 1

@@ -91,6 +91,18 @@
         "region": {
           "type": "string",
           "description": "AWS region of the RDS instance. Used by the application to\ngenerate RDS IAM auth tokens.\n"
+        },
+        "tokenImage": {
+          "type": "string",
+          "description": "Image providing the 'rds-auth-token' helper, run as an init container\nby the psql-based jobs (create-database, create-importers) because psql\ncannot mint an IAM token itself. Takes precedence over defaultTokenImage.\nLeave unset to use the image the operator advertises; set it to pin a\ndifferent image, to run the chart standalone, or when the operator was\ndeployed without RELATED_IMAGE_RDS_AUTH_TOKEN.\n"
+        },
+        "defaultTokenImage": {
+          "type": "string",
+          "description": "Fallback for tokenImage, injected by the operator from the optional\nRELATED_IMAGE_RDS_AUTH_TOKEN environment variable via watches.yaml.\nDo not set it by hand — the operator overwrites it on every reconcile.\n"
+        },
+        "resources": {
+          "type": "object",
+          "description": "Resource requests and limits for the RDS auth token init container.\n"
         }
       }
     },
@@ -1222,6 +1234,10 @@
           "description": "The maximum number of connections created in the connection pool.\n",
           "type": "integer",
           "minimum": 1
+        },
+        "iamAuth": {
+          "description": "Authenticate this connection with an AWS RDS IAM token instead of a\npassword. Defaults to ccoRds.enabled. Set it to false on an individual\nconnection to keep password authentication there — typically on\ncreateDatabase, whose bootstrap admin is often the RDS master user.\n",
+          "type": "boolean"
         }
       }
     },

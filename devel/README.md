@@ -335,17 +335,31 @@ adds `ccoRds.enabled: true` / `ccoRds.region`, includes `rds-db:connect` in the
 `cco/aws-credentialRequest.yaml` as well, before running `ccoctl`, so the role can
 actually log in.
 
-Two things the chart does *not* handle, so the CR disables both jobs and you must do
-them yourself:
+How the three init jobs authenticate:
 
+- `migrate-database` runs `trustd db migrate`, which speaks IAM auth natively. It
+  connects as `database.username`, which must therefore own the schema.
 - `create-database` and `create-importers` shell out to `psql`, which cannot mint an RDS
-  IAM token. `helpers/_postgres.tpl` drops `PGPASSWORD` from every `psql` env block as
-  soon as `ccoRds.enabled` is set — including the admin connection from
-  `createDatabase` — so these jobs would connect with no password at all and fail.
-  Create the database, the login role (`GRANT rds_iam TO trustify;`) and the schema
-  grants out of band, and seed the importers after the server is up.
-- `migrate-database` runs `trustd db migrate` and does support IAM auth, so it stays
-  enabled. It connects as `database.username`, which must therefore own the schema.
+  IAM token. Whenever the connection they make uses IAM auth, the chart prepends an
+  `rds-auth-token` init container — the operator image, which carries a small helper of
+  that name — that mints a token onto a shared in-memory volume; the job reads it into
+  `PGPASSWORD`. The image is `ccoRds.tokenImage` if you set it, otherwise
+  `ccoRds.defaultTokenImage`, which the operator injects from the optional
+  `RELATED_IMAGE_RDS_AUTH_TOKEN` env var (added by the `config/rds-auth-token` kustomize
+  component, enabled from `config/default/kustomization.yaml`; see `watches.yaml` for the
+  injection). Set `ccoRds.tokenImage` by hand to pin a specific image, to run the chart
+  standalone, or when the operator was deployed with that component disabled.
+
+None of this touches a deployment that is not using RDS IAM auth: those jobs still exec
+`psql` directly, exactly as before.
+
+IAM auth is chosen per connection, not globally, and `iamAuth` is the switch — set it on
+any database block to override `ccoRds.enabled` for that one connection.
+`create-database` bootstraps the database and the login role, and the RDS master user it
+connects as normally still has a
+password — so the CR sets `createDatabase.iamAuth: false` and points the password at a
+Secret. The `trustify` role that job creates is granted `rds_iam` instead of a password,
+which is why `create-importers`, connecting as that role, does need the init container.
 
 # Cleanup an instance
 From the UI

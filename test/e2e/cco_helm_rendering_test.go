@@ -38,16 +38,23 @@ const (
 	testRegionUSEast1     = "us-east-1"
 	testSTSRoleARN        = "arn:aws:iam::123456789012:role/trustify-s3-role"
 	testRdsHost           = "testdb.cluster-xyz.us-east-1.rds.amazonaws.com"
+	fieldUsername         = "username"
+	fieldTokenImage       = "tokenImage"
+	testTokenImage        = "quay.io/example/rhtpa-rhel10-operator:test"
+	tokenInitContainer    = "rds-auth-token"
+	tokenFilePath         = "/var/run/rds-auth-token/token"
+	jobCreateDb           = "create-db"
+	jobCreateImporters    = "create-importers"
 	cloudProviderAWS      = "aws"
 	cloudProviderGCP      = "gcp"
 )
 
 func testDatabaseValues() map[string]interface{} {
 	return map[string]interface{}{
-		"host":     "postgres.test.svc",
-		fieldName:  "testdb",
-		"username": "testuser",
-		"password": "testpass",
+		fieldHost:     "postgres.test.svc",
+		fieldName:     "testdb",
+		fieldUsername: "testuser",
+		fieldPassword: "testpass",
 	}
 }
 
@@ -543,28 +550,33 @@ func TestHelmRenderAWSPassthroughCredentialsRequest(t *testing.T) {
 
 func rdsIamDatabaseValues() map[string]interface{} {
 	return map[string]interface{}{
-		"host":     testRdsHost,
-		fieldName:  "testdb",
-		"username": "testuser",
+		fieldHost:     testRdsHost,
+		fieldName:     "testdb",
+		fieldUsername: "testuser",
+	}
+}
+
+// ccoRdsValues is the ccoRds block used by the RDS IAM tests. tokenImage is
+// always set because the psql-based jobs refuse to render without it; in a
+// cluster the operator injects it from RELATED_IMAGE_RDS_AUTH_TOKEN.
+func ccoRdsValues() map[string]interface{} {
+	return map[string]interface{}{
+		fieldEnabled:    true,
+		fieldRegion:     testRegionUSEast1,
+		fieldTokenImage: testTokenImage,
 	}
 }
 
 func awsRdsValues() map[string]interface{} {
 	v := awsValues()
-	v[fieldCcoRds] = map[string]interface{}{
-		fieldEnabled: true,
-		fieldRegion:  testRegionUSEast1,
-	}
+	v[fieldCcoRds] = ccoRdsValues()
 	v[fieldDatabase] = rdsIamDatabaseValues()
 	return v
 }
 
 func awsManualRdsValues() map[string]interface{} {
 	v := awsManualValues()
-	v[fieldCcoRds] = map[string]interface{}{
-		fieldEnabled: true,
-		fieldRegion:  testRegionUSEast1,
-	}
+	v[fieldCcoRds] = ccoRdsValues()
 	v[fieldDatabase] = rdsIamDatabaseValues()
 	return v
 }
@@ -867,4 +879,421 @@ func TestHelmRenderMigrateDbJobManualVolumes(t *testing.T) {
 		break
 	}
 	require.True(t, found, "migrate-db job should be rendered")
+}
+
+// enablePsqlJobs turns on the two init jobs that shell out to psql. The
+// create-database Job additionally requires a top-level `createDatabase`
+// block holding the bootstrap (admin) connection settings.
+func enablePsqlJobs(v map[string]interface{}, createDatabase map[string]interface{}) map[string]interface{} {
+	modules, _ := v[fieldModules].(map[string]interface{})
+	if modules == nil {
+		modules = map[string]interface{}{}
+		v[fieldModules] = modules
+	}
+	modules["createDatabase"] = map[string]interface{}{fieldEnabled: true}
+	modules["createImporters"] = map[string]interface{}{fieldEnabled: true}
+	v["createDatabase"] = createDatabase
+	return v
+}
+
+// jobPodSpec returns the pod spec of the first Job whose name contains
+// nameContains.
+func jobPodSpec(t *testing.T, docs []string, nameContains string) map[string]interface{} {
+	t.Helper()
+	for _, doc := range docs {
+		obj, err := parseYAMLDoc(doc)
+		if err != nil || obj["kind"] != "Job" {
+			continue
+		}
+		metadata, _ := obj[fieldMetadata].(map[string]interface{})
+		if name, _ := metadata[fieldName].(string); !strings.Contains(name, nameContains) {
+			continue
+		}
+		spec, _ := obj[fieldSpec].(map[string]interface{})
+		template, _ := spec["template"].(map[string]interface{})
+		podSpec, _ := template[fieldSpec].(map[string]interface{})
+		require.NotNil(t, podSpec, "job %q should have a pod spec", nameContains)
+		return podSpec
+	}
+	t.Fatalf("Job with name containing %q not found in rendered output", nameContains)
+	return nil
+}
+
+// containerByName returns the named entry of the pod spec's `containers` or
+// `initContainers` list, or nil when absent.
+func containerByName(podSpec map[string]interface{}, list, name string) map[string]interface{} {
+	entries, _ := podSpec[list].([]interface{})
+	for _, e := range entries {
+		container, _ := e.(map[string]interface{})
+		if n, _ := container[fieldName].(string); n == name {
+			return container
+		}
+	}
+	return nil
+}
+
+// volumeNames returns the set of volume names on the pod spec.
+func volumeNames(podSpec map[string]interface{}) map[string]bool {
+	names := map[string]bool{}
+	volumes, _ := podSpec["volumes"].([]interface{})
+	for _, v := range volumes {
+		vol, _ := v.(map[string]interface{})
+		if n, _ := vol[fieldName].(string); n != "" {
+			names[n] = true
+		}
+	}
+	return names
+}
+
+// containerEnv returns the env list of a container map.
+func containerEnv(container map[string]interface{}) []interface{} {
+	env, _ := container["env"].([]interface{})
+	return env
+}
+
+// containerScript joins a container's command into a single string so it can
+// be searched for shell fragments.
+func containerScript(container map[string]interface{}) string {
+	parts, _ := container["command"].([]interface{})
+	var sb strings.Builder
+	for _, p := range parts {
+		if s, ok := p.(string); ok {
+			sb.WriteString(s)
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
+}
+
+// mountPaths returns the set of mount paths of a container.
+func mountPaths(container map[string]interface{}) map[string]bool {
+	paths := map[string]bool{}
+	mounts, _ := container["volumeMounts"].([]interface{})
+	for _, m := range mounts {
+		mount, _ := m.(map[string]interface{})
+		if p, _ := mount["mountPath"].(string); p != "" {
+			paths[p] = true
+		}
+	}
+	return paths
+}
+
+// assertMintsRdsToken checks the shape shared by both psql jobs when the
+// connection they make uses RDS IAM auth: an `rds-auth-token` init container
+// mints the token onto a shared volume, and the job itself reads that file
+// into PGPASSWORD instead of receiving a static password.
+func assertMintsRdsToken(t *testing.T, podSpec map[string]interface{}, jobName string) {
+	t.Helper()
+
+	init := containerByName(podSpec, "initContainers", tokenInitContainer)
+	require.NotNil(t, init, "%s should have an %s init container", jobName, tokenInitContainer)
+
+	image, _ := init["image"].(string)
+	assert.Equal(t, testTokenImage, image,
+		"%s init container should run the operator image carrying the helper", jobName)
+
+	initEnv := containerEnv(init)
+	region, ok := envValue(initEnv, "AWS_REGION")
+	assert.True(t, ok, "%s init container should set AWS_REGION", jobName)
+	assert.Equal(t, testRegionUSEast1, region)
+
+	host, ok := envValue(initEnv, "PGHOST")
+	assert.True(t, ok, "%s init container should set PGHOST", jobName)
+	assert.Equal(t, testRdsHost, host, "the token is bound to the host it is minted for")
+
+	// The token is bound to host+port+user, so the init container must mint it
+	// for the very same user the job connects as.
+	job := containerByName(podSpec, "containers", "job")
+	require.NotNil(t, job, "%s should have a `job` container", jobName)
+	initUser, _ := envValue(initEnv, "PGUSER")
+	jobUser, _ := envValue(containerEnv(job), "PGUSER")
+	assert.Equal(t, jobUser, initUser,
+		"%s init container must mint the token for the user the job connects as", jobName)
+
+	assert.True(t, volumeNames(podSpec)[tokenInitContainer],
+		"%s should carry the %s volume", jobName, tokenInitContainer)
+	assert.True(t, mountPaths(init)["/var/run/rds-auth-token"],
+		"%s init container should mount the token volume", jobName)
+	assert.True(t, mountPaths(job)["/var/run/rds-auth-token"],
+		"%s job container should mount the token volume", jobName)
+
+	assert.Contains(t, containerScript(job), tokenFilePath,
+		"%s should read the minted token into PGPASSWORD", jobName)
+	if _, ok := envValue(containerEnv(job), "PGPASSWORD"); ok {
+		t.Errorf("%s should NOT set a static PGPASSWORD when using RDS IAM auth", jobName)
+	}
+}
+
+// TestHelmRenderPsqlJobsRdsIamInitContainer covers the core of the feature:
+// psql cannot mint an RDS IAM token itself, so both psql-based init jobs get
+// an init container that does it for them.
+func TestHelmRenderPsqlJobsRdsIamInitContainer(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	values := enablePsqlJobs(awsManualRdsValues(), map[string]interface{}{})
+	docs := splitYAMLDocs(renderHelmChart(t, chartPath, values))
+
+	for _, jobName := range []string{jobCreateDb, jobCreateImporters} {
+		podSpec := jobPodSpec(t, docs, jobName)
+		assertMintsRdsToken(t, podSpec, jobName)
+
+		// Manual mode: the init container needs the STS volumes to assume the
+		// role before it can sign the token request.
+		names := volumeNames(podSpec)
+		assert.True(t, names["cloud-credentials"],
+			"%s should include the cloud-credentials volume in manual mode", jobName)
+		assert.True(t, names["bound-sa-token"],
+			"%s should include the bound-sa-token volume in manual mode", jobName)
+
+		init := containerByName(podSpec, "initContainers", tokenInitContainer)
+		if _, ok := envValue(containerEnv(init), "AWS_WEB_IDENTITY_TOKEN_FILE"); !ok {
+			t.Errorf("%s init container should set AWS_WEB_IDENTITY_TOKEN_FILE in manual mode", jobName)
+		}
+	}
+}
+
+// TestHelmRenderPsqlJobsRdsIamMintMode asserts the init container gets static
+// CCO credentials — rather than STS volumes — in the non-manual modes.
+func TestHelmRenderPsqlJobsRdsIamMintMode(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	values := enablePsqlJobs(awsRdsValues(), map[string]interface{}{})
+	docs := splitYAMLDocs(renderHelmChart(t, chartPath, values))
+
+	podSpec := jobPodSpec(t, docs, jobCreateImporters)
+	assertMintsRdsToken(t, podSpec, jobCreateImporters)
+
+	init := containerByName(podSpec, "initContainers", tokenInitContainer)
+	if _, ok := envValue(containerEnv(init), "AWS_ACCESS_KEY_ID"); !ok {
+		t.Error("create-importers init container should reference AWS_ACCESS_KEY_ID from the CCO secret in mint mode")
+	}
+	assert.False(t, volumeNames(podSpec)["bound-sa-token"],
+		"mint mode should not mount the projected SA token")
+}
+
+// TestHelmRenderRdsTokenImageSources covers the two ways the helper image is
+// supplied: `defaultTokenImage`, which the operator injects from the optional
+// RELATED_IMAGE_RDS_AUTH_TOKEN env var, and `tokenImage`, which the user sets
+// and which must win so a deployment can pin a different image.
+func TestHelmRenderRdsTokenImageSources(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	const pinnedImage = "quay.io/example/rhtpa-rhel10-operator:pinned"
+
+	tests := []struct {
+		name     string
+		ccoRds   map[string]interface{}
+		expected string
+	}{
+		{
+			name: "operator injected only",
+			ccoRds: map[string]interface{}{
+				fieldEnabled:        true,
+				fieldRegion:         testRegionUSEast1,
+				"defaultTokenImage": testTokenImage,
+			},
+			expected: testTokenImage,
+		},
+		{
+			name: "user value wins over operator injected",
+			ccoRds: map[string]interface{}{
+				fieldEnabled:        true,
+				fieldRegion:         testRegionUSEast1,
+				"defaultTokenImage": testTokenImage,
+				fieldTokenImage:     pinnedImage,
+			},
+			expected: pinnedImage,
+		},
+		{
+			name: "user value only - operator env var absent",
+			ccoRds: map[string]interface{}{
+				fieldEnabled:    true,
+				fieldRegion:     testRegionUSEast1,
+				fieldTokenImage: pinnedImage,
+			},
+			expected: pinnedImage,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			values := awsValues()
+			values[fieldCcoRds] = tt.ccoRds
+			values[fieldDatabase] = rdsIamDatabaseValues()
+			docs := splitYAMLDocs(renderHelmChart(t, chartPath, enablePsqlJobs(values, map[string]interface{}{})))
+
+			init := containerByName(jobPodSpec(t, docs, jobCreateImporters), "initContainers", tokenInitContainer)
+			require.NotNil(t, init, "create-importers should have an %s init container", tokenInitContainer)
+			image, _ := init["image"].(string)
+			assert.Equal(t, tt.expected, image)
+		})
+	}
+}
+
+// TestHelmRenderCreateDbAdminIamOptOut covers the common bootstrap case: the
+// admin connection create-database makes is the RDS master user on password
+// auth, while the application user it creates gets rds_iam. The two identities
+// must be able to differ.
+func TestHelmRenderCreateDbAdminIamOptOut(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	values := enablePsqlJobs(awsRdsValues(), map[string]interface{}{
+		fieldUsername: "postgres",
+		fieldPassword: "adminpass",
+		"iamAuth":     false,
+	})
+	docs := splitYAMLDocs(renderHelmChart(t, chartPath, values))
+
+	podSpec := jobPodSpec(t, docs, jobCreateDb)
+	assert.Nil(t, containerByName(podSpec, "initContainers", tokenInitContainer),
+		"an admin connection opted out of IAM auth needs no token init container")
+
+	job := containerByName(podSpec, "containers", "job")
+	require.NotNil(t, job, "create-db should have a `job` container")
+	if _, ok := envValue(containerEnv(job), "PGPASSWORD"); !ok {
+		t.Error("create-db should keep PGPASSWORD for an admin connection opted out of IAM auth")
+	}
+	command, _ := job["command"].([]interface{})
+	require.NotEmpty(t, command, "create-db should have a command")
+	assert.Equal(t, "psql", command[0],
+		"a connection opted out of IAM auth keeps the plain psql invocation")
+
+	// The application user is still on IAM auth, so it has no password to set.
+	if _, ok := envValue(containerEnv(job), "DB_PASSWORD"); ok {
+		t.Error("create-db should not pass DB_PASSWORD for an application user on IAM auth")
+	}
+
+	// The opt-out is per connection: create-importers connects as the
+	// application user and must still mint a token.
+	assertMintsRdsToken(t, jobPodSpec(t, docs, jobCreateImporters), jobCreateImporters)
+}
+
+// assertPlainPsqlJob checks that a job is left exactly as deployments without
+// RDS IAM auth have always had it: psql invoked directly, no shell wrapper, no
+// init container, no token volume.
+func assertPlainPsqlJob(t *testing.T, podSpec map[string]interface{}, jobName string) {
+	t.Helper()
+
+	assert.Nil(t, podSpec["initContainers"],
+		"%s should have no init containers without RDS IAM auth", jobName)
+	assert.False(t, volumeNames(podSpec)[tokenInitContainer],
+		"%s should have no token volume without RDS IAM auth", jobName)
+
+	job := containerByName(podSpec, "containers", "job")
+	require.NotNil(t, job, "%s should have a `job` container", jobName)
+
+	command, _ := job["command"].([]interface{})
+	require.NotEmpty(t, command, "%s should have a command", jobName)
+	assert.Equal(t, "psql", command[0],
+		"%s should exec psql directly, not through a shell, without RDS IAM auth", jobName)
+
+	if _, ok := envValue(containerEnv(job), "PGPASSWORD"); !ok {
+		t.Errorf("%s should set PGPASSWORD without RDS IAM auth", jobName)
+	}
+	assert.NotContains(t, containerScript(job), tokenFilePath,
+		"%s should not read a token file without RDS IAM auth", jobName)
+}
+
+// TestHelmRenderPsqlJobsWithoutRdsIam asserts the jobs are untouched when RDS
+// IAM auth is off — the whole mechanism is opt-in.
+func TestHelmRenderPsqlJobsWithoutRdsIam(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	values := enablePsqlJobs(awsValues(), map[string]interface{}{})
+	docs := splitYAMLDocs(renderHelmChart(t, chartPath, values))
+
+	for _, jobName := range []string{jobCreateDb, jobCreateImporters} {
+		assertPlainPsqlJob(t, jobPodSpec(t, docs, jobName), jobName)
+	}
+
+	// The importer SQL keeps being passed as a psql argument rather than
+	// through an env-var.
+	importers := containerByName(jobPodSpec(t, docs, jobCreateImporters), "containers", "job")
+	if _, ok := envValue(containerEnv(importers), "IMPORTERS_SQL"); ok {
+		t.Error("create-importers should not use IMPORTERS_SQL without RDS IAM auth")
+	}
+	assert.Contains(t, containerScript(importers), "INSERT INTO IMPORTER",
+		"create-importers should pass the SQL to psql directly without RDS IAM auth")
+}
+
+// TestHelmRenderPsqlJobsWithoutCloudProvider is the plain non-cloud case: no
+// CCO at all, an in-cluster database, static passwords.
+func TestHelmRenderPsqlJobsWithoutCloudProvider(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+	values := enablePsqlJobs(map[string]interface{}{
+		fieldAppDomain: testAppDomain,
+		fieldStorage:   map[string]interface{}{fieldType: "filesystem", "size": "32Gi"},
+		fieldDatabase:  testDatabaseValues(),
+	}, map[string]interface{}{})
+	docs := splitYAMLDocs(renderHelmChart(t, chartPath, values))
+
+	for _, jobName := range []string{jobCreateDb, jobCreateImporters} {
+		assertPlainPsqlJob(t, jobPodSpec(t, docs, jobName), jobName)
+	}
+}
+
+// createDbInitSQL returns the init.sql the create-database Job runs.
+func createDbInitSQL(t *testing.T, docs []string) string {
+	t.Helper()
+	for _, doc := range docs {
+		obj, err := parseYAMLDoc(doc)
+		if err != nil || obj["kind"] != "ConfigMap" {
+			continue
+		}
+		metadata, _ := obj[fieldMetadata].(map[string]interface{})
+		if name, _ := metadata[fieldName].(string); !strings.Contains(name, jobCreateDb) {
+			continue
+		}
+		data, _ := obj["data"].(map[string]interface{})
+		sql, _ := data["init.sql"].(string)
+		require.NotEmpty(t, sql, "create-db ConfigMap should hold init.sql")
+		return sql
+	}
+	t.Fatal("create-db ConfigMap not found in rendered output")
+	return ""
+}
+
+// TestHelmRenderCreateDbInitSQLGrantsRdsIam asserts the created role is set up
+// for the auth method it will actually use. Granting rds_iam is what enables
+// token login — and it disables password login, so the two branches are
+// mutually exclusive.
+func TestHelmRenderCreateDbInitSQLGrantsRdsIam(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	chartPath := getChartPath(t)
+
+	withIam := enablePsqlJobs(awsRdsValues(), map[string]interface{}{})
+	sql := createDbInitSQL(t, splitYAMLDocs(renderHelmChart(t, chartPath, withIam)))
+	assert.Contains(t, sql, "GRANT rds_iam TO :db_user",
+		"an application user on IAM auth should be granted rds_iam")
+	assert.NotContains(t, sql, "ALTER USER :db_user WITH PASSWORD",
+		"an application user on IAM auth has no password to set")
+
+	withoutIam := enablePsqlJobs(awsValues(), map[string]interface{}{})
+	sql = createDbInitSQL(t, splitYAMLDocs(renderHelmChart(t, chartPath, withoutIam)))
+	assert.Contains(t, sql, "ALTER USER :db_user WITH PASSWORD",
+		"without IAM auth the application user keeps a password")
+	assert.NotContains(t, sql, "GRANT rds_iam",
+		"rds_iam must not be granted when the user logs in with a password")
 }

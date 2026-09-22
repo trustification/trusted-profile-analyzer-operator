@@ -111,7 +111,7 @@ metadata:
     operators.operatorframework.io/project_layout: helm.sdk.operatorframework.io/v1
     repository: https://github.com/trustification/trusted-profile-analyzer-operator
     support: Red Hat
-  name: rhtpa-operator.v3.1.1
+  name: rhtpa-operator.v3.2.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -121,7 +121,7 @@ spec:
         name: trustedprofileanalyzers.rhtpa.io
         version: v1
   description: |
-    Red Hat Trusted Profile Analyzer (RHTPA) 3.1.1 provides a single source of truth for your software inventory across all your environments. You can verify the integrity of your in-house and third-party applications against their respective Software Bill of Materials (SBOM) document.  Trusted Profile Analyzer provides vulnerability, component and license transparency, strengthens your software supply chain security, and enables an accurate, up-to-date understanding of your software inventory.
+    Red Hat Trusted Profile Analyzer (RHTPA) 3.2.0 provides a single source of truth for your software inventory across all your environments. You can verify the integrity of your in-house and third-party applications against their respective Software Bill of Materials (SBOM) document.  Trusted Profile Analyzer provides vulnerability, component and license transparency, strengthens your software supply chain security, and enables an accurate, up-to-date understanding of your software inventory.
 
     Features and Benefits:
 
@@ -282,7 +282,19 @@ spec:
                       - --metrics-bind-address=:8443
                       - --leader-elect
                       - --health-probe-bind-address=:8081
-                    image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:96a075c382cc6b521bffd12fc7bd6c15c729f3d15575e8c02c453ebfa0c393ab
+                    env:
+                      # [RDS_AUTH_TOKEN] Optional. The chart runs this image as an
+                      # init container to mint RDS IAM auth tokens for the psql-based
+                      # jobs; it is the operator image itself. Generated from the
+                      # config/rds-auth-token kustomize component (enabled in
+                      # config/default) — disable that component and re-run
+                      # `make bundle` to drop this env var and the matching
+                      # relatedImages entry below. A cluster admin can also override
+                      # the value per install via `spec.config.env` on the
+                      # Subscription, or per CR via `ccoRds.tokenImage`.
+                      - name: RELATED_IMAGE_RDS_AUTH_TOKEN
+                        value: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:e81ca4327bb4a64f9f6e1e6a59f59fd70cb98459246bb025c58090dd01193118
+                    image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:e81ca4327bb4a64f9f6e1e6a59f59fd70cb98459246bb025c58090dd01193118
                     livenessProbe:
                       httpGet:
                         path: /healthz

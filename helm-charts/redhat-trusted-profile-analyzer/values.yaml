@@ -19,6 +19,12 @@ tls: {}
 
 storage: {}
 
+# Every database block (`database`, `createDatabase`,
+# `modules.createImporters.database`) accepts `iamAuth`, which overrides
+# `ccoRds.enabled` for that one connection. Leave it unset to follow
+# `ccoRds.enabled`; set it to false to keep password authentication for a
+# connection — typically the RDS master user that `createDatabase` uses to
+# bootstrap the database.
 database: {}
 
 # ccoMode: ""  # default | mint | passthrough | manual
@@ -29,6 +35,21 @@ cloudCredentials: {}
 # ccoRds:         # Uncomment to enable RDS IAM authentication via CCO
 #   enabled: false
 #   region: ""    # AWS region of the RDS instance
+#   # Image providing the `rds-auth-token` helper, run as an init container by the
+#   # psql-based jobs (create-database, create-importers) because psql cannot mint
+#   # an IAM token itself. Leave it unset to use the image the operator advertises
+#   # in `defaultTokenImage`; set it to pin a different image, or when running the
+#   # chart standalone, or when the operator was deployed without the optional
+#   # RELATED_IMAGE_RDS_AUTH_TOKEN env var.
+#   # Required only for connections that actually use IAM auth — deployments
+#   # without it, or with `iamAuth: false`, run psql unchanged and never need it.
+#   tokenImage: ""
+#   # Fallback for tokenImage, injected by the operator from
+#   # RELATED_IMAGE_RDS_AUTH_TOKEN (see watches.yaml). Do not set it by hand: the
+#   # operator overwrites it on every reconcile. Empty when the operator was
+#   # deployed with the config/rds-auth-token component disabled.
+#   defaultTokenImage: ""
+#   resources: {} # optional resources for the token init container
   #aws:
   #  statementEntries:
   #    - effect: Allow
@@ -105,6 +126,7 @@ modules:
   migrateDatabase:
     enabled: false
     image: {}
+    rust: {}
 
   createImporters:
     enabled: true

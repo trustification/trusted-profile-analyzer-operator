@@ -255,14 +255,31 @@ When `ccoRds.enabled` is true:
 
 When `ccoRds.enabled` is false or absent, behavior is unchanged — `database.password` is required and SSL mode uses the configured value.
 
-**Note:** The `create-database` and `create-importers` init jobs use `psql` directly and cannot generate RDS IAM tokens. These jobs continue requiring static credentials via `createDatabase.database`. The `migrate-database` job runs `trustd db migrate` and supports RDS IAM auth.
+**Init jobs:** `migrate-database` runs `trustd db migrate`, which speaks RDS IAM auth natively. The `create-database` and `create-importers` jobs shell out to `psql`, which cannot mint an IAM token, so when the connection they make uses IAM auth the chart prepends an `rds-auth-token` init container that mints the token onto a shared in-memory volume; the job is then wrapped in `bash` so it can read that file into `PGPASSWORD`. That init container runs the operator image itself (it carries the `cmd/rds-auth-token` helper).
+
+**Where the helper image comes from (optional, configurable):** the chart resolves it from `ccoRds.tokenImage` first, falling back to `ccoRds.defaultTokenImage`, which the operator injects from the `RELATED_IMAGE_RDS_AUTH_TOKEN` environment variable via `overrideValues` in `watches.yaml`. Rendering fails only when a connection actually needs a token and both are empty.
+
+That environment variable is added by the optional `config/rds-auth-token` kustomize component, enabled from the `# [RDS_AUTH_TOKEN]` block in `config/default/kustomization.yaml`:
+
+| To… | Do this |
+|-----|---------|
+| Disable it | Comment out the `[RDS_AUTH_TOKEN]` block in `config/default/kustomization.yaml`, then `make bundle`. The env var and the `rds-auth-token` `relatedImages` entry disappear; clusters that need the helper set `ccoRds.tokenImage` in the CR. |
+| Pin a different image cluster-wide | Edit the value in `config/rds-auth-token/manager_rds_auth_token_patch.yaml` and comment out the `replacements` block in that component (it otherwise forces the manager image), or set `spec.config.env` on the OLM Subscription. |
+| Pin a different image per instance | Set `ccoRds.tokenImage` in the CR — a user value always wins over the operator-injected one. |
+
+Because the override always wins over the CR, the operator writes to `defaultTokenImage` and never to `tokenImage`; leaving the user key free is what makes the per-instance override possible.
+
+**The whole mechanism is opt-in.** A connection that does not use IAM auth renders exactly as it always did: `psql` exec'd directly with the SQL as an argument, no init container, no shell wrapper, no token volume, `PGPASSWORD` from the configured password. Deployments that are not on AWS, or not using `ccoRds`, are unaffected.
+
+**Per-connection opt-out:** IAM auth is selected per database connection, not globally, and `iamAuth` is the switch. Any database block (`database`, `createDatabase`, `modules.createImporters.database`) may set `iamAuth: false` to keep password authentication while `ccoRds.enabled` is true, or `iamAuth: true` to opt a single connection in. This matters for `create-database`, whose bootstrap connection is typically the RDS master user on password auth, while the application role it creates is granted `rds_iam`.
 
 ### Key Files
 
 | File | Purpose |
 |------|---------|
 | `helm-charts/.../templates/credentialrequest.yaml` | CredentialsRequest template (conditional on `cloudProvider`) |
-| `helm-charts/.../templates/helpers/_cco.tpl` | Helper templates for manual mode volumes/mounts/env vars and RDS IAM auth |
+| `helm-charts/.../templates/helpers/_cco.tpl` | Helper templates for manual mode volumes/mounts/env vars, RDS IAM auth, and the `rds-auth-token` init container |
+| `cmd/rds-auth-token/main.go` | Helper binary shipped in the operator image; mints an RDS IAM token to a file |
 | `helm-charts/.../templates/helpers/_storage.tpl` | S3 env vars — branches on CCO vs manual credentials |
 | `helm-charts/.../templates/helpers/_postgres.tpl` | Database env vars — branches on ccoRds for password/SSL |
 | `config/rbac/clusterrole.yaml` | ClusterRole granting access to `credentialsrequests` API |

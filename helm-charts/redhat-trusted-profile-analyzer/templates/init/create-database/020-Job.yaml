@@ -1,5 +1,17 @@
 {{- if .Values.modules.createDatabase.enabled }}
 {{- $mod := dict "root" . "name" "create-db" "component" "database" "module" .Values.modules.createDatabase -}}
+{{- /*
+  Two distinct identities are involved here:
+    $admin - the bootstrap connection psql makes, from the `createDatabase` settings
+    .Values.database - the application user this job creates
+  Either can use RDS IAM authentication independently of the other.
+*/ -}}
+{{- /* `required` wraps the value, not the deepCopy: deepCopy of a nil value
+       panics inside reflect before `required` ever gets to report it. */}}
+{{- $admin := merge ( deepCopy ( required "Using createDatabase requires setting .Values.createDatabase" .Values.createDatabase ) ) ( deepCopy .Values.database ) -}}
+{{- $adminConn := dict "root" . "database" $admin -}}
+{{- $adminIam := eq (include "trustification.cco.rds.isConnectionIamAuth" $adminConn) "true" -}}
+{{- $appIam := eq (include "trustification.cco.rds.isConnectionIamAuth" (dict "root" . "database" .Values.database)) "true" -}}
 kind: Job
 apiVersion: batch/v1
 metadata:
@@ -37,7 +49,13 @@ spec:
         - name: init-data
           configMap:
             name: {{ include "trustification.common.name" $mod }}
+        {{- include "trustification.cco.rds.tokenVolumes" $adminConn | nindent 8 }}
         {{- include "trustification.application.extraVolumes" $mod | nindent 8 }}
+
+      {{- with include "trustification.cco.rds.tokenInitContainer" $adminConn }}
+      initContainers:
+        {{- . | nindent 8 }}
+      {{- end }}
 
       containers:
         - name: job
@@ -46,21 +64,48 @@ spec:
 
           env:
             # connect using the `createDatabase` settings
-            {{- include "trustification.psql.envVars" ( dict "root" . "database" ( merge ( required "Using createDatabase requires setting .Values.createDatabase" (deepCopy .Values.createDatabase) ) ( deepCopy .Values.database ) ) ) | nindent 12 }}
+            {{- include "trustification.psql.envVars" ( dict "root" . "database" $admin ) | nindent 12 }}
 
             # create a user with the `database` settings
             - name: DB_NAME
               {{- include "trustification.common.envVarValue" .Values.database.name | nindent 14 }}
             - name: DB_USERNAME
               {{- include "trustification.common.envVarValue" .Values.database.username | nindent 14 }}
+            {{- if not $appIam }}
             - name: DB_PASSWORD
               {{- include "trustification.common.envVarValue" .Values.database.password | nindent 14 }}
+            {{- end }}
 
           volumeMounts:
             - mountPath: /etc/init-data
               name: init-data
+            {{- include "trustification.cco.rds.tokenVolumeMount" $adminConn | nindent 12 }}
             {{- include "trustification.application.extraVolumeMounts" $mod | nindent 12 }}
 
+          {{- if $adminIam }}
+          {{- /*
+            Only when the bootstrap connection uses RDS IAM authentication:
+            wrapped in a shell rather than exec'ing psql directly, so the token
+            minted by the init container can be loaded into PGPASSWORD. Note
+            that an RDS token is bound to host+port+user and not to a database,
+            so the `\connect :db_name` inside init.sql reuses it without a
+            second mint.
+          */}}
+          command:
+            - bash
+            - -ec
+            - |
+              {{- include "trustification.cco.rds.psqlPasswordPrologue" $adminConn | nindent 14 }}
+              exec psql \
+                --echo-all \
+                -v ON_ERROR_STOP=1 \
+                -v db_name="${DB_NAME}" \
+                -v db_user="${DB_USERNAME}" \
+                {{- if not $appIam }}
+                -v db_password="${DB_PASSWORD}" \
+                {{- end }}
+                -f /etc/init-data/init.sql
+          {{- else }}
           command:
             - psql
             - --echo-all
@@ -70,9 +115,12 @@ spec:
             - db_name=$(DB_NAME)
             - -v
             - db_user=$(DB_USERNAME)
+            {{- if not $appIam }}
             - -v
             - db_password=$(DB_PASSWORD)
+            {{- end }}
             - -f
             - /etc/init-data/init.sql
+          {{- end }}
 
 {{- end }}

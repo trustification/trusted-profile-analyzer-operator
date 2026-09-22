@@ -9,13 +9,21 @@
 #   1. devel/cco/aws-credentialRequest.yaml must also list "rds-db:connect" in its
 #      statementEntries, otherwise the role ccoctl creates cannot log into RDS.
 #   2. The RDS instance has IAM database authentication enabled.
-#   3. The database, the login role and the schema grants already exist, and the
-#      role was granted IAM login:
-#        CREATE DATABASE trustify;
-#        CREATE USER trustify LOGIN;
-#        GRANT rds_iam TO trustify;
-#        GRANT ALL ON DATABASE trustify TO trustify;
-#      This is *not* optional — see the modules.createDatabase note below.
+#   3. A `rds-connection-details` Secret with PGHOST / PGPORT / PGDATABASE /
+#      PGUSER. No PGPASSWORD is needed: PGUSER is the RDS master user here and
+#      it has been granted rds_iam, so every connection authenticates with a
+#      token.
+#
+#      Granting rds_iam *disables* password login for that role — it is
+#      all-or-nothing per role, so every connection that uses PGUSER (server,
+#      importer, migrate-db, create-db, create-importers) must be on IAM auth.
+#      Do not set `iamAuth: false` anywhere while PGUSER holds rds_iam; that
+#      connection will fail with `PAM authentication failed`.
+#
+#      Reusing the master as the application role is fine for a dev cluster but
+#      is not least-privilege, and it leaves no password break-glass. For a
+#      separate app role: create it as the master, GRANT it rds_iam plus
+#      CREATE ON SCHEMA public, and point `database.username` at it.
 kind: TrustedProfileAnalyzer
 apiVersion: rhtpa.io/v1
 metadata:
@@ -50,24 +58,98 @@ spec:
             # for a least-privilege policy.
             - "rds-db:connect"
           resource: "*"
-      # Fill in with the role ARN printed by `ccoctl aws create-iam-roles`
-      stsIAMRoleARN: "arn:aws:iam::<ACCOUNT_ID>:role/<role-name>"
+      # Fill in with the role ARN printed by `ccoctl aws create-iam-roles`.
+      # It must be a :role/ ARN — AssumeRoleWithWebIdentity rejects a :user/ ARN,
+      # which fails credential resolution in every pod that talks to AWS
+      # (including the rds-auth-token init container).
+      stsIAMRoleARN: "arn:aws:iam::<ACCOUNT_ID>:role/rhtpa-demo-trustify-rhtpa-demo-cloud-creds"
   # ------------------------------------------------------------------------
 
   # No password: with ccoRds.enabled the chart omits TRUSTD_DB_PASSWORD, sets
   # TRUSTD_DB_IAM_AUTH=true / TRUSTD_DB_IAM_REGION, and forces sslMode to
   # "require" (RDS IAM auth mandates TLS).
-  database: {
-    host: <your-db>.<cluster-id>.<your-region>.rds.amazonaws.com,
-    port: "5432",
-    name: trustify,
-    username: trustify
-  }
+  database:
+    host:
+      valueFrom:
+        secretKeyRef:
+          name: rds-connection-details
+          key: PGHOST
+    port:
+      valueFrom:
+        secretKeyRef:
+          name: rds-connection-details
+          key: PGPORT
+    name:
+      valueFrom:
+          secretKeyRef:
+            name: rds-connection-details
+            key: PGDATABASE
+    username:
+      valueFrom:
+        secretKeyRef:
+          name: rds-connection-details
+          key: PGUSER
+    # trustd's 25/75 default is unworkable over RDS IAM auth: each connection
+    # costs a PAM round-trip, and opening 25 at once starves them all inside
+    # trustd's 8s acquire timeout (not configurable from this chart), so the
+    # pool never yields even one connection and startup fails.
+    # Start the pool small and let it grow on demand. The server and the
+    # importer share these values — there is no per-module override.
+    minimumConnections: 2
+    maximumConnections: 20
 
-  # Runs `trustd db migrate`, which supports IAM auth. Left empty so it inherits
-  # the `database` settings above and connects as that user — which therefore
-  # must own (or be able to create) the schema objects.
-  migrateDatabase: {}
+  # Bootstrap connection used by the create-database job. On this instance the
+  # RDS master user and the application user are the same role (PGUSER), and it
+  # has already been granted rds_iam — which permanently disables password login
+  # for it. So this connection uses IAM auth too: no `iamAuth: false`, no
+  # password. The chart gives the job an `rds-auth-token` init container that
+  # mints a token for PGUSER, exactly as it does for create-importers.
+  #
+  # Being the master, that role can still run the `GRANT rds_iam` in init.sql
+  # (a no-op here, since it is already a member).
+  #
+  # Only `name` differs from `.Values.database`: the bootstrap connection has to
+  # attach to an existing database before `CREATE DATABASE` can run. An RDS token
+  # is bound to host+port+user and not to a database, so the `\connect :db_name`
+  # later in init.sql reuses the same token.
+  createDatabase:
+    name: postgres
+    username:
+      valueFrom:
+        secretKeyRef:
+          name: rds-connection-details
+          key: PGUSER
+
+  # Runs `trustd db migrate`, which speaks RDS IAM auth natively. No iamAuth
+  # override and no password: it connects as the application user with a token,
+  # exactly like the server and importer. That user therefore must own (or be
+  # able to create) the schema objects.
+  migrateDatabase:
+    host:
+      valueFrom:
+        secretKeyRef:
+          name: rds-connection-details
+          key: PGHOST
+    port:
+      valueFrom:
+        secretKeyRef:
+          name: rds-connection-details
+          key: PGPORT
+    name:
+      valueFrom:
+        secretKeyRef:
+          name: rds-connection-details
+          key: PGDATABASE
+    username:
+      valueFrom:
+        secretKeyRef:
+          name: rds-connection-details
+          key: PGUSER
+    # trustd defaults to a 25/75 pool, which a one-shot `db migrate` does not
+    # need and a small RDS instance may not have room for — the server and the
+    # importer are already holding 25 each by the time this job runs.
+    minimumConnections: 1
+    maximumConnections: 5
 
   infrastructure:
     port: 9010
@@ -80,20 +162,18 @@ spec:
   metrics:
     enabled: false
   modules:
-    # Disabled: both jobs shell out to `psql`, which cannot mint an RDS IAM
-    # token. With ccoRds.enabled the chart drops PGPASSWORD from every psql
-    # env block (helpers/_postgres.tpl), so these jobs would connect with no
-    # password and fail. Create the database/user out of band (see the header)
-    # and seed the importers below manually once the server is up.
+    # Both jobs shell out to `psql`, which cannot mint an RDS IAM token itself.
+    # Whenever the connection they make uses IAM auth, the chart prepends an
+    # `rds-auth-token` init container (the operator image) that mints the token
+    # onto a shared in-memory volume; the job then reads it into PGPASSWORD.
+    # Here that applies to create-importers, which connects as the `trustify`
+    # user; create-db connects as the RDS master user and keeps its password.
     createDatabase:
-      enabled: false
+      enabled: true
       image: {}
     createImporters:
-      enabled: false
+      enabled: true
       image: {}
-      # Kept for reference: the importer set this deployment expects. Seed it
-      # with `psql` from a host that can reach the RDS instance, or via the
-      # RHTPA UI / API, after migrate-database has completed.
       importers:
         redhat-sboms:
           sbom:
@@ -184,7 +264,6 @@ spec:
     type: s3,
     bucket: <your-bucket-name>,
     region: <your-region>
-
   }
 
   # Trust the cluster's router CA so trustd can reach the Keycloak route over TLS.
@@ -193,9 +272,8 @@ spec:
     additionalTrustAnchor: /etc/trust-anchor/tls.crt
   }
 
-  tracing:
-    enabled: false
-
+  # The path above must actually exist in every pod that reads it — the init
+  # jobs included, since TRUSTD_S3_TRUST_ANCHORS is set chart-wide.
   extraVolumes:
   - name: trust-anchor
     configMap:
@@ -205,3 +283,6 @@ spec:
   - name: trust-anchor
     readOnly: true
     mountPath: /etc/trust-anchor
+
+  tracing:
+    enabled: false

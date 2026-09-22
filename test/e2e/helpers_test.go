@@ -68,6 +68,8 @@ const (
 	fieldType        = "type"
 	fieldBucket      = "bucket"
 	fieldRegion      = "region"
+	fieldHost        = "host"
+	fieldPassword    = "password"
 
 	// Common test skip messages.
 	skipE2ETest         = "skipping e2e test in short mode"
