@@ -224,6 +224,17 @@ properties:
                 description: |
                   Enable read-only mode. When true, the server rejects all mutating API
                   requests with 503 and the importer suspends all import jobs.
+              recommendPatterns:
+                type: array
+                items:
+                  type: string
+                default: []
+                description: |
+                  List of regex patterns for PURL vendor rebuild recommendations.
+                  Each pattern must contain exactly one capture group extracting the upstream
+                  base version (e.g. "^(.+)\\.redhat-[0-9]+$"). When empty, the server
+                  returns no recommendations. Injected as TRUSTD_RECOMMEND_PATTERNS
+                  comma-joined on the trustd Deployment.
 
       importer:
         description: |
