@@ -262,7 +262,7 @@ spec:
                       - --metrics-bind-address=:8443
                       - --leader-elect
                       - --health-probe-bind-address=:8081
-                    image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:074c642bad915efde729af00c46186156f6167055cf0106fc37255385fc19386
+                    image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:2d4cb61a2920c49f8998964e5c770b76d71677352ceed8e84c441c281baf784d
                     livenessProbe:
                       httpGet:
                         path: /healthz
@@ -371,6 +371,6 @@ spec:
     name: Red Hat
     url: https://github.com/trustification/trusted-profile-analyzer-operator
   relatedImages:
-    - image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:074c642bad915efde729af00c46186156f6167055cf0106fc37255385fc19386
+    - image: registry.redhat.io/rhtpa/rhtpa-rhel9-operator@sha256:2d4cb61a2920c49f8998964e5c770b76d71677352ceed8e84c441c281baf784d
       name: manager
   version: 1.1.8
