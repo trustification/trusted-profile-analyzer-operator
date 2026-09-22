@@ -250,6 +250,14 @@
                 "readOnly": {
                   "type": "boolean",
                   "description": "Enable read-only mode. When true, the server rejects all mutating API\nrequests with 503 and the importer suspends all import jobs.\n"
+                },
+                "recommendPatterns": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": [],
+                  "description": "List of regex patterns for PURL vendor rebuild recommendations.\nEach pattern must contain exactly one capture group extracting the upstream\nbase version (e.g. \"^(.+)\\\\.redhat-[0-9]+$\"). When empty, the server\nreturns no recommendations. Injected as TRUSTD_RECOMMEND_PATTERNS\ncomma-joined on the trustd Deployment.\n"
                 }
               }
             }
