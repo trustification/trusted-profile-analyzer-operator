@@ -37,7 +37,7 @@ LABEL name="rhtpa/rhtpa-rhel10-operator"
 LABEL org.opencontainers.image.source="https://github.com/trustification/trusted-profile-analyzer-operator"
 LABEL summary="RHTPA Operator"
 LABEL version="3.1.1"
-LABEL release=3.1.0
+LABEL release=3.1.1
 LABEL maintainer="Red Hat"
 LABEL operators.operatorframework.io.index.configs.v1=/config
 
