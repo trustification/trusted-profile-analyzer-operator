@@ -31,7 +31,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o rd
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM registry.access.redhat.com/ubi10/ubi-minimal:1789456844
+FROM registry.access.redhat.com/ubi10/ubi-minimal:1790075800
 
 LABEL com.redhat.component="rhtpa-operator"
 LABEL description="Red Hat Trusted Profile Analyzer Operator"
@@ -42,7 +42,7 @@ LABEL name="rhtpa/rhtpa-rhel10-operator"
 LABEL org.opencontainers.image.source="https://github.com/trustification/trusted-profile-analyzer-operator"
 LABEL summary="RHTPA Operator"
 LABEL version="3.1.1"
-LABEL release=3.1.0
+LABEL release=3.1.1
 LABEL maintainer="Red Hat"
 LABEL operators.operatorframework.io.index.configs.v1=/config
 
