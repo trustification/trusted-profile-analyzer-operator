@@ -99,11 +99,11 @@ spec:
     maximumConnections: 20
 
   # Bootstrap connection used by the create-database job. On this instance the
-  # RDS master user and the application user are the same role (PGUSER), and it
-  # has already been granted rds_iam — which permanently disables password login
+  # RDS master user and the application (MASTER_PGUSER), and it
+  # has already been granted rds_iam (IAMDatabaseAuthenticationEnabled)— which permanently disables password login
   # for it. So this connection uses IAM auth too: no `iamAuth: false`, no
   # password. The chart gives the job an `rds-auth-token` init container that
-  # mints a token for PGUSER, exactly as it does for create-importers.
+  # mints a token for MASTER_PGUSER, exactly as it does for create-importers.
   #
   # Being the master, that role can still run the `GRANT rds_iam` in init.sql
   # (a no-op here, since it is already a member).
@@ -118,7 +118,7 @@ spec:
       valueFrom:
         secretKeyRef:
           name: rds-connection-details
-          key: PGUSER
+          key: MASTER_PGUSER
 
   # Runs `trustd db migrate`, which speaks RDS IAM auth natively. No iamAuth
   # override and no password: it connects as the application user with a token,
