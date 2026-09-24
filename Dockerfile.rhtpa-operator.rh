@@ -13,6 +13,7 @@ RUN go mod download
 
 # Copy the go source
 COPY main.go main.go
+COPY cmd/ cmd/
 #TODO uncomment after adding golang api
 #COPY api/ api/
 #COPY controllers/ controllers/
@@ -27,6 +28,10 @@ RUN go generate -mod=readonly ./...
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -mod=readonly -a -o manager main.go
 
+# Helper binary shipped in the same image: the chart runs it as an init container
+# to mint RDS IAM auth tokens for the psql-based jobs. See cmd/rds-auth-token.
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -mod=readonly -a -o rds-auth-token ./cmd/rds-auth-token
+
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM registry.access.redhat.com/ubi10/ubi-minimal:1790075800
@@ -39,8 +44,8 @@ LABEL io.openshift.tags="RHTPA, rhtpa-operator, Red Hat Trusted Profile Analyzer
 LABEL name="rhtpa/rhtpa-rhel10-operator"
 LABEL org.opencontainers.image.source="https://github.com/trustification/trusted-profile-analyzer-operator"
 LABEL summary="RHTPA Operator"
-LABEL version="3.1.1"
-LABEL release=3.1.1
+LABEL version="3.2.0"
+LABEL release=3.2.0
 LABEL maintainer="Red Hat"
 LABEL cpe="cpe:/a:redhat:trusted_profile_analyzer:3.1::el10"
 
@@ -51,7 +56,7 @@ LABEL features.operators.openshift.io/proxy-aware="false"
 LABEL features.operators.openshift.io/cnf="false"
 LABEL features.operators.openshift.io/csi="false"
 LABEL features.operators.openshift.io/tls-profiles="false"
-LABEL features.operators.openshift.io/token-auth-aws="false"
+LABEL features.operators.openshift.io/token-auth-aws="true"
 LABEL features.operators.openshift.io/token-auth-azure="false"
 LABEL features.operators.openshift.io/token-auth-gcp="false"
 
@@ -83,6 +88,7 @@ COPY --chown=${USER_UID}:0 helm-charts  ${HOME}/helm-charts
 
 # Copy manager binary
 COPY --from=builder /workspace/manager .
+COPY --from=builder /workspace/rds-auth-token /usr/local/bin/rds-auth-token
 
 USER ${USER_UID}
 

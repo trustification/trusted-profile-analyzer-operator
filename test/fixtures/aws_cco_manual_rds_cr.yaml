@@ -1,0 +1,73 @@
+apiVersion: rhtpa.io/v1
+kind: TrustedProfileAnalyzer
+metadata:
+  name: aws-cco-manual-rds-instance
+  namespace: test-namespace
+spec:
+  appDomain: test.example.com
+  replicas: 1
+  cloudProvider: aws
+  ccoMode: manual
+  ccoRds:
+    enabled: true
+    region: us-east-1
+  cloudCredentials:
+    aws:
+      statementEntries:
+        - effect: Allow
+          action:
+            - "s3:GetObject"
+            - "s3:PutObject"
+            - "s3:DeleteObject"
+            - "s3:ListBucket"
+            - "rds-db:connect"
+          resource: "*"
+      stsIAMRoleARN: "arn:aws:iam::123456789012:role/trustify-s3-rds-role"
+  storage:
+    type: s3
+    bucket: trustify-storage
+    region: us-east-1
+  # Bootstrap connection for the create-database job. The RDS master user still
+  # authenticates with a password, so it opts out of IAM auth per connection;
+  # the role it creates is granted rds_iam instead.
+  createDatabase:
+    name: postgres
+    username: postgres
+    password: test-admin-password
+    iamAuth: false
+    sslMode: require
+  modules:
+    # Both jobs shell out to psql. create-importers connects as the IAM-auth
+    # user, so the chart gives it an rds-auth-token init container.
+    createDatabase:
+      enabled: true
+    createImporters:
+      enabled: true
+    server:
+      enabled: true
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+    importer:
+      enabled: true
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+  oidc:
+    clients:
+      frontend:
+        clientId: test-frontend
+      cli:
+        clientSecret: test-secret
+  database:
+    host: testdb.cluster-xyz.us-east-1.rds.amazonaws.com
+    name: testdb
+    username: testuser
+  metrics:
+    enabled: false
+  tracing:
+    enabled: false

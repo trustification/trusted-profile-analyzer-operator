@@ -1,11 +1,24 @@
 apiVersion: rhtpa.io/v1
 kind: TrustedProfileAnalyzer
 metadata:
-  name: test-instance
+  name: gcp-cco-instance
   namespace: test-namespace
 spec:
   appDomain: test.example.com
   replicas: 1
+  cloudProvider: gcp
+  ccoMode: mint
+  cloudCredentials:
+    gcp:
+      permissions:
+        - storage.objects.get
+        - storage.objects.create
+        - storage.objects.delete
+        - storage.buckets.get
+  storage:
+    type: s3
+    bucket: trustify-storage
+    region: us-central1
   modules:
     server:
       enabled: true
@@ -31,9 +44,8 @@ spec:
     host: postgres.test.svc
     name: testdb
     username: testuser
-    password: testpassword
-  storage:
-    type: filesystem
-    size: 32Gi
-  openshift:
-    useServiceCa: true
+    password: testpass
+  metrics:
+    enabled: false
+  tracing:
+    enabled: false

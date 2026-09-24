@@ -64,6 +64,8 @@ spec:
           - --health-probe-bind-address=:8081
         image: controller:latest
         name: manager
+        # [RDS_AUTH_TOKEN] RELATED_IMAGE_RDS_AUTH_TOKEN is added by the
+        # ../rds-auth-token component, which is enabled from config/default.
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

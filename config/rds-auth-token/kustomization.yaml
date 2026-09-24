@@ -1,0 +1,35 @@
+# [RDS_AUTH_TOKEN] Advertises the image carrying the `rds-auth-token` helper.
+#
+# The chart runs that helper as an init container for the psql-based jobs
+# (create-database, create-importers) when a connection uses RDS IAM
+# authentication. The helper ships inside the operator image, so by default the
+# env var below is kept in sync with whatever image the manager runs.
+#
+# Enable/disable: this component is referenced from config/default; comment out
+# the `[RDS_AUTH_TOKEN]` block there to drop the env var (and, in the bundle, the
+# matching relatedImages entry) entirely. Deployments that never use RDS IAM
+# auth for the psql jobs are unaffected either way.
+#
+# Pin a different image: replace the value in manager_rds_auth_token_patch.yaml
+# and comment out the `replacements` block below, which would otherwise
+# overwrite it with the manager image.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+- path: manager_rds_auth_token_patch.yaml
+  target:
+    kind: Deployment
+    name: controller-manager
+
+replacements:
+- source:
+    fieldPath: spec.template.spec.containers.[name=manager].image
+    kind: Deployment
+    name: controller-manager
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=manager].env.[name=RELATED_IMAGE_RDS_AUTH_TOKEN].value
+    select:
+      kind: Deployment
+      name: controller-manager
