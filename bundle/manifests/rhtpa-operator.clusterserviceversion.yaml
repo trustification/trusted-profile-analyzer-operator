@@ -439,10 +439,12 @@ spec:
     url: https://github.com/trustification/trusted-profile-analyzer-operator
   relatedImages:
     - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:ced5f0bd75a99c14701731fea2cabc7753376228ebc1516556a87a5b2904811f
-<<<<<<< HEAD
       name: manager
-  version: 3.1.1
-=======
-      name: tls-configurator
+    # Same image as `manager`: the TLS configurator is a second binary in the
+    # operator image. It needs its own relatedImages entry because it is
+    # referenced by the RELATED_IMAGE_TLS_CONFIGURATOR env var. The name uses
+    # underscores to match what operator-sdk derives from that var name, so
+    # `make bundle` stays idempotent instead of emitting a duplicate entry.
+    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:ced5f0bd75a99c14701731fea2cabc7753376228ebc1516556a87a5b2904811f
+      name: tls_configurator
   version: 3.2.0
->>>>>>> 6137cd4 (Tls-configurator embedded)
