@@ -1,0 +1,12 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tls-configurator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tls-configurator
+subjects:
+  - kind: ServiceAccount
+    name: tls-configurator
+    namespace: openshift-ingress-operator
