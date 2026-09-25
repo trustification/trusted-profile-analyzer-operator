@@ -1,5 +1,5 @@
 # Build the manager binary 1.26.7
-FROM registry.redhat.io/ubi10/go-toolset:1.26.7-1790270385 AS builder
+FROM registry.access.redhat.com/hi/go:1.26.7 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -36,8 +36,6 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -mod=rea
     -ldflags="-w -s" \
     -o tls-configurator ./cmd/tls-configurator
 
-# Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM registry.access.redhat.com/ubi10/ubi-minimal:1790075800
 
 LABEL com.redhat.component="rhtpa-operator"
@@ -48,8 +46,8 @@ LABEL io.openshift.tags="RHTPA, rhtpa-operator, Red Hat Trusted Profile Analyzer
 LABEL name="rhtpa/rhtpa-rhel10-operator"
 LABEL org.opencontainers.image.source="https://github.com/trustification/trusted-profile-analyzer-operator"
 LABEL summary="RHTPA Operator"
-LABEL version="3.1.1"
-LABEL release=3.1.1
+LABEL version="3.2.0"
+LABEL release=3.2.0
 LABEL maintainer="Red Hat"
 LABEL cpe="cpe:/a:redhat:trusted_profile_analyzer:3.1::el10"
 
