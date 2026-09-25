@@ -438,7 +438,7 @@ spec:
     name: Red Hat
     url: https://github.com/trustification/trusted-profile-analyzer-operator
   relatedImages:
-    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:ced5f0bd75a99c14701731fea2cabc7753376228ebc1516556a87a5b2904811f
+    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:53362bd1ee3415d44ef369ee830a5f70cb6445f20fe8b4c320c8df47bfd46a94
       name: manager
     # Same image as `manager`: the TLS configurator is a second binary in the
     # operator image. It needs its own relatedImages entry because it is
