@@ -21,7 +21,7 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions: {}
   description: |
-    Red Hat Trusted Profile Analyzer (RHTPA 3.1.1) provides a single source of truth for your software inventory across all your environments. You can verify the integrity of your in-house and third-party applications against their respective Software Bill of Materials (SBOM) document.  Trusted Profile Analyzer provides vulnerability, component and license transparency, strengthens your software supply chain security, and enables an accurate, up-to-date understanding of your software inventory.
+    Red Hat Trusted Profile Analyzer (RHTPA 3.2.0) provides a single source of truth for your software inventory across all your environments. You can verify the integrity of your in-house and third-party applications against their respective Software Bill of Materials (SBOM) document.  Trusted Profile Analyzer provides vulnerability, component and license transparency, strengthens your software supply chain security, and enables an accurate, up-to-date understanding of your software inventory.
 
     Features and Benefits:
 
@@ -71,4 +71,4 @@ spec:
   provider:
     name: Red Hat
     url: https://github.com/trustification/trusted-profile-analyzer-operator
-  version: 3.1.1
+  version: 3.2.0

@@ -111,7 +111,7 @@ metadata:
     operators.operatorframework.io/project_layout: helm.sdk.operatorframework.io/v1
     repository: https://github.com/trustification/trusted-profile-analyzer-operator
     support: Red Hat
-  name: rhtpa-operator.v3.1.1
+  name: rhtpa-operator.v3.2.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -121,7 +121,7 @@ spec:
         name: trustedprofileanalyzers.rhtpa.io
         version: v1
   description: |
-    Red Hat Trusted Profile Analyzer (RHTPA) 3.1.1 provides a single source of truth for your software inventory across all your environments. You can verify the integrity of your in-house and third-party applications against their respective Software Bill of Materials (SBOM) document.  Trusted Profile Analyzer provides vulnerability, component and license transparency, strengthens your software supply chain security, and enables an accurate, up-to-date understanding of your software inventory.
+    Red Hat Trusted Profile Analyzer (RHTPA) 3.2.0 provides a single source of truth for your software inventory across all your environments. You can verify the integrity of your in-house and third-party applications against their respective Software Bill of Materials (SBOM) document.  Trusted Profile Analyzer provides vulnerability, component and license transparency, strengthens your software supply chain security, and enables an accurate, up-to-date understanding of your software inventory.
 
     Features and Benefits:
 
@@ -148,6 +148,54 @@ spec:
     spec:
       clusterPermissions:
         - rules:
+            - apiGroups:
+                - ""
+              resources:
+                - serviceaccounts
+              verbs:
+                - create
+                - get
+                - list
+                - watch
+                - delete
+                - patch
+                - update
+            - apiGroups:
+                - batch
+              resources:
+                - jobs
+              verbs:
+                - create
+                - get
+                - list
+                - watch
+                - delete
+                - patch
+                - update
+            - apiGroups:
+                - rbac.authorization.k8s.io
+              resources:
+                - clusterroles
+                - clusterrolebindings
+              verbs:
+                - create
+                - get
+                - list
+                - watch
+                - delete
+                - patch
+                - update
+            - apiGroups:
+                - config.openshift.io
+              resources:
+                - ingresses
+                - clusterversions
+              verbs:
+                - get
+                - list
+                - watch
+                - patch
+                - update
             - apiGroups:
                 - networking.k8s.io
               resources:
@@ -270,7 +318,10 @@ spec:
                       - --metrics-bind-address=:8443
                       - --leader-elect
                       - --health-probe-bind-address=:8081
-                    image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:53362bd1ee3415d44ef369ee830a5f70cb6445f20fe8b4c320c8df47bfd46a94
+                    image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:ced5f0bd75a99c14701731fea2cabc7753376228ebc1516556a87a5b2904811f
+                    env:
+                      - name: RELATED_IMAGE_TLS_CONFIGURATOR
+                        value: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:ced5f0bd75a99c14701731fea2cabc7753376228ebc1516556a87a5b2904811f
                     livenessProbe:
                       httpGet:
                         path: /healthz
@@ -389,4 +440,11 @@ spec:
   relatedImages:
     - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:53362bd1ee3415d44ef369ee830a5f70cb6445f20fe8b4c320c8df47bfd46a94
       name: manager
-  version: 3.1.1
+    # Same image as `manager`: the TLS configurator is a second binary in the
+    # operator image. It needs its own relatedImages entry because it is
+    # referenced by the RELATED_IMAGE_TLS_CONFIGURATOR env var. The name uses
+    # underscores to match what operator-sdk derives from that var name, so
+    # `make bundle` stays idempotent instead of emitting a duplicate entry.
+    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:ced5f0bd75a99c14701731fea2cabc7753376228ebc1516556a87a5b2904811f
+      name: tls_configurator
+  version: 3.2.0
