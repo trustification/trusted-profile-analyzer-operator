@@ -162,6 +162,9 @@ The TrustedProfileAnalyzer CR spec uses `x-kubernetes-preserve-unknown-fields: t
 
 ### How the TLS Configurator is wired in
 
+Detailed documentation lives in `docs/tls-configurator/`; start with
+`docs/tls-configurator/FINAL_PROJECT_STATUS.md`.
+
 The chart ships an optional `tlsConfigurator` module (disabled by default).
 
 **The configurator now lives in this repo and ships in the operator image.** It

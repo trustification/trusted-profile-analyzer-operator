@@ -46,6 +46,14 @@ func NewWorkloadsClient(config *rest.Config) (*WorkloadsClient, error) {
 	return &WorkloadsClient{kube: kube}, nil
 }
 
+// NewWorkloadsClientWithClientset creates a WorkloadsClient around an existing
+// Kubernetes clientset. It exists so callers can inject an alternative
+// implementation -- notably a fake clientset in tests -- without going through a
+// *rest.Config.
+func NewWorkloadsClientWithClientset(kube kubernetes.Interface) *WorkloadsClient {
+	return &WorkloadsClient{kube: kube}
+}
+
 // GetDeploymentTLSHash returns the current TLS config hash annotation on a
 // deployment's pod template, or "" if it is not set.
 func (w *WorkloadsClient) GetDeploymentTLSHash(ctx context.Context, namespace, name string) (string, error) {

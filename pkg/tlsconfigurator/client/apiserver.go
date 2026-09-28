@@ -44,6 +44,14 @@ func NewAPIServerClient(config *rest.Config) (*APIServerClient, error) {
 	}, nil
 }
 
+// NewAPIServerClientWithClientset creates an APIServer client around an existing
+// config clientset. It exists so callers can inject an alternative
+// implementation -- notably a fake clientset in tests -- without going through a
+// *rest.Config.
+func NewAPIServerClientWithClientset(configClient configclient.Interface) *APIServerClient {
+	return &APIServerClient{configClient: configClient}
+}
+
 // GetAPIServer retrieves the cluster APIServer resource
 // The APIServer resource is always named "cluster" in OpenShift
 func (c *APIServerClient) GetAPIServer(ctx context.Context) (*configv1.APIServer, error) {
