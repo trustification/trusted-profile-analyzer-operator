@@ -128,3 +128,38 @@ modules:
           source: quay.io
           namespace: redhat-user-workloads
           disabled: true
+
+  tlsConfigurator:
+    # OpenShift-only. The reconciler reads the cluster-wide TLS profile from the
+    # config.openshift.io APIServer CR, which does not exist on plain
+    # Kubernetes.
+    #
+    #   OpenShift >= 4.22   required -- set this to true; the chart refuses to
+    #                       install with it disabled (see allowDisabled)
+    #   OpenShift <  4.22   optional
+    #   plain Kubernetes    leave false; the chart refuses to install with it
+    #                       enabled
+    enabled: false
+    # Acknowledge running on OpenShift 4.22+ without the configurator. Only
+    # consulted when enabled is false; it suppresses the install-time error and
+    # accepts that a runtime TLS profile change will not roll the workloads.
+    allowDisabled: false
+    name: tls-configurator
+    image:
+      # The configurator ships inside the operator image. When installed via the
+      # operator this is overridden with the operator's own running image (see
+      # RELATED_IMAGE_TLS_CONFIGURATOR in watches.yaml); this default only
+      # applies to a standalone `helm install`.
+      fullName: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:ced5f0bd75a99c14701731fea2cabc7753376228ebc1516556a87a5b2904811f
+      pullPolicy: IfNotPresent
+    # Post-quantum cryptography: enforce TLS 1.3 + X25519MLKEM768 key exchange
+    # and record it in the workload rollout hash.
+    pqc:
+      enabled: false
+    # Deployment names (in this release namespace) to roll out when the
+    # cluster-wide TLS configuration changes at runtime. Must match the
+    # rendered Deployment names of the TLS-serving workloads.
+    targetDeployments:
+      - server
+    # Periodic drift-correction interval for the reconciler.
+    resyncPeriod: 5m

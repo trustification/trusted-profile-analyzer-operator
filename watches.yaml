@@ -5,8 +5,13 @@
   chart: helm-charts/redhat-trusted-profile-analyzer
   WatchDependentResources: false
   MaxConcurrentReconciles: 4
-  # ReconcilePeriod
-  # OverrideValues
+  # The TLS configurator ships in the operator image, so its Deployment must run
+  # the same image as the operator that rendered the chart. The value is
+  # expanded from the environment at load time; RELATED_IMAGE_TLS_CONFIGURATOR is
+  # set to the operator's own digest by the CSV, which also lists it under
+  # relatedImages so disconnected installs mirror it.
+  overrideValues:
+    modules.tlsConfigurator.image.fullName: $RELATED_IMAGE_TLS_CONFIGURATOR
   # ReconcilePeriod
   # Selector
 # +kubebuilder:scaffold:watch
