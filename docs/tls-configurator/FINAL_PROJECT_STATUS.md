@@ -152,12 +152,25 @@ See "Open items" for the router-level gap.
 - **Chart module**: `modules.tlsConfigurator.enabled` (default `false`), with
   `pqc.enabled`, `targetDeployments` (default `[server]`) and `resyncPeriod`
   (default `5m`).
-- **Rendered resources**: `templates/init/tls-configure/` — ServiceAccount
-  (`010`), ClusterRole (`015`), Role (`016`), RoleBinding (`017`),
-  ClusterRoleBinding (`018`), Deployment (`020`). These are plain (non-hook)
-  objects living for the lifetime of the release in `.Release.Namespace`.
+- **Rendered resources**: `templates/init/tls-configure/` — platform guard
+  (`000`, renders nothing), ServiceAccount (`010`), ClusterRole (`015`), Role
+  (`016`), RoleBinding (`017`), ClusterRoleBinding (`018`), Deployment (`020`).
+  Everything from `010` on is a plain (non-hook) object living for the lifetime
+  of the release in `.Release.Namespace`.
 
-### Enabling it
+### Platform matrix
+
+The module is OpenShift-only: the reconciler reads the cluster-wide TLS profile
+from the `config.openshift.io` `APIServer` CR, which plain Kubernetes does not
+have.
+
+| Platform | `modules.tlsConfigurator.enabled` | Rationale |
+| --- | --- | --- |
+| OpenShift >= 4.22 | **required `true`** | The cluster-wide TLS profile can change at runtime and nothing else rolls the RHTPA workloads to pick it up. |
+| OpenShift < 4.22 | optional | The `reconcile` action does not check the cluster version, so it works; it is just not mandatory. (The `update`/`validate` actions do gate on 4.22 via `ValidateMinimumVersion`, but the Deployment does not run those.) |
+| plain Kubernetes | **required `false`** (default) | `config.openshift.io/v1` is absent; the reconciler would fail every attempt and retry forever. |
+
+### Enabling it (OpenShift)
 
 ```yaml
 modules:
@@ -167,10 +180,52 @@ modules:
       enabled: true
     targetDeployments:
       - server
+    resyncPeriod: 5m
 ```
 
 `targetDeployments` must match the rendered Deployment names of the TLS-serving
 workloads (the server Deployment renders as `server`).
+
+Under the operator, `image.fullName` is overridden with the operator's own
+running image via `$RELATED_IMAGE_TLS_CONFIGURATOR` in `watches.yaml`, so
+nothing needs pointing at a separate registry. The `values.yaml` default only
+applies to a standalone `helm install`.
+
+### Disabling it (plain Kubernetes)
+
+`enabled: false` is the chart default, so a plain Kubernetes install needs no
+action. Only set it explicitly if your values override it somewhere.
+
+### Install-time enforcement
+
+`templates/init/tls-configure/000-validate.yaml` renders no resources. It is
+deliberately **not** gated on `.enabled` — it has to run in the disabled case
+too — and fails the install when platform and setting do not match:
+
+| Condition | Result | Override |
+| --- | --- | --- |
+| `enabled: true`, no OpenShift API detected | `fail` with an explanation | `openshift.enabled: true` if detection is wrong |
+| `enabled: false`, cluster is OpenShift >= 4.22 | `fail` with an explanation | `modules.tlsConfigurator.allowDisabled: true` |
+
+Implementation notes:
+
+- Platform detection reuses the chart's existing
+  `trustification.openshift.detect` helper (`route.openshift.io/v1` presence,
+  or an explicit `openshift.enabled`).
+- The version check reads the `ClusterVersion` CR with
+  `lookup "config.openshift.io/v1" "ClusterVersion" "" "version"` and parses
+  `.status.desired.version`. `lookup` returns nothing under `helm template` and
+  `--dry-run`, so in those modes the version is unknown and the check is
+  **skipped** rather than failing closed — otherwise every dry run would break.
+- `allowDisabled` (default `false`) is consulted only when `enabled` is
+  `false`. It is an explicit acknowledgement that a runtime TLS profile change
+  will not roll the workloads.
+- `allowDisabled` had to be added to `values.schema.json` as well as
+  `values.schema.yaml` — the JSON file is what Helm actually enforces.
+
+Verified against six `helm template` scenarios (plain/disabled, plain/enabled,
+OpenShift/enabled, OpenShift/disabled, OpenShift/disabled+allowDisabled, and
+the detection escape hatch); `helm lint` passes.
 
 ---
 

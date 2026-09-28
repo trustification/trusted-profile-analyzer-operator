@@ -242,6 +242,40 @@ The Deployment invokes:
 `targetDeployments` (default `[server]`) must match the rendered Deployment
 names of the TLS-serving workloads (the server Deployment renders as `server`).
 
+### When the module must be on, and when it must be off
+
+The module is OpenShift-only, and the chart *enforces* the matrix rather than
+just documenting it:
+
+| Platform | `modules.tlsConfigurator.enabled` | Enforced by |
+| --- | --- | --- |
+| OpenShift >= 4.22 | **required `true`** | install fails unless `allowDisabled: true` |
+| OpenShift < 4.22 | optional | nothing — `reconcile` has no version gate, so it runs fine, it is just not mandatory |
+| plain Kubernetes | **required `false`** (the default) | install fails if enabled |
+
+Enforcement lives in
+`helm-charts/redhat-trusted-profile-analyzer/templates/init/tls-configure/000-validate.yaml`.
+It renders no resources and is deliberately **not** gated on
+`.enabled` — it has to run in the disabled case too. Details:
+
+- Platform detection reuses the chart's existing
+  `trustification.openshift.detect` helper (`route.openshift.io/v1` +
+  `openshift.enabled`). Escape hatch for wrong detection:
+  `openshift.enabled: true`.
+- The 4.22 check uses `lookup "config.openshift.io/v1" "ClusterVersion" ""
+  "version"` and parses `.status.desired.version`. `lookup` returns nothing
+  under `helm template` / `--dry-run`, so the check is **skipped** there rather
+  than failing on an unreadable version. Do not "fix" that by failing closed —
+  it would break every dry run and the operator's own rendering paths.
+- `modules.tlsConfigurator.allowDisabled` (default `false`) is consulted only
+  when `enabled` is `false`. It is an explicit acknowledgement that a runtime
+  TLS profile change will not roll the workloads.
+
+User-facing versions of this live in the chart `README.md` and in
+`values.yaml` comments; `values.schema.json` is the schema Helm actually
+enforces, so `allowDisabled` had to be added there (the `.yaml` schema is the
+source but is not what Helm reads).
+
 ### Enabling Post-Quantum Cryptography
 
 PQC in TLS 1.3 is delivered through the hybrid **key-exchange group**

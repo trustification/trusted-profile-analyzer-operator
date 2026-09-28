@@ -299,12 +299,21 @@ properties:
           TLS Configurator for Openshift. Runs a long-lived reconciler that
           watches the cluster-wide TLS profile and rolls target workloads when it
           changes at runtime. Supports post-quantum (X25519MLKEM768) TLS 1.3.
+
+          OpenShift-only: required from OpenShift 4.22, and must stay disabled on
+          plain Kubernetes. The chart enforces both at install time.
         allOf:
           - $ref: "#/definitions/Feature"
           - $ref: "#/definitions/Image"
           - $ref: "#/definitions/Application"
           - type: object
             properties:
+              allowDisabled:
+                type: boolean
+                description: |
+                  Acknowledge running on OpenShift 4.22+ without the
+                  configurator. Only consulted when enabled is false; it
+                  suppresses the install-time error.
               pqc:
                 type: object
                 description: Post-quantum cryptography settings

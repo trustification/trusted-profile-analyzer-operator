@@ -130,7 +130,20 @@ modules:
           disabled: true
 
   tlsConfigurator:
+    # OpenShift-only. The reconciler reads the cluster-wide TLS profile from the
+    # config.openshift.io APIServer CR, which does not exist on plain
+    # Kubernetes.
+    #
+    #   OpenShift >= 4.22   required -- set this to true; the chart refuses to
+    #                       install with it disabled (see allowDisabled)
+    #   OpenShift <  4.22   optional
+    #   plain Kubernetes    leave false; the chart refuses to install with it
+    #                       enabled
     enabled: false
+    # Acknowledge running on OpenShift 4.22+ without the configurator. Only
+    # consulted when enabled is false; it suppresses the install-time error and
+    # accepts that a runtime TLS profile change will not roll the workloads.
+    allowDisabled: false
     name: tls-configurator
     image:
       # The configurator ships inside the operator image. When installed via the
