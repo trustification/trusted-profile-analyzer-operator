@@ -17,8 +17,10 @@ limitations under the License.
 package integration
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -177,4 +179,89 @@ func TestHelmIgnoreExists(t *testing.T) {
 
 	_, err := os.Stat(helmignorePath)
 	assert.NoError(t, err, ".helmignore should exist")
+}
+
+// TestChartHasNoMergeConflictMarkers walks the entire Helm chart and fails if
+// any file contains an unresolved git merge conflict marker. A committed
+// conflict in values.schema.json once broke every `helm template` render, so
+// this guards the whole tree cheaply rather than relying on rendering coverage.
+func TestChartHasNoMergeConflictMarkers(t *testing.T) {
+	chartRoot := filepath.Join("helm-charts", "redhat-trusted-profile-analyzer")
+
+	// Line prefixes that unambiguously indicate a conflict marker.
+	markers := []string{"<<<<<<< ", ">>>>>>> "}
+
+	err := filepath.WalkDir(chartRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+
+		data, readErr := os.ReadFile(path)
+		require.NoError(t, readErr, "should be able to read %s", path)
+
+		for lineNum, line := range strings.Split(string(data), "\n") {
+			for _, marker := range markers {
+				if strings.HasPrefix(line, marker) {
+					t.Errorf("%s:%d contains a merge conflict marker: %q",
+						path, lineNum+1, line)
+				}
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err, "walking the chart directory should succeed")
+}
+
+func TestValuesSchemaContainsCCOFields(t *testing.T) {
+	schemaPath := filepath.Join("helm-charts", "redhat-trusted-profile-analyzer", "values.schema.json")
+
+	data, err := os.ReadFile(schemaPath)
+	require.NoError(t, err, "values.schema.json should be readable")
+
+	var schema map[string]interface{}
+	err = yaml.Unmarshal(data, &schema)
+	require.NoError(t, err, "values.schema.json should be valid JSON")
+
+	properties, ok := schema["properties"].(map[string]interface{})
+	require.True(t, ok, "schema should have properties")
+
+	assert.Contains(t, properties, "cloudProvider", "schema should define cloudProvider")
+	assert.Contains(t, properties, "ccoMode", "schema should define ccoMode")
+	assert.Contains(t, properties, "cloudCredentials", "schema should define cloudCredentials")
+
+	cloudProvider, ok := properties["cloudProvider"].(map[string]interface{})
+	require.True(t, ok, "cloudProvider should be an object")
+	assert.Equal(t, "string", cloudProvider["type"], "cloudProvider should be a string type")
+
+	cpEnum, ok := cloudProvider["enum"].([]interface{})
+	require.True(t, ok, "cloudProvider should have enum values")
+	assert.Contains(t, cpEnum, "aws", "cloudProvider enum should include aws")
+	assert.Contains(t, cpEnum, "gcp", "cloudProvider enum should include gcp")
+
+	ccoMode, ok := properties["ccoMode"].(map[string]interface{})
+	require.True(t, ok, "ccoMode should be an object")
+	assert.Equal(t, "string", ccoMode["type"], "ccoMode should be a string type")
+
+	modeEnum, ok := ccoMode["enum"].([]interface{})
+	require.True(t, ok, "ccoMode should have enum values")
+	assert.Contains(t, modeEnum, "default", "ccoMode enum should include default")
+	assert.Contains(t, modeEnum, "mint", "ccoMode enum should include mint")
+	assert.Contains(t, modeEnum, "passthrough", "ccoMode enum should include passthrough")
+	assert.Contains(t, modeEnum, "manual", "ccoMode enum should include manual")
+
+	cloudCreds, ok := properties["cloudCredentials"].(map[string]interface{})
+	require.True(t, ok, "cloudCredentials should be an object")
+	ccProps, ok := cloudCreds["properties"].(map[string]interface{})
+	require.True(t, ok, "cloudCredentials should have properties")
+	assert.Contains(t, ccProps, "aws", "cloudCredentials should have aws")
+	assert.Contains(t, ccProps, "gcp", "cloudCredentials should have gcp")
+
+	awsCreds, ok := ccProps["aws"].(map[string]interface{})
+	require.True(t, ok, "aws credentials should be an object")
+	awsProps, ok := awsCreds["properties"].(map[string]interface{})
+	require.True(t, ok, "aws should have properties")
+	assert.Contains(t, awsProps, "stsIAMRoleARN", "aws should have stsIAMRoleARN property")
 }

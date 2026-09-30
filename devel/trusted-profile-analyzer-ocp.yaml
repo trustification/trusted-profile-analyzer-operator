@@ -14,7 +14,7 @@ spec:
         secretKeyRef:
           name: infrastructure-postgresql
           key: postgres-password
-    username: postgres    
+    username: postgres
   database: {
     host: infrastructure-postgresql,
     port: "5432",
