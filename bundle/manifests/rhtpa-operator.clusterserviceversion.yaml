@@ -293,8 +293,8 @@ spec:
                       # the value per install via `spec.config.env` on the
                       # Subscription, or per CR via `ccoRds.tokenImage`.
                       - name: RELATED_IMAGE_RDS_AUTH_TOKEN
-                        value: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:e81ca4327bb4a64f9f6e1e6a59f59fd70cb98459246bb025c58090dd01193118
-                    image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:e81ca4327bb4a64f9f6e1e6a59f59fd70cb98459246bb025c58090dd01193118
+                        value: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:89ecf7315fb6341e115440c12e0561697584dcf1d37565d269d11f13744380bb
+                    image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:89ecf7315fb6341e115440c12e0561697584dcf1d37565d269d11f13744380bb
                     livenessProbe:
                       httpGet:
                         path: /healthz
@@ -411,6 +411,6 @@ spec:
     name: Red Hat
     url: https://github.com/trustification/trusted-profile-analyzer-operator
   relatedImages:
-    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:e81ca4327bb4a64f9f6e1e6a59f59fd70cb98459246bb025c58090dd01193118
+    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:89ecf7315fb6341e115440c12e0561697584dcf1d37565d269d11f13744380bb
       name: manager
   version: 3.2.0
