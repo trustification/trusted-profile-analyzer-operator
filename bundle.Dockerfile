@@ -12,8 +12,8 @@ LABEL maintainer="Red Hat"
 LABEL vendor="Red Hat, Inc."
 LABEL distribution-scope="public"
 LABEL url="https://www.redhat.com"
-LABEL version="3.1.1"
-LABEL release=3.1.1
+LABEL version="3.2.0"
+LABEL release=3.2.0
 LABEL cpe="cpe:/a:redhat:trusted_profile_analyzer:3.1::el10"
 
 LABEL features.operators.openshift.io/cni="false"
@@ -23,7 +23,7 @@ LABEL features.operators.openshift.io/proxy-aware="false"
 LABEL features.operators.openshift.io/cnf="false"
 LABEL features.operators.openshift.io/csi="false"
 LABEL features.operators.openshift.io/tls-profiles="false"
-LABEL features.operators.openshift.io/token-auth-aws="false"
+LABEL features.operators.openshift.io/token-auth-aws="true"
 LABEL features.operators.openshift.io/token-auth-azure="false"
 LABEL features.operators.openshift.io/token-auth-gcp="false"
 # Core bundle labels.

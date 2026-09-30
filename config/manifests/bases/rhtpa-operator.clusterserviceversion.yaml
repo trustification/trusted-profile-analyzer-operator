@@ -11,7 +11,7 @@ metadata:
     features.operators.openshift.io/fips-compliant: "false"
     features.operators.openshift.io/proxy-aware: "false"
     features.operators.openshift.io/tls-profiles: "false"
-    features.operators.openshift.io/token-auth-aws: "false"
+    features.operators.openshift.io/token-auth-aws: "true"
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
     operators.openshift.io/valid-subscription: '["Red Hat Trusted Profile Analyzer"]'
@@ -71,4 +71,4 @@ spec:
   provider:
     name: Red Hat
     url: https://github.com/trustification/trusted-profile-analyzer-operator
-  version: 3.1.1
+  version: 3.2.0

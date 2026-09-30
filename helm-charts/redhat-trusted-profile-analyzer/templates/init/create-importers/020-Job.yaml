@@ -1,5 +1,8 @@
 {{- if .Values.modules.createImporters.enabled }}
 {{- $mod := dict "root" . "name" "create-importers" "component" "database" "module" .Values.modules.createImporters -}}
+{{- $db := merge ( deepCopy (.Values.modules.createImporters.database | default dict ) ) (deepCopy .Values.database) -}}
+{{- $conn := dict "root" . "database" $db -}}
+{{- $iamAuth := eq (include "trustification.cco.rds.isConnectionIamAuth" $conn) "true" -}}
 kind: Job
 apiVersion: batch/v1
 metadata:
@@ -34,7 +37,13 @@ spec:
       {{- include "trustification.application.pod" $mod | nindent 6 }}
 
       volumes:
+        {{- include "trustification.cco.rds.tokenVolumes" $conn | nindent 8 }}
         {{- include "trustification.application.extraVolumes" $mod | nindent 8 }}
+
+      {{- with include "trustification.cco.rds.tokenInitContainer" $conn }}
+      initContainers:
+        {{- . | nindent 8 }}
+      {{- end }}
 
       containers:
         - name: job
@@ -42,27 +51,39 @@ spec:
           {{- include "trustification.application.container" $mod | nindent 10 }}
 
           env:
-            {{- include "trustification.psql.envVars" ( dict "root" . "database" ( merge ( deepCopy (.Values.modules.createImporters.database | default dict ) ) (deepCopy .Values.database) ) ) | nindent 12 }}
+            {{- include "trustification.psql.envVars" $conn | nindent 12 }}
+            {{- if $iamAuth }}
+
+            {{- /* Passed as an env-var so the SQL needs no shell quoting. */}}
+            - name: IMPORTERS_SQL
+              value: |
+                {{- include "trustification.createImporters.sql" . | nindent 16 }}
+            {{- end }}
 
           volumeMounts:
+            {{- include "trustification.cco.rds.tokenVolumeMount" $conn | nindent 12 }}
             {{- include "trustification.application.extraVolumeMounts" $mod | nindent 12 }}
 
+          {{- if $iamAuth }}
+          {{- /*
+            Only when this connection uses RDS IAM authentication: wrapped in a
+            shell rather than exec'ing psql directly, so the token minted by the
+            init container can be loaded into PGPASSWORD.
+          */}}
+          command:
+            - bash
+            - -ec
+            - |
+              {{- include "trustification.cco.rds.psqlPasswordPrologue" $conn | nindent 14 }}
+              exec psql -v ON_ERROR_STOP=1 -c "${IMPORTERS_SQL}"
+          {{- else }}
           command:
             - psql
             - -v
             - ON_ERROR_STOP=1
             - -c
             - |
-              {{ range $key, $value := .Values.modules.createImporters.importers }}
-              INSERT INTO IMPORTER
-                (name, revision, state, last_change, configuration)
-              VALUES
-                ({{ $key | squote }}, gen_random_uuid(), 0, now(), '{{ $value | toJson }}'::jsonb)
-              ON CONFLICT (name) DO UPDATE
-              SET
-                revision=EXCLUDED.revision,
-                configuration=EXCLUDED.configuration
-              ;
-              {{ end }}
+              {{- include "trustification.createImporters.sql" . | nindent 14 }}
+          {{- end }}
 
 {{- end }}
