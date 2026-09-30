@@ -3,9 +3,9 @@
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
-VERSION ?= 3.2.0
-IMAGE_TAG ?= 3.2.0
-REDUCED_VERSION ?= 3.2.0-snapshot
+VERSION ?= 3.2.1
+IMAGE_TAG ?= 3.2.1
+REDUCED_VERSION ?= 3.2.1-snapshot
 CONTROLLER_TOOLS_VERSION ?= v0.18.0
 
 # CHANNELS define the bundle channels used in the bundle.
@@ -34,7 +34,8 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
 # registry.redhat.io/rhtpa/rhtpa-operator-bundle:$VERSION and registry.redhat.io/rhtpa/rhtpa-operator-catalog:$VERSION.
-IMAGE_TAG_BASE ?= registry.redhat.io/rhtpa/rhtpa-rhel10-operator
+#IMAGE_TAG_BASE ?= registry.redhat.io/rhtpa/rhtpa-rhel10-operator
+IMAGE_TAG_BASE ?= quay.io/mdessi/rhtpa-rhel10-operator
 #IMAGE_DIGEST ?=
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
