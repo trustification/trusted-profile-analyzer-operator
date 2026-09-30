@@ -28,6 +28,16 @@ resources:
 # be able to communicate with the Webhook Server.
 #- ../network-policy
 
+# [RDS_AUTH_TOKEN] Advertise the image carrying the `rds-auth-token` helper via
+# RELATED_IMAGE_RDS_AUTH_TOKEN on the manager, and — in the OLM bundle — as a
+# relatedImages entry. Comment out the two lines below to disable it: the env
+# var and the relatedImages entry disappear, and clusters that need the helper
+# must then set `ccoRds.tokenImage` in the TrustedProfileAnalyzer CR. Only
+# deployments using RDS IAM authentication for the psql-based init jobs
+# (create-database, create-importers) need it at all.
+components:
+- ../rds-auth-token
+
 # Uncomment the patches line if you enable Metrics, and/or are using webhooks and cert-manager
 patches:
 # [METRICS] The following patch will enable the metrics endpoint using HTTPS and the port :8443.

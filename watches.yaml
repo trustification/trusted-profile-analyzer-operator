@@ -5,8 +5,19 @@
   chart: helm-charts/redhat-trusted-profile-analyzer
   WatchDependentResources: false
   MaxConcurrentReconciles: 4
+  overrideValues:
+    # The chart runs this image as an init container to mint RDS IAM auth tokens
+    # for the psql-based jobs. It is the operator image itself, which is the only
+    # image in the deployment carrying the `rds-auth-token` helper — and it is
+    # already digest-pinned and mirrored, so disconnected installs work unchanged.
+    #
+    # It lands in `defaultTokenImage`, not `tokenImage`: overrides always win over
+    # the CR, so writing to a separate key leaves `ccoRds.tokenImage` free for the
+    # user to pin a different image. RELATED_IMAGE_RDS_AUTH_TOKEN is optional (the
+    # config/rds-auth-token kustomize component); unset, this resolves to the empty
+    # string and the chart falls back to `ccoRds.tokenImage`.
+    ccoRds.defaultTokenImage: $RELATED_IMAGE_RDS_AUTH_TOKEN
   # ReconcilePeriod
-  # OverrideValues
   # ReconcilePeriod
   # Selector
 # +kubebuilder:scaffold:watch
