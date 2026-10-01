@@ -39,7 +39,7 @@ LABEL summary="RHTPA Operator"
 LABEL version="3.1.1"
 LABEL release=3.1.1
 LABEL maintainer="Red Hat"
-LABEL operators.operatorframework.io.index.configs.v1=/config
+#LABEL operators.operatorframework.io.index.configs.v1=/config
 
 #RUN microdnf update -y && microdnf clean all -y
 
