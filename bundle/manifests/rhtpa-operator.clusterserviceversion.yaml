@@ -149,6 +149,54 @@ spec:
       clusterPermissions:
         - rules:
             - apiGroups:
+                - ""
+              resources:
+                - serviceaccounts
+              verbs:
+                - create
+                - get
+                - list
+                - watch
+                - delete
+                - patch
+                - update
+            - apiGroups:
+                - batch
+              resources:
+                - jobs
+              verbs:
+                - create
+                - get
+                - list
+                - watch
+                - delete
+                - patch
+                - update
+            - apiGroups:
+                - rbac.authorization.k8s.io
+              resources:
+                - clusterroles
+                - clusterrolebindings
+              verbs:
+                - create
+                - get
+                - list
+                - watch
+                - delete
+                - patch
+                - update
+            - apiGroups:
+                - config.openshift.io
+              resources:
+                - ingresses
+                - clusterversions
+              verbs:
+                - get
+                - list
+                - watch
+                - patch
+                - update
+            - apiGroups:
                 - networking.k8s.io
               resources:
                 - ingresses
