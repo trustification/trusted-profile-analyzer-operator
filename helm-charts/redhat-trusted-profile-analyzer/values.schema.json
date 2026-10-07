@@ -1263,6 +1263,10 @@
           "$ref": "#/definitions/ValueOrRef",
           "description": "OIDC issuer URL for EI service authentication (client credentials flow with discovery).\n"
         },
+        "scope": {
+          "$ref": "#/definitions/ValueOrRef",
+          "description": "OAuth scope(s) to request in the client_credentials token request. Space-separated\nwhen multiple scopes are needed. If unset, no scope parameter is sent.\n"
+        },
         "refreshBefore": {
           "type": "string",
           "description": "Duration an access token must still be valid before requesting a new one (humantime).\n"

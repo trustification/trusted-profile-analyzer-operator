@@ -999,6 +999,11 @@ definitions:
         $ref: "#/definitions/ValueOrRef"
         description: |
           OIDC issuer URL for EI service authentication (client credentials flow with discovery).
+      scope:
+        $ref: "#/definitions/ValueOrRef"
+        description: |
+          OAuth scope(s) to request in the client_credentials token request. Space-separated
+          when multiple scopes are needed. If unset, no scope parameter is sent.
       refreshBefore:
         type: string
         description: |
