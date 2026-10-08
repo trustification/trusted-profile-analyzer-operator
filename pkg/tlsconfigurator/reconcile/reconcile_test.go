@@ -24,6 +24,12 @@ import (
 	"github.com/trustification/trusted-profile-analyzer-operator/pkg/tlsconfigurator/crypto"
 )
 
+const (
+	// caseNilProfile and caseModern name table cases shared by several tests.
+	caseNilProfile = "nil profile"
+	caseModern     = "modern"
+)
+
 // sha256Hex matches the lowercase hex encoding of a 32-byte digest.
 var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
@@ -81,9 +87,9 @@ func TestTLSConfigHashFormat(t *testing.T) {
 		profile   *configv1.TLSSecurityProfile
 		enablePQC bool
 	}{
-		{name: "nil profile", profile: nil, enablePQC: false},
+		{name: caseNilProfile, profile: nil, enablePQC: false},
 		{name: "nil profile with pqc", profile: nil, enablePQC: true},
-		{name: "modern", profile: modernProfile(), enablePQC: false},
+		{name: caseModern, profile: modernProfile(), enablePQC: false},
 		{name: "intermediate", profile: intermediateProfile(), enablePQC: false},
 		{name: "old", profile: &configv1.TLSSecurityProfile{Type: configv1.TLSProfileOldType}},
 		{
@@ -111,8 +117,8 @@ func TestTLSConfigHashIsDeterministic(t *testing.T) {
 		profile   func() *configv1.TLSSecurityProfile
 		enablePQC bool
 	}{
-		{name: "nil profile", profile: func() *configv1.TLSSecurityProfile { return nil }},
-		{name: "modern", profile: modernProfile},
+		{name: caseNilProfile, profile: func() *configv1.TLSSecurityProfile { return nil }},
+		{name: caseModern, profile: modernProfile},
 		{name: "modern with pqc", profile: modernProfile, enablePQC: true},
 		{
 			name: "custom with multiple ciphers",
@@ -143,8 +149,8 @@ func TestTLSConfigHashIncludesPQCFlag(t *testing.T) {
 		name    string
 		profile *configv1.TLSSecurityProfile
 	}{
-		{name: "nil profile", profile: nil},
-		{name: "modern", profile: modernProfile()},
+		{name: caseNilProfile, profile: nil},
+		{name: caseModern, profile: modernProfile()},
 		{name: "intermediate", profile: intermediateProfile()},
 		{name: "custom", profile: customProfile(configv1.VersionTLS13)},
 	}

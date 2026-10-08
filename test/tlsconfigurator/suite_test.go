@@ -11,6 +11,13 @@ import (
 	"github.com/trustification/trusted-profile-analyzer-operator/pkg/tlsconfigurator/controller"
 )
 
+const (
+	// testCipher is an arbitrary TLS 1.3 cipher suite name used across the specs.
+	testCipher = "TLS_AES_128_GCM_SHA256"
+	// testNamespace is the namespace used by the config specs.
+	testNamespace = "test-namespace"
+)
+
 func TestTLSConfigurator(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "TLS Configurator Suite")
@@ -28,7 +35,7 @@ var _ = Describe("TLS Configuration", func() {
 		It("should validate config correctly", func() {
 			cfg := &config.Config{
 				IngressControllerName: "test",
-				Namespace:             "test-namespace",
+				Namespace:             testNamespace,
 			}
 			err := cfg.Validate()
 			Expect(err).ToNot(HaveOccurred())
@@ -37,7 +44,7 @@ var _ = Describe("TLS Configuration", func() {
 		It("should fail validation with empty ingress controller name", func() {
 			cfg := &config.Config{
 				IngressControllerName: "",
-				Namespace:             "test-namespace",
+				Namespace:             testNamespace,
 			}
 			err := cfg.Validate()
 			Expect(err).To(HaveOccurred())
@@ -46,7 +53,7 @@ var _ = Describe("TLS Configuration", func() {
 		It("should build TLS profile correctly", func() {
 			tlsConfig := &config.TLSConfig{
 				Type:          configv1.TLSProfileCustomType,
-				Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+				Ciphers:       []string{testCipher},
 				MinTLSVersion: configv1.VersionTLS13,
 			}
 
@@ -55,7 +62,7 @@ var _ = Describe("TLS Configuration", func() {
 			Expect(profile.Type).To(Equal(configv1.TLSProfileCustomType))
 			Expect(profile.Custom).NotTo(BeNil())
 			Expect(profile.Custom.MinTLSVersion).To(Equal(configv1.VersionTLS13))
-			Expect(profile.Custom.Ciphers).To(ContainElement("TLS_AES_128_GCM_SHA256"))
+			Expect(profile.Custom.Ciphers).To(ContainElement(testCipher))
 		})
 	})
 
@@ -65,7 +72,7 @@ var _ = Describe("TLS Configuration", func() {
 				Type: configv1.TLSProfileCustomType,
 				Custom: &configv1.CustomTLSProfile{
 					TLSProfileSpec: configv1.TLSProfileSpec{
-						Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+						Ciphers:       []string{testCipher},
 						MinTLSVersion: configv1.VersionTLS13,
 					},
 				},
@@ -108,7 +115,7 @@ var _ = Describe("TLS Configuration", func() {
 				Type: configv1.TLSProfileCustomType,
 				Custom: &configv1.CustomTLSProfile{
 					TLSProfileSpec: configv1.TLSProfileSpec{
-						Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+						Ciphers:       []string{testCipher},
 						MinTLSVersion: configv1.VersionTLS13,
 					},
 				},
@@ -118,7 +125,7 @@ var _ = Describe("TLS Configuration", func() {
 				Type: configv1.TLSProfileCustomType,
 				Custom: &configv1.CustomTLSProfile{
 					TLSProfileSpec: configv1.TLSProfileSpec{
-						Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+						Ciphers:       []string{testCipher},
 						MinTLSVersion: configv1.VersionTLS13,
 					},
 				},
@@ -133,7 +140,7 @@ var _ = Describe("TLS Configuration", func() {
 				Type: configv1.TLSProfileCustomType,
 				Custom: &configv1.CustomTLSProfile{
 					TLSProfileSpec: configv1.TLSProfileSpec{
-						Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+						Ciphers:       []string{testCipher},
 						MinTLSVersion: configv1.VersionTLS13,
 					},
 				},
@@ -159,7 +166,7 @@ var _ = Describe("TLS Configuration", func() {
 			// Create config
 			cfg := config.NewConfig()
 			cfg.IngressControllerName = "test-ingress"
-			cfg.Namespace = "test-namespace"
+			cfg.Namespace = testNamespace
 
 			// Validate config
 			err := cfg.Validate()
@@ -168,7 +175,7 @@ var _ = Describe("TLS Configuration", func() {
 			// Build TLS configuration
 			tlsConfig := &config.TLSConfig{
 				Type:          configv1.TLSProfileCustomType,
-				Ciphers:       []string{"TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384"},
+				Ciphers:       []string{testCipher, "TLS_AES_256_GCM_SHA384"},
 				MinTLSVersion: configv1.VersionTLS13,
 			}
 
@@ -197,7 +204,7 @@ var _ = Describe("TLS Configuration", func() {
 			for _, version := range versions {
 				tlsConfig := &config.TLSConfig{
 					Type:          configv1.TLSProfileCustomType,
-					Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+					Ciphers:       []string{testCipher},
 					MinTLSVersion: version,
 				}
 
@@ -244,7 +251,7 @@ var _ = Describe("Edge Cases", func() {
 				Type: configv1.TLSProfileCustomType,
 				Custom: &configv1.CustomTLSProfile{
 					TLSProfileSpec: configv1.TLSProfileSpec{
-						Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+						Ciphers:       []string{testCipher},
 						MinTLSVersion: "",
 					},
 				},
@@ -263,7 +270,7 @@ var _ = Describe("Performance", func() {
 			for i := 0; i < 1000; i++ {
 				tlsConfig := &config.TLSConfig{
 					Type:          configv1.TLSProfileCustomType,
-					Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+					Ciphers:       []string{testCipher},
 					MinTLSVersion: configv1.VersionTLS13,
 				}
 				config.BuildTLSProfile(tlsConfig)
@@ -278,7 +285,7 @@ var _ = Describe("Performance", func() {
 			Type: configv1.TLSProfileCustomType,
 			Custom: &configv1.CustomTLSProfile{
 				TLSProfileSpec: configv1.TLSProfileSpec{
-					Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+					Ciphers:       []string{testCipher},
 					MinTLSVersion: configv1.VersionTLS13,
 				},
 			},

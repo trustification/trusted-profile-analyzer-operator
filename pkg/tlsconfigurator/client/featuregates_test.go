@@ -25,7 +25,7 @@ import (
 )
 
 func featureGate(enabled, disabled []configv1.FeatureGateName) *configv1.FeatureGate {
-	details := configv1.FeatureGateDetails{Version: "4.22.0"}
+	details := configv1.FeatureGateDetails{Version: version422}
 	for _, name := range enabled {
 		details.Enabled = append(details.Enabled, configv1.FeatureGateAttributes{Name: name})
 	}

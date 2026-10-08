@@ -19,6 +19,13 @@ import (
 	"testing"
 )
 
+const (
+	// version422 is the OpenShift release the TLS configurator gates on.
+	version422 = "4.22.0"
+	// version422RC is the same release as a pre-release build.
+	version422RC = "4.22.0-rc.1"
+)
+
 func TestParseVersion(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -30,7 +37,7 @@ func TestParseVersion(t *testing.T) {
 	}{
 		{
 			name:       "simple version",
-			versionStr: "4.22.0",
+			versionStr: version422,
 			wantMajor:  4,
 			wantMinor:  22,
 			wantPatch:  0,
@@ -46,7 +53,7 @@ func TestParseVersion(t *testing.T) {
 		},
 		{
 			name:       "version with suffix",
-			versionStr: "4.22.0-rc.1",
+			versionStr: version422RC,
 			wantMajor:  4,
 			wantMinor:  22,
 			wantPatch:  0,
@@ -187,8 +194,8 @@ func TestOpenShiftVersion_String(t *testing.T) {
 	}{
 		{
 			name:    "with full version",
-			version: &OpenShiftVersion{Major: 4, Minor: 22, Patch: 0, Full: "4.22.0-rc.1"},
-			want:    "4.22.0-rc.1",
+			version: &OpenShiftVersion{Major: 4, Minor: 22, Patch: 0, Full: version422RC},
+			want:    version422RC,
 		},
 		{
 			name:    "without full version",
@@ -198,7 +205,7 @@ func TestOpenShiftVersion_String(t *testing.T) {
 		{
 			name:    "zero patch",
 			version: &OpenShiftVersion{Major: 4, Minor: 22, Patch: 0},
-			want:    "4.22.0",
+			want:    version422,
 		},
 	}
 

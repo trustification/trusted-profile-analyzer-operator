@@ -36,6 +36,10 @@ import (
 
 const (
 	testNamespace = "rhtpa"
+	// testDeployment is the TLS-serving workload the reconciler rolls.
+	testDeployment = "server"
+	// missingDeployment names a target that does not exist in the cluster.
+	missingDeployment = "ghost"
 	// eventBuffer lets tests queue watch events without a reader, so the loop
 	// tests stay synchronous.
 	eventBuffer = 8
@@ -166,7 +170,7 @@ func TestNewReconcilerRejectsIncompleteConfig(t *testing.T) {
 	}{
 		{
 			name: "missing target namespace",
-			cfg:  &config.Config{TargetDeployments: []string{"server"}},
+			cfg:  &config.Config{TargetDeployments: []string{testDeployment}},
 		},
 		{
 			name: "missing target deployments",
@@ -207,27 +211,27 @@ func TestReconcileOnce(t *testing.T) {
 			name: "stamps an unannotated deployment",
 			opts: harnessOpts{
 				profile:     modern,
-				deployments: []*appsv1.Deployment{deploymentWithHash("server", "")},
+				deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
 			},
-			wantPatched:    []string{"server"},
-			wantHashOf:     "server",
+			wantPatched:    []string{testDeployment},
+			wantHashOf:     testDeployment,
 			wantHashSource: modern,
 		},
 		{
 			name: "rewrites a stale hash",
 			opts: harnessOpts{
 				profile:     modern,
-				deployments: []*appsv1.Deployment{deploymentWithHash("server", "stale")},
+				deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "stale")},
 			},
-			wantPatched:    []string{"server"},
-			wantHashOf:     "server",
+			wantPatched:    []string{testDeployment},
+			wantHashOf:     testDeployment,
 			wantHashSource: modern,
 		},
 		{
 			name: "leaves an up-to-date deployment alone",
 			opts: harnessOpts{
 				profile:     modern,
-				deployments: []*appsv1.Deployment{deploymentWithHash("server", mustHashFor(modern, false))},
+				deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, mustHashFor(modern, false))},
 			},
 			wantPatched: nil,
 		},
@@ -236,7 +240,7 @@ func TestReconcileOnce(t *testing.T) {
 			opts: harnessOpts{
 				profile: modern,
 				deployments: []*appsv1.Deployment{
-					deploymentWithHash("server", mustHashFor(modern, false)),
+					deploymentWithHash(testDeployment, mustHashFor(modern, false)),
 					deploymentWithHash("importer", "stale"),
 				},
 			},
@@ -246,11 +250,11 @@ func TestReconcileOnce(t *testing.T) {
 			name: "pqc changes the stamped hash",
 			opts: harnessOpts{
 				profile:     modern,
-				deployments: []*appsv1.Deployment{deploymentWithHash("server", mustHashFor(modern, false))},
+				deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, mustHashFor(modern, false))},
 				enablePQC:   true,
 			},
-			wantPatched:    []string{"server"},
-			wantHashOf:     "server",
+			wantPatched:    []string{testDeployment},
+			wantHashOf:     testDeployment,
 			wantHashSource: modern,
 			wantPQC:        true,
 		},
@@ -258,17 +262,17 @@ func TestReconcileOnce(t *testing.T) {
 			name: "defaults to Intermediate when the cluster sets no profile",
 			opts: harnessOpts{
 				profile:     nil,
-				deployments: []*appsv1.Deployment{deploymentWithHash("server", "")},
+				deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
 			},
-			wantPatched:    []string{"server"},
-			wantHashOf:     "server",
+			wantPatched:    []string{testDeployment},
+			wantHashOf:     testDeployment,
 			wantHashSource: &configv1.TLSSecurityProfile{Type: configv1.TLSProfileIntermediateType},
 		},
 		{
 			name: "errors when the APIServer CR is missing",
 			opts: harnessOpts{
 				noAPIServer: true,
-				deployments: []*appsv1.Deployment{deploymentWithHash("server", "")},
+				deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
 			},
 			wantErr:     true,
 			wantPatched: nil,
@@ -277,7 +281,7 @@ func TestReconcileOnce(t *testing.T) {
 			name: "errors when a target deployment does not exist",
 			opts: harnessOpts{
 				profile: modern,
-				targets: []string{"ghost"},
+				targets: []string{missingDeployment},
 			},
 			wantErr:     true,
 			wantPatched: nil,
@@ -287,12 +291,12 @@ func TestReconcileOnce(t *testing.T) {
 			name: "reports an error but still patches healthy targets",
 			opts: harnessOpts{
 				profile:     modern,
-				deployments: []*appsv1.Deployment{deploymentWithHash("server", "")},
-				targets:     []string{"ghost", "server"},
+				deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
+				targets:     []string{missingDeployment, testDeployment},
 			},
 			wantErr:        true,
-			wantPatched:    []string{"server"},
-			wantHashOf:     "server",
+			wantPatched:    []string{testDeployment},
+			wantHashOf:     testDeployment,
 			wantHashSource: modern,
 		},
 	}
@@ -322,7 +326,7 @@ func TestReconcileOnce(t *testing.T) {
 func TestReconcileOnceIsIdempotent(t *testing.T) {
 	h := newHarness(t, harnessOpts{
 		profile:     &configv1.TLSSecurityProfile{Type: configv1.TLSProfileModernType},
-		deployments: []*appsv1.Deployment{deploymentWithHash("server", "")},
+		deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
 	})
 
 	for i := 0; i < 3; i++ {
@@ -331,7 +335,7 @@ func TestReconcileOnceIsIdempotent(t *testing.T) {
 		}
 	}
 
-	assertPatched(t, h.patchedDeployments(), []string{"server"})
+	assertPatched(t, h.patchedDeployments(), []string{testDeployment})
 }
 
 func TestConsumeWatch(t *testing.T) {
@@ -352,9 +356,9 @@ func TestConsumeWatch(t *testing.T) {
 			},
 			opts: harnessOpts{
 				profile:     modern,
-				deployments: []*appsv1.Deployment{deploymentWithHash("server", "stale")},
+				deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "stale")},
 			},
-			wantPatched: []string{"server"},
+			wantPatched: []string{testDeployment},
 		},
 		{
 			name: "added event triggers a reconcile",
@@ -363,9 +367,9 @@ func TestConsumeWatch(t *testing.T) {
 			},
 			opts: harnessOpts{
 				profile:     modern,
-				deployments: []*appsv1.Deployment{deploymentWithHash("server", "stale")},
+				deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "stale")},
 			},
-			wantPatched: []string{"server"},
+			wantPatched: []string{testDeployment},
 		},
 		{
 			name: "deleted event is ignored",
@@ -374,7 +378,7 @@ func TestConsumeWatch(t *testing.T) {
 			},
 			opts: harnessOpts{
 				profile:     modern,
-				deployments: []*appsv1.Deployment{deploymentWithHash("server", "stale")},
+				deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "stale")},
 			},
 			wantPatched: nil,
 		},
@@ -388,7 +392,7 @@ func TestConsumeWatch(t *testing.T) {
 			},
 			opts: harnessOpts{
 				profile:     modern,
-				deployments: []*appsv1.Deployment{deploymentWithHash("server", "stale")},
+				deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "stale")},
 			},
 			wantPatched: nil,
 		},
@@ -397,7 +401,7 @@ func TestConsumeWatch(t *testing.T) {
 			queue: func(w *watch.FakeWatcher) {},
 			opts: harnessOpts{
 				profile:     modern,
-				deployments: []*appsv1.Deployment{deploymentWithHash("server", "stale")},
+				deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "stale")},
 			},
 			wantPatched: nil,
 		},
@@ -411,10 +415,10 @@ func TestConsumeWatch(t *testing.T) {
 			},
 			opts: harnessOpts{
 				profile:     modern,
-				deployments: []*appsv1.Deployment{deploymentWithHash("server", "stale")},
-				targets:     []string{"ghost", "server"},
+				deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "stale")},
+				targets:     []string{missingDeployment, testDeployment},
 			},
-			wantPatched: []string{"server"},
+			wantPatched: []string{testDeployment},
 		},
 	}
 
@@ -441,7 +445,7 @@ func TestConsumeWatch(t *testing.T) {
 func TestConsumeWatchReturnsOnContextCancel(t *testing.T) {
 	h := newHarness(t, harnessOpts{
 		profile:     &configv1.TLSSecurityProfile{Type: configv1.TLSProfileModernType},
-		deployments: []*appsv1.Deployment{deploymentWithHash("server", "stale")},
+		deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "stale")},
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -466,7 +470,7 @@ func TestConsumeWatchReturnsOnContextCancel(t *testing.T) {
 func TestConsumeWatchReconcilesOnResyncTick(t *testing.T) {
 	h := newHarness(t, harnessOpts{
 		profile:     &configv1.TLSSecurityProfile{Type: configv1.TLSProfileModernType},
-		deployments: []*appsv1.Deployment{deploymentWithHash("server", "stale")},
+		deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "stale")},
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -492,7 +496,7 @@ func TestConsumeWatchReconcilesOnResyncTick(t *testing.T) {
 func TestRunReconcilesOnStartup(t *testing.T) {
 	h := newHarness(t, harnessOpts{
 		profile:     &configv1.TLSSecurityProfile{Type: configv1.TLSProfileModernType},
-		deployments: []*appsv1.Deployment{deploymentWithHash("server", "")},
+		deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -519,7 +523,7 @@ func TestRunRollsOnProfileChange(t *testing.T) {
 
 	h := newHarness(t, harnessOpts{
 		profile:     modern,
-		deployments: []*appsv1.Deployment{deploymentWithHash("server", "")},
+		deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -531,7 +535,7 @@ func TestRunRollsOnProfileChange(t *testing.T) {
 	waitFor(t, "the startup reconcile", func() bool {
 		return len(h.patchedDeployments()) == 1
 	})
-	if got, want := h.storedHash(t, "server"), mustHashFor(modern, false); got != want {
+	if got, want := h.storedHash(t, testDeployment), mustHashFor(modern, false); got != want {
 		t.Fatalf("hash after startup = %q, want %q", got, want)
 	}
 
@@ -547,7 +551,7 @@ func TestRunRollsOnProfileChange(t *testing.T) {
 	waitFor(t, "the watch event to drive a second rollout", func() bool {
 		return len(h.patchedDeployments()) == 2
 	})
-	if got, want := h.storedHash(t, "server"), mustHashFor(old, false); got != want {
+	if got, want := h.storedHash(t, testDeployment), mustHashFor(old, false); got != want {
 		t.Errorf("hash after profile change = %q, want %q", got, want)
 	}
 
@@ -564,7 +568,7 @@ func TestRunRollsOnAdherencePolicyChange(t *testing.T) {
 
 	h := newHarness(t, harnessOpts{
 		profile:     modern,
-		deployments: []*appsv1.Deployment{deploymentWithHash("server", "")},
+		deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -576,7 +580,7 @@ func TestRunRollsOnAdherencePolicyChange(t *testing.T) {
 	waitFor(t, "the startup reconcile", func() bool {
 		return len(h.patchedDeployments()) == 1
 	})
-	beforeHash := h.storedHash(t, "server")
+	beforeHash := h.storedHash(t, testDeployment)
 
 	// Same profile, stricter adherence policy.
 	updated := apiServerCR(modern)
@@ -591,7 +595,7 @@ func TestRunRollsOnAdherencePolicyChange(t *testing.T) {
 	waitFor(t, "the adherence change to drive a rollout", func() bool {
 		return len(h.patchedDeployments()) == 2
 	})
-	if got := h.storedHash(t, "server"); got == beforeHash {
+	if got := h.storedHash(t, testDeployment); got == beforeHash {
 		t.Errorf("hash unchanged at %q after tlsAdherence moved to StrictAllComponents", got)
 	}
 
@@ -605,7 +609,7 @@ func TestRunRollsOnAdherencePolicyChange(t *testing.T) {
 func TestRunSurvivesInitialReconcileFailure(t *testing.T) {
 	h := newHarness(t, harnessOpts{
 		noAPIServer: true,
-		deployments: []*appsv1.Deployment{deploymentWithHash("server", "")},
+		deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -637,7 +641,7 @@ func TestRunSurvivesInitialReconcileFailure(t *testing.T) {
 func TestRunRetriesWhenTheWatchCannotBeEstablished(t *testing.T) {
 	h := newHarness(t, harnessOpts{
 		profile:     &configv1.TLSSecurityProfile{Type: configv1.TLSProfileModernType},
-		deployments: []*appsv1.Deployment{deploymentWithHash("server", "")},
+		deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
 		watchErr:    errors.New("watch refused"),
 	})
 

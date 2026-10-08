@@ -21,6 +21,9 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 )
 
+// testCipher is an arbitrary TLS 1.3 cipher suite name used across the tests.
+const testCipher = "TLS_AES_128_GCM_SHA256"
+
 func TestCompareTLSProfiles(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -46,7 +49,7 @@ func TestCompareTLSProfiles(t *testing.T) {
 				Type: configv1.TLSProfileCustomType,
 				Custom: &configv1.CustomTLSProfile{
 					TLSProfileSpec: configv1.TLSProfileSpec{
-						Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+						Ciphers:       []string{testCipher},
 						MinTLSVersion: configv1.VersionTLS13,
 					},
 				},
@@ -55,7 +58,7 @@ func TestCompareTLSProfiles(t *testing.T) {
 				Type: configv1.TLSProfileCustomType,
 				Custom: &configv1.CustomTLSProfile{
 					TLSProfileSpec: configv1.TLSProfileSpec{
-						Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+						Ciphers:       []string{testCipher},
 						MinTLSVersion: configv1.VersionTLS13,
 					},
 				},
@@ -68,7 +71,7 @@ func TestCompareTLSProfiles(t *testing.T) {
 				Type: configv1.TLSProfileCustomType,
 				Custom: &configv1.CustomTLSProfile{
 					TLSProfileSpec: configv1.TLSProfileSpec{
-						Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+						Ciphers:       []string{testCipher},
 						MinTLSVersion: configv1.VersionTLS13,
 					},
 				},
@@ -77,7 +80,7 @@ func TestCompareTLSProfiles(t *testing.T) {
 				Type: configv1.TLSProfileCustomType,
 				Custom: &configv1.CustomTLSProfile{
 					TLSProfileSpec: configv1.TLSProfileSpec{
-						Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+						Ciphers:       []string{testCipher},
 						MinTLSVersion: configv1.VersionTLS12,
 					},
 				},
@@ -90,7 +93,7 @@ func TestCompareTLSProfiles(t *testing.T) {
 				Type: configv1.TLSProfileCustomType,
 				Custom: &configv1.CustomTLSProfile{
 					TLSProfileSpec: configv1.TLSProfileSpec{
-						Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+						Ciphers:       []string{testCipher},
 						MinTLSVersion: configv1.VersionTLS13,
 					},
 				},
@@ -155,7 +158,7 @@ func TestCompareCustomProfiles(t *testing.T) {
 			name: "one nil",
 			custom1: &configv1.CustomTLSProfile{
 				TLSProfileSpec: configv1.TLSProfileSpec{
-					Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+					Ciphers:       []string{testCipher},
 					MinTLSVersion: configv1.VersionTLS13,
 				},
 			},
@@ -166,13 +169,13 @@ func TestCompareCustomProfiles(t *testing.T) {
 			name: "same profiles",
 			custom1: &configv1.CustomTLSProfile{
 				TLSProfileSpec: configv1.TLSProfileSpec{
-					Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+					Ciphers:       []string{testCipher},
 					MinTLSVersion: configv1.VersionTLS13,
 				},
 			},
 			custom2: &configv1.CustomTLSProfile{
 				TLSProfileSpec: configv1.TLSProfileSpec{
-					Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+					Ciphers:       []string{testCipher},
 					MinTLSVersion: configv1.VersionTLS13,
 				},
 			},
@@ -182,13 +185,13 @@ func TestCompareCustomProfiles(t *testing.T) {
 			name: "different number of ciphers",
 			custom1: &configv1.CustomTLSProfile{
 				TLSProfileSpec: configv1.TLSProfileSpec{
-					Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+					Ciphers:       []string{testCipher},
 					MinTLSVersion: configv1.VersionTLS13,
 				},
 			},
 			custom2: &configv1.CustomTLSProfile{
 				TLSProfileSpec: configv1.TLSProfileSpec{
-					Ciphers:       []string{"TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384"},
+					Ciphers:       []string{testCipher, "TLS_AES_256_GCM_SHA384"},
 					MinTLSVersion: configv1.VersionTLS13,
 				},
 			},

@@ -27,6 +27,14 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+const (
+	// DefaultIngressControllerName is the IngressController reconciled when no
+	// name is given on the command line.
+	DefaultIngressControllerName = "default"
+	// DefaultNamespace is the namespace holding the IngressController.
+	DefaultNamespace = "openshift-ingress-operator"
+)
+
 // Config represents the application configuration
 type Config struct {
 	Kubeconfig            string
@@ -65,8 +73,8 @@ type TLSConfig struct {
 func NewConfig() *Config {
 	return &Config{
 		Kubeconfig:            os.Getenv("KUBECONFIG"),
-		IngressControllerName: "default",
-		Namespace:             "openshift-ingress-operator",
+		IngressControllerName: DefaultIngressControllerName,
+		Namespace:             DefaultNamespace,
 	}
 }
 

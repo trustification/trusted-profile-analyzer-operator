@@ -22,6 +22,9 @@ import (
 	operatorv1 "github.com/openshift/api/operator/v1"
 )
 
+// testCipher is an arbitrary TLS 1.3 cipher suite name used across the tests.
+const testCipher = "TLS_AES_128_GCM_SHA256"
+
 func TestNewConfig(t *testing.T) {
 	// Set environment variable (t.Setenv restores it automatically)
 	t.Setenv("KUBECONFIG", "/tmp/kubeconfig")
@@ -32,11 +35,11 @@ func TestNewConfig(t *testing.T) {
 		t.Errorf("expected kubeconfig to be /tmp/kubeconfig, got %s", cfg.Kubeconfig)
 	}
 
-	if cfg.IngressControllerName != "default" {
+	if cfg.IngressControllerName != DefaultIngressControllerName {
 		t.Errorf("expected default ingress controller name, got %s", cfg.IngressControllerName)
 	}
 
-	if cfg.Namespace != "openshift-ingress-operator" {
+	if cfg.Namespace != DefaultNamespace {
 		t.Errorf("expected openshift-ingress-operator namespace, got %s", cfg.Namespace)
 	}
 }
@@ -50,8 +53,8 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "valid config",
 			config: &Config{
-				IngressControllerName: "default",
-				Namespace:             "openshift-ingress-operator",
+				IngressControllerName: DefaultIngressControllerName,
+				Namespace:             DefaultNamespace,
 			},
 			expectError: false,
 		},
@@ -59,14 +62,14 @@ func TestConfigValidate(t *testing.T) {
 			name: "empty ingress controller name",
 			config: &Config{
 				IngressControllerName: "",
-				Namespace:             "openshift-ingress-operator",
+				Namespace:             DefaultNamespace,
 			},
 			expectError: true,
 		},
 		{
 			name: "empty namespace",
 			config: &Config{
-				IngressControllerName: "default",
+				IngressControllerName: DefaultIngressControllerName,
 				Namespace:             "",
 			},
 			expectError: true,
@@ -101,14 +104,14 @@ func TestBuildTLSProfile(t *testing.T) {
 			name: "custom TLS 1.3 profile",
 			tlsConfig: &TLSConfig{
 				Type:          configv1.TLSProfileCustomType,
-				Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+				Ciphers:       []string{testCipher},
 				MinTLSVersion: configv1.VersionTLS13,
 			},
 			expected: &configv1.TLSSecurityProfile{
 				Type: configv1.TLSProfileCustomType,
 				Custom: &configv1.CustomTLSProfile{
 					TLSProfileSpec: configv1.TLSProfileSpec{
-						Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+						Ciphers:       []string{testCipher},
 						MinTLSVersion: configv1.VersionTLS13,
 					},
 				},
@@ -118,14 +121,14 @@ func TestBuildTLSProfile(t *testing.T) {
 			name: "custom profile without curves",
 			tlsConfig: &TLSConfig{
 				Type:          configv1.TLSProfileCustomType,
-				Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+				Ciphers:       []string{testCipher},
 				MinTLSVersion: configv1.VersionTLS12,
 			},
 			expected: &configv1.TLSSecurityProfile{
 				Type: configv1.TLSProfileCustomType,
 				Custom: &configv1.CustomTLSProfile{
 					TLSProfileSpec: configv1.TLSProfileSpec{
-						Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+						Ciphers:       []string{testCipher},
 						MinTLSVersion: configv1.VersionTLS12,
 					},
 				},
