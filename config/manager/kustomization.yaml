@@ -5,4 +5,20 @@ kind: Kustomization
 images:
 - name: controller
   newName: registry.redhat.io/rhtpa/rhtpa-rhel10-operator
-  newTag: 3.1.1
+  newTag: 3.2.0
+# The TLS configurator ships in the operator image, so RELATED_IMAGE_TLS_CONFIGURATOR
+# must always equal the manager's image. The `images:` transformer above only
+# rewrites container `image:` fields, not env var values, so copy the resolved
+# image across explicitly. Without this, `make bundle` regenerates the CSV with
+# the literal placeholder `controller:latest` in the env var.
+replacements:
+- source:
+    kind: Deployment
+    name: controller-manager
+    fieldPath: spec.template.spec.containers.[name=manager].image
+  targets:
+  - select:
+      kind: Deployment
+      name: controller-manager
+    fieldPaths:
+    - spec.template.spec.containers.[name=manager].env.[name=RELATED_IMAGE_TLS_CONFIGURATOR].value

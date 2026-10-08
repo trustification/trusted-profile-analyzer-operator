@@ -64,6 +64,13 @@ spec:
           - --health-probe-bind-address=:8081
         image: controller:latest
         name: manager
+        env:
+          # The TLS configurator ships in this same image. watches.yaml expands
+          # this into modules.tlsConfigurator.image.fullName so the configurator
+          # Deployment always runs the operator's own digest. Keep this in sync
+          # with the manager image and with the CSV relatedImages entry.
+          - name: RELATED_IMAGE_TLS_CONFIGURATOR
+            value: controller:latest
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
