@@ -14,6 +14,7 @@ RUN go mod download
 # Copy the go source
 COPY main.go main.go
 COPY cmd/ cmd/
+COPY pkg/ pkg/
 #TODO uncomment after adding golang api
 #COPY api/ api/
 #COPY controllers/ controllers/
@@ -25,9 +26,15 @@ COPY cmd/ cmd/
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager main.go
 
+
 # Helper binary shipped in the same image: the chart runs it as an init container
 # to mint RDS IAM auth tokens for the psql-based jobs. See cmd/rds-auth-token.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o rds-auth-token ./cmd/rds-auth-token
+
+# The TLS configurator ships in the same image as a second entrypoint.
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a \
+    -ldflags="-w -s" \
+    -o tls-configurator ./cmd/tls-configurator
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
@@ -61,6 +68,9 @@ COPY --chown=${USER_UID}:0 helm-charts  ${HOME}/helm-charts
 # Copy manager binary
 COPY --from=builder /workspace/manager .
 COPY --from=builder /workspace/rds-auth-token /usr/local/bin/rds-auth-token
+
+# TLS configurator binary, selected via an explicit `command:` in its Deployment.
+COPY --from=builder /workspace/tls-configurator /usr/local/bin/tls-configurator
 
 USER ${USER_UID}
 

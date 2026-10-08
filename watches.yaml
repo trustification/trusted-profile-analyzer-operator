@@ -5,6 +5,7 @@
   chart: helm-charts/redhat-trusted-profile-analyzer
   WatchDependentResources: false
   MaxConcurrentReconciles: 4
+
   overrideValues:
     # The chart runs this image as an init container to mint RDS IAM auth tokens
     # for the psql-based jobs. It is the operator image itself, which is the only
@@ -18,6 +19,12 @@
     # string and the chart falls back to `ccoRds.tokenImage`.
     ccoRds.defaultTokenImage: $RELATED_IMAGE_RDS_AUTH_TOKEN
   # ReconcilePeriod
+  # The TLS configurator ships in the operator image, so its Deployment must run
+  # the same image as the operator that rendered the chart. The value is
+  # expanded from the environment at load time; RELATED_IMAGE_TLS_CONFIGURATOR is
+  # set to the operator's own digest by the CSV, which also lists it under
+  # relatedImages so disconnected installs mirror it.
+    modules.tlsConfigurator.image.fullName: $RELATED_IMAGE_TLS_CONFIGURATOR
   # ReconcilePeriod
   # Selector
 # +kubebuilder:scaffold:watch
