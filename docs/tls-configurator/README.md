@@ -7,10 +7,22 @@ Documentation for the TLS configurator that ships inside the operator image
 
 ## Start here
 
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** — how to configure the module per
+  platform: OpenShift 4.22+ (required, with `tlsAdherence` and post-quantum),
+  OpenShift < 4.22 (optional), and plain Kubernetes (must stay off, and where
+  TLS is configured instead). Includes verification commands and
+  troubleshooting. A runnable CRC walkthrough is in
+  [`devel/README.md`](../../devel/README.md).
+- **[TLS_ADHERENCE.md](TLS_ADHERENCE.md)** — how the component implements Red
+  Hat's *TLS Profile Compliance — Implementation Reference*: which upstream
+  packages it delegates to, how `tlsAdherence` is read and used, what goes into
+  the rollout hash, and how the post-quantum key-exchange group reaches both
+  Go services and the router.
 - **[FINAL_PROJECT_STATUS.md](FINAL_PROJECT_STATUS.md)** — current state of the
   component: package layout, CLI actions and flags, the runtime reconcile flow,
   PQC, packaging, RBAC, test inventory and open items. Verified against the tree
-  on 2026-09-28.
+  on 2026-09-28; the TLS-adherence work postdates it, so prefer
+  `TLS_ADHERENCE.md` where the two disagree.
 
 ## Historical documents
 

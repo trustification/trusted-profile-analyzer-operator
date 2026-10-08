@@ -50,10 +50,14 @@ type TLSConfig struct {
 	Ciphers       []string
 	MinTLSVersion configv1.TLSProtocolVersion
 
-	// EnablePQC forces TLS 1.3 and advertises the post-quantum key-exchange
-	// group. Note: the pinned OpenShift TLSSecurityProfile API cannot express
-	// key-exchange groups, so this only affects converted crypto/tls.Config
-	// values and the compliance hash, not the IngressController profile fields.
+	// Groups are the key-exchange groups to advertise, in preference order.
+	// TLSProfileSpec.Groups is gated on the cluster's TLSGroupPreferences
+	// feature gate; writing it on a cluster without the gate is rejected by
+	// the API server, so callers must check before setting this.
+	Groups []configv1.TLSGroup
+
+	// EnablePQC forces TLS 1.3 and advertises the hybrid post-quantum
+	// key-exchange group X25519MLKEM768.
 	EnablePQC bool
 }
 
@@ -117,6 +121,7 @@ func BuildTLSProfile(tlsConfig *TLSConfig) *configv1.TLSSecurityProfile {
 		customProfile := &configv1.CustomTLSProfile{
 			TLSProfileSpec: configv1.TLSProfileSpec{
 				Ciphers:       tlsConfig.Ciphers,
+				Groups:        tlsConfig.Groups,
 				MinTLSVersion: tlsConfig.MinTLSVersion,
 			},
 		}

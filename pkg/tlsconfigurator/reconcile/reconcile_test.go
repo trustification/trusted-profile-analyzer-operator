@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	configv1 "github.com/openshift/api/config/v1"
+	"github.com/trustification/trusted-profile-analyzer-operator/pkg/tlsconfigurator/client"
+	"github.com/trustification/trusted-profile-analyzer-operator/pkg/tlsconfigurator/crypto"
 )
 
 // sha256Hex matches the lowercase hex encoding of a 32-byte digest.
@@ -45,9 +47,28 @@ func customProfile(minVersion configv1.TLSProtocolVersion, ciphers ...string) *c
 	}
 }
 
+// settingsFor resolves a profile the way the reconciler does before hashing.
+func settingsFor(t *testing.T, profile *configv1.TLSSecurityProfile,
+	adherence configv1.TLSAdherencePolicy,
+) client.ClusterTLSSettings {
+	t.Helper()
+	spec, err := crypto.ResolveProfileSpec(profile)
+	if err != nil {
+		t.Fatalf("ResolveProfileSpec() unexpected error = %v", err)
+	}
+	return client.ClusterTLSSettings{Profile: profile, Spec: spec, Adherence: adherence}
+}
+
 func mustHash(t *testing.T, profile *configv1.TLSSecurityProfile, enablePQC bool) string {
 	t.Helper()
-	hash, err := TLSConfigHash(profile, enablePQC)
+	return mustHashWithAdherence(t, profile, configv1.TLSAdherencePolicyNoOpinion, enablePQC)
+}
+
+func mustHashWithAdherence(t *testing.T, profile *configv1.TLSSecurityProfile,
+	adherence configv1.TLSAdherencePolicy, enablePQC bool,
+) string {
+	t.Helper()
+	hash, err := TLSConfigHash(settingsFor(t, profile, adherence), enablePQC)
 	if err != nil {
 		t.Fatalf("TLSConfigHash() unexpected error = %v", err)
 	}
@@ -148,11 +169,6 @@ func TestTLSConfigHashDistinguishesProfiles(t *testing.T) {
 		b    *configv1.TLSSecurityProfile
 	}{
 		{
-			name: "nil vs empty profile",
-			a:    nil,
-			b:    &configv1.TLSSecurityProfile{},
-		},
-		{
 			name: "modern vs intermediate",
 			a:    modernProfile(),
 			b:    intermediateProfile(),
@@ -201,6 +217,68 @@ func TestTLSConfigHashDistinguishesProfiles(t *testing.T) {
 				t.Errorf("TLSConfigHash() = %v for both profiles, want different hashes", hashA)
 			}
 		})
+	}
+}
+
+// The hash covers the *resolved* spec, so profiles that differ only in how
+// they are spelled must not roll the workloads.
+func TestTLSConfigHashIgnoresEquivalentSpellings(t *testing.T) {
+	intermediate := *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
+
+	tests := []struct {
+		name string
+		a    *configv1.TLSSecurityProfile
+		b    *configv1.TLSSecurityProfile
+	}{
+		{
+			name: "nil vs empty profile",
+			a:    nil,
+			b:    &configv1.TLSSecurityProfile{},
+		},
+		{
+			// Both resolve to the cluster default.
+			name: "unset vs explicit intermediate",
+			a:    nil,
+			b:    intermediateProfile(),
+		},
+		{
+			// A Custom profile spelling out exactly what Intermediate means.
+			name: "intermediate vs equivalent custom",
+			a:    intermediateProfile(),
+			b: &configv1.TLSSecurityProfile{
+				Type:   configv1.TLSProfileCustomType,
+				Custom: &configv1.CustomTLSProfile{TLSProfileSpec: intermediate},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if hashA, hashB := mustHash(t, tt.a, false), mustHash(t, tt.b, false); hashA != hashB {
+				t.Errorf("TLSConfigHash() = %v and %v for equivalent profiles, want the same hash",
+					hashA, hashB)
+			}
+		})
+	}
+}
+
+// Flipping tlsAdherence is a cluster-wide policy change the workloads should
+// pick up, so it has to move the hash.
+func TestTLSConfigHashIncludesAdherencePolicy(t *testing.T) {
+	policies := []configv1.TLSAdherencePolicy{
+		configv1.TLSAdherencePolicyNoOpinion,
+		configv1.TLSAdherencePolicyLegacyAdheringComponentsOnly,
+		configv1.TLSAdherencePolicyStrictAllComponents,
+	}
+
+	seen := make(map[string]configv1.TLSAdherencePolicy, len(policies))
+	for _, policy := range policies {
+		hash := mustHashWithAdherence(t, intermediateProfile(), policy, false)
+		if other, dup := seen[hash]; dup {
+			t.Errorf("tlsAdherence %q and %q hash identically to %v, want different hashes",
+				policy, other, hash)
+		}
+		seen[hash] = policy
 	}
 }
 

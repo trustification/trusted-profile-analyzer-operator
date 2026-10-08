@@ -162,8 +162,15 @@ The TrustedProfileAnalyzer CR spec uses `x-kubernetes-preserve-unknown-fields: t
 
 ### How the TLS Configurator is wired in
 
-Detailed documentation lives in `docs/tls-configurator/`; start with
-`docs/tls-configurator/FINAL_PROJECT_STATUS.md`.
+Detailed documentation lives in `docs/tls-configurator/`:
+
+- `DEPLOYMENT.md` — per-platform configuration (OpenShift 4.22+, OpenShift
+  < 4.22, plain Kubernetes), verification and troubleshooting. `devel/README.md`
+  has the runnable CRC version.
+- `TLS_ADHERENCE.md` — how the component implements Red Hat's *TLS Profile
+  Compliance — Implementation Reference*.
+- `FINAL_PROJECT_STATUS.md` — component inventory (predates the adherence
+  work).
 
 The chart ships an optional `tlsConfigurator` module (disabled by default).
 
@@ -224,13 +231,45 @@ The Deployment invokes:
 --resync-period={{ .Values.modules.tlsConfigurator.resyncPeriod }}
 ```
 
+### Upstream packages (do not reimplement these)
+
+Profile resolution and `tls.Config` construction are delegated to the packages
+Red Hat documents for this, not hand-rolled:
+
+- `github.com/openshift/controller-runtime-common/pkg/tls` —
+  `GetTLSProfileSpec`, `NewTLSConfigFromProfile`, `SetNextProtos`,
+  `APIServerName`.
+- `github.com/openshift/library-go/pkg/crypto` — TLS version and cipher name
+  conversion, and `ShouldHonorClusterTLSProfile`.
+
+`pkg/tlsconfigurator/crypto` is a thin adapter over those two. It must not
+regrow local cipher-name tables or per-profile cipher lists: the built-in
+profiles live in `configv1.TLSProfiles` and already carry `Groups`, including
+`X25519MLKEM768`. `BuildTLSConfig` returns an `unsupported []string` rather
+than erroring on ciphers Go cannot offer — a cluster profile may legitimately
+name OpenSSL-only suites, and failing there would stop reconciliation.
+
+### `tlsAdherence`
+
+`APIServer.spec.tlsAdherence` (feature gate `TLSAdherence`) says whether
+components *must* honor the cluster profile. The configurator honors it in
+every mode — it has no competing TLS settings of its own — but the policy is
+part of the rollout hash, so tightening it to `StrictAllComponents` rolls the
+workloads even when the profile is unchanged. It is logged once per distinct
+value and reported by `--action=get-adherence`, `get-cluster`,
+`show-tlsconfig` and `validate`.
+
 ### Runtime update flow (TLS change → workload rollout)
 
-1. The reconciler watches the cluster `APIServer` CR (`cluster`)
-   `.spec.tlsSecurityProfile` — the authoritative cluster-wide TLS config.
-2. On any change it computes a hash of the effective (optionally post-quantum)
-   TLS config and compares it to each target Deployment's
-   `rhtpa.io/tls-config-hash` pod-template annotation.
+1. The reconciler watches the cluster `APIServer` CR (`cluster`) — both
+   `.spec.tlsSecurityProfile` and `.spec.tlsAdherence`, the authoritative
+   cluster-wide TLS config.
+2. On any change it computes a hash of the **resolved** `TLSProfileSpec` plus
+   the adherence policy and the PQC flag, and compares it to each target
+   Deployment's `rhtpa.io/tls-config-hash` pod-template annotation. Hashing the
+   resolved spec means equivalent spellings (unset vs. explicit
+   `Intermediate`, a `Custom` profile that restates a built-in) do not churn
+   the workloads.
 3. Deployments whose hash differs are patched, changing the pod template and
    triggering a **rolling restart** so pods re-read the new TLS settings. This
    reuses the same idea as the chart's existing `configHash/auth` annotation on
@@ -252,6 +291,16 @@ just documenting it:
 | OpenShift >= 4.22 | **required `true`** | install fails unless `allowDisabled: true` |
 | OpenShift < 4.22 | optional | nothing — `reconcile` has no version gate, so it runs fine, it is just not mandatory |
 | plain Kubernetes | **required `false`** (the default) | install fails if enabled |
+
+The deeper reason for the plain-Kubernetes row is not just the missing
+`config.openshift.io/v1` API. `trustification.openshift.useServiceCa` resolves
+to `false` off OpenShift, so the chart never sets `HTTP_SERVER_TLS_ENABLED` and
+the server listens on **plain HTTP** — TLS terminates at the ingress
+controller. There is no `tls.Config` in the RHTPA pods for a cluster profile to
+apply to, which is the reference's "plaintext behind a TLS-terminating router:
+out of scope". User-facing per-platform configuration (including where TLS
+*is* configured on plain Kubernetes) is in
+`docs/tls-configurator/DEPLOYMENT.md` and `devel/README.md`.
 
 Enforcement lives in
 `helm-charts/redhat-trusted-profile-analyzer/templates/init/tls-configure/000-validate.yaml`.
@@ -287,16 +336,21 @@ forced TLS 1.3, a `validate` action) and the runtime `reconcile` mode are built
 into the configurator. Because it now ships in the operator image, there is no
 separate image to rebuild or republish — an operator build carries it.
 
-**Router-level PQC is now unblocked but not yet implemented.** The old
-limitation was that the pinned `openshift/api` exposed only `minTLSVersion` and
-`ciphers` on `TLSSecurityProfile`, so `update` could not push a key-exchange
-group onto the IngressController. The version this repo now depends on
-(`v0.0.0-20260924195948`) adds `TLSProfileSpec.Groups []TLSGroup`, including
-`TLSGroupX25519MLKEM768`, behind the `TLSGroupPreferences` feature gate.
-Nothing in `pkg/tlsconfigurator` writes that field yet: PQC still applies only
-to Go services' `crypto/tls.Config` and to the rollout hash. Wiring `Groups`
-into the `update` path (and gating on `TLSGroupPreferences` being enabled on the
-cluster) is the remaining work.
+**Groups come from the cluster profile.** `TLSProfileSpec.Groups []TLSGroup`
+exists in the `openshift/api` this repo depends on, and the built-in `Old`,
+`Intermediate` and `Modern` profiles all list `TLSGroupX25519MLKEM768` first.
+Because the config is now built by `NewTLSConfigFromProfile`, those groups land
+in `CurvePreferences` automatically — a cluster on `Modern` is post-quantum
+without `--enable-pqc`.
+
+**Router-level PQC is implemented, gated on `TLSGroupPreferences`.**
+`--action=update --enable-pqc` with a `Custom` profile writes
+`Groups: [X25519MLKEM768, X25519]` onto the IngressController profile. The
+field is behind the `TLSGroupPreferences` feature gate and the API server
+rejects it when the gate is off, so `controller.SupportsTLSGroups` reads the
+`FeatureGate` CR first and the field is skipped (with a log line) on clusters
+without it. `--enable-pqc` additionally forces TLS 1.3 locally, since hybrid
+key exchange is only defined for TLS 1.3.
 
 To enable from the operator side:
 
@@ -309,16 +363,18 @@ To enable from the operator side:
 ### RBAC
 
 The reconciler needs: `watch` on `config.openshift.io/apiservers`, `get,list` on
-`clusterversions`, `get,list,watch,update,patch` on
+`clusterversions` and on `featuregates`, `get,list,watch,update,patch` on
 `operator.openshift.io/ingresscontrollers` (ClusterRole `015`), and
 `get,list,watch,update,patch` on `apps/deployments` in the release namespace
-(Role `016`). These are provided by the chart.
+(Role `016`). These are provided by the chart. Reading `.spec.tlsAdherence`
+needs nothing extra — it rides on the same `APIServer` get as the profile.
 
 Because this is a Helm operator, it can only *grant* permissions it holds
 itself (RBAC escalation prevention). `config/rbac/role_cluster_rbac_manager.yaml`
 (`rhtpa-rbac-manager`) was therefore widened to also hold `apiservers` (watch),
-`ingresscontrollers`, `apps/deployments`, and namespaced `roles`/`rolebindings`
-so the operator can create the reconciler's RBAC and Deployment.
+`featuregates`, `ingresscontrollers`, `apps/deployments`, and namespaced
+`roles`/`rolebindings` so the operator can create the reconciler's RBAC and
+Deployment.
 
 **Follow-up / known issue:** `config/rbac/role_cluster_tlsconfigurator.yaml` +
 `role_binding_tlsconfigurator.yaml` + the `tls-configurator` entry in

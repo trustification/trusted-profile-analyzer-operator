@@ -22,11 +22,17 @@ rules:
 - apiGroups: ["config.openshift.io"]
   resources: ["ingresses", "clusterversions"]
   verbs: ["get", "list", "watch", "patch", "update"]
-# The reconciler watches the cluster-wide TLS profile (APIServer CR); the
-# operator must hold this permission to be able to grant it (RBAC escalation).
+# The reconciler watches the cluster-wide TLS profile and adherence policy
+# (APIServer CR .spec.tlsSecurityProfile / .spec.tlsAdherence); the operator
+# must hold this permission to be able to grant it (RBAC escalation).
 - apiGroups: ["config.openshift.io"]
   resources: ["apiservers"]
   verbs: ["get", "list", "watch"]
+# The configurator reads the FeatureGate CR to find out whether the cluster
+# accepts TLSProfileSpec.Groups; same escalation requirement applies.
+- apiGroups: ["config.openshift.io"]
+  resources: ["featuregates"]
+  verbs: ["get", "list"]
 # The reconciler reads/updates the IngressController TLS profile; same escalation
 # requirement applies.
 - apiGroups: ["operator.openshift.io"]

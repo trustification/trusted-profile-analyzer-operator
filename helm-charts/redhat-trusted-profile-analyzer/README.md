@@ -41,6 +41,13 @@ modules:
     resyncPeriod: 5m
 ```
 
+`pqc.enabled` is a floor, not the only source of post-quantum settings. The
+cluster's own TLS profile carries key-exchange groups
+(`TLSProfileSpec.groups`), and the built-in `Old`, `Intermediate` and `Modern`
+profiles all list `X25519MLKEM768` first — the configurator honors those
+whether or not `pqc.enabled` is set. Turning it on additionally forces TLS 1.3,
+which is what makes the hybrid group mandatory rather than merely preferred.
+
 Installed through the operator, the configurator runs the operator's own image —
 `watches.yaml` expands `$RELATED_IMAGE_TLS_CONFIGURATOR` into
 `modules.tlsConfigurator.image.fullName`, so there is no separate image to
@@ -77,4 +84,23 @@ nothing during `helm template` and `--dry-run`. In those modes the version is
 unknown and the check is skipped, so rendering never fails on a version it
 cannot read.
 
-More detail: [`docs/tls-configurator/`](../../docs/tls-configurator/).
+### Why the platform matters
+
+It is not only that `config.openshift.io/v1` is absent off OpenShift. On
+OpenShift, `openshift.useServiceCa` (default `true`) makes the chart request a
+service-CA certificate and set `HTTP_SERVER_TLS_ENABLED=true`, so the server is
+a real TLS server and is in scope for the cluster-wide profile. On plain
+Kubernetes that resolves to `false`, the server listens on plain HTTP, and TLS
+terminates at your ingress controller — there is no `tls.Config` in the RHTPA
+pods for a profile to apply to. Protocol versions and ciphers are configured on
+the ingress controller there (for ingress-nginx, `ssl-protocols` /
+`ssl-ciphers` in its ConfigMap), and changing those rolls the controller rather
+than the RHTPA pods.
+
+More detail:
+
+- [`docs/tls-configurator/DEPLOYMENT.md`](../../docs/tls-configurator/DEPLOYMENT.md)
+  — per-platform configuration, verification and troubleshooting.
+- [`docs/tls-configurator/TLS_ADHERENCE.md`](../../docs/tls-configurator/TLS_ADHERENCE.md)
+  — `tlsAdherence`, the rollout hash, and the upstream packages used.
+- [`devel/README.md`](../../devel/README.md) — runnable CRC walkthrough.

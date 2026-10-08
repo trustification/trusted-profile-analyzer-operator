@@ -30,6 +30,7 @@ type TLSController struct {
 	client         *client.Client
 	config         *config.Config
 	versionChecker *client.VersionChecker
+	featureGates   *client.FeatureGateChecker
 }
 
 // NewTLSController creates a new TLSController
@@ -53,11 +54,23 @@ func NewTLSController(cfg *config.Config) (*TLSController, error) {
 		return nil, fmt.Errorf("failed to create version checker: %w", err)
 	}
 
+	featureGates, err := client.NewFeatureGateChecker(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create feature gate checker: %w", err)
+	}
+
 	return &TLSController{
 		client:         c,
 		config:         cfg,
 		versionChecker: versionChecker,
+		featureGates:   featureGates,
 	}, nil
+}
+
+// SupportsTLSGroups reports whether this cluster accepts
+// TLSProfileSpec.Groups, which is gated on TLSGroupPreferences.
+func (tc *TLSController) SupportsTLSGroups(ctx context.Context) (bool, error) {
+	return tc.featureGates.IsEnabled(ctx, client.FeatureGateTLSGroupPreferences)
 }
 
 // GetCurrentTLSProfile retrieves the current TLS profile from the IngressController

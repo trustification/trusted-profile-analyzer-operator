@@ -1,5 +1,14 @@
 # Using TLS Configurator as a Go Library
 
+> **API update (TLS adherence work).** `crypto.ConvertTLSProfile` /
+> `ConvertTLSProfileWithPQC` were replaced by `crypto.BuildTLSConfig(profile,
+> crypto.Options{})` and `crypto.BuildTLSConfigFromSpec(spec, opts)`, and the
+> hand-written cipher tables were dropped in favour of
+> `openshift/library-go/pkg/crypto` and
+> `openshift/controller-runtime-common/pkg/tls`. See
+> [TLS_ADHERENCE.md](TLS_ADHERENCE.md) for the mapping to the upstream
+> "TLS Profile Compliance — Implementation Reference".
+
 **Version**: 1.0.0
 **Go Module**: `github.com/openshift/tls-configurator`
 **Minimum Go Version**: 1.25
@@ -160,7 +169,7 @@ func main() {
     }
 
     // Convert to crypto/tls.Config
-    tlsConfig, err := crypto.ConvertTLSProfile(profile)
+    tlsConfig, unsupported, err := crypto.BuildTLSConfig(profile, crypto.Options{})
     if err != nil {
         log.Fatal(err)
     }
@@ -233,7 +242,7 @@ err = checker.ValidateMinimumVersion(ctx)
 import "github.com/openshift/tls-configurator/pkg/crypto"
 
 // Convert OpenShift profile to crypto/tls.Config
-tlsConfig, err := crypto.ConvertTLSProfile(osProfile)
+tlsConfig, unsupported, err := crypto.BuildTLSConfig(osProfile, crypto.Options{})
 
 // Convert TLS version string
 version, err := crypto.TLSVersion("VersionTLS13")
@@ -245,9 +254,13 @@ cipherIDs, err := crypto.CipherSuites(ianaNames)
 // Apply secure baseline
 crypto.SecureTLSConfig(tlsConfig)
 
-// Get predefined cipher suites
-modernCiphers := crypto.GetModernCipherSuites()
-intermediateCiphers := crypto.GetIntermediateCipherSuites()
+// Predefined profiles come from the OpenShift API itself, not from a
+// local copy; resolve them through the same helper the reconciler uses.
+modernSpec, err := crypto.ResolveProfileSpec(
+    &configv1.TLSSecurityProfile{Type: configv1.TLSProfileModernType})
+
+// Does the cluster require components to honor the profile?
+honor := crypto.ShouldHonorClusterTLSProfile(adherence)
 ```
 
 ### pkg/config
@@ -330,7 +343,7 @@ func (o *MyOperator) SetupWebhookServer(mgr manager.Manager) error {
     }
 
     // Convert to crypto/tls.Config
-    tlsConfig, err := crypto.ConvertTLSProfile(profile)
+    tlsConfig, unsupported, err := crypto.BuildTLSConfig(profile, crypto.Options{})
     if err != nil {
         return err
     }
@@ -383,7 +396,7 @@ func StartMetricsServer(kubeconfig string) error {
     }
 
     // Convert to TLS config
-    tlsConfig, err := crypto.ConvertTLSProfile(profile)
+    tlsConfig, unsupported, err := crypto.BuildTLSConfig(profile, crypto.Options{})
     if err != nil {
         return err
     }
@@ -544,11 +557,16 @@ Creates a new version checker for OpenShift version detection.
 
 **Returns:** VersionChecker instance or error
 
-### crypto.ConvertTLSProfile
+### crypto.BuildTLSConfig
 
 ```go
-func ConvertTLSProfile(profile *configv1.TLSSecurityProfile) (*tls.Config, error)
+func BuildTLSConfig(profile *configv1.TLSSecurityProfile, opts Options) (
+    tlsConfig *tls.Config, unsupported []string, err error)
 ```
+
+`unsupported` lists cipher and group names in the profile that Go's crypto/tls
+cannot honor (for example the OpenSSL-only `DHE-RSA-*` suites). That is
+informational, not an error — log it and carry on.
 
 Converts an OpenShift TLS security profile to crypto/tls.Config.
 
@@ -678,7 +696,7 @@ func getClusterTLSConfig(config *rest.Config) (*tls.Config, error) {
         return nil, err
     }
 
-    tlsConfig, err := crypto.ConvertTLSProfile(profile)
+    tlsConfig, unsupported, err := crypto.BuildTLSConfig(profile, crypto.Options{})
     if err != nil {
         return nil, err
     }
@@ -831,12 +849,12 @@ if err != nil {
 #### Conversion Error
 
 ```go
-tlsConfig, err := crypto.ConvertTLSProfile(profile)
+tlsConfig, unsupported, err := crypto.BuildTLSConfig(profile, crypto.Options{})
 if err != nil {
     // Handle conversion error
     log.Error(err, "Failed to convert TLS profile")
     // Fall back to default
-    tlsConfig = crypto.GetDefaultTLSConfig()
+    tlsConfig = crypto.DefaultTLSConfig()
 }
 ```
 
@@ -851,7 +869,7 @@ func MyFunction() error {
         return fmt.Errorf("failed to get cluster profile: %w", err)
     }
 
-    tlsConfig, err := crypto.ConvertTLSProfile(profile)
+    tlsConfig, unsupported, err := crypto.BuildTLSConfig(profile, crypto.Options{})
     if err != nil {
         return fmt.Errorf("failed to convert profile: %w", err)
     }
@@ -909,7 +927,7 @@ func (s *MyService) GetTLSConfig() (*tls.Config, error) {
             return s.tlsConfig, nil
         }
 
-        s.tlsConfig, _ = crypto.ConvertTLSProfile(profile)
+        s.tlsConfig, _, _ = crypto.BuildTLSConfig(profile, crypto.Options{})
         s.lastRefresh = time.Now()
     }
 
@@ -920,8 +938,8 @@ func (s *MyService) GetTLSConfig() (*tls.Config, error) {
 ### 4. Handle nil Profiles Gracefully
 
 ```go
-// ConvertTLSProfile handles nil profiles
-tlsConfig, err := crypto.ConvertTLSProfile(nil)
+// BuildTLSConfig handles nil profiles
+tlsConfig, _, err := crypto.BuildTLSConfig(nil, crypto.Options{})
 // Returns default Intermediate profile
 
 // When profile might be nil
@@ -996,7 +1014,7 @@ func (a *MyApp) Initialize() error {
         return err
     }
 
-    a.tlsConfig, err = crypto.ConvertTLSProfile(profile)
+    a.tlsConfig, _, err = crypto.BuildTLSConfig(profile, crypto.Options{})
     return err
 }
 ```
@@ -1029,12 +1047,12 @@ func (a *MyApp) GetTLSConfig() *tls.Config {
         if a.tlsConfig != nil {
             return a.tlsConfig
         }
-        return crypto.GetDefaultTLSConfig()
+        return crypto.DefaultTLSConfig()
     }
 
-    config, err := crypto.ConvertTLSProfile(profile)
+    config, _, err := crypto.BuildTLSConfig(profile, crypto.Options{})
     if err != nil {
-        return crypto.GetDefaultTLSConfig()
+        return crypto.DefaultTLSConfig()
     }
 
     return config
@@ -1064,7 +1082,7 @@ func TestTLSConfiguration(t *testing.T) {
     }
 
     // Convert
-    tlsConfig, err := crypto.ConvertTLSProfile(profile)
+    tlsConfig, unsupported, err := crypto.BuildTLSConfig(profile, crypto.Options{})
     if err != nil {
         t.Fatalf("conversion failed: %v", err)
     }

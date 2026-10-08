@@ -144,8 +144,10 @@ func TestConvertTLSProfile(t *testing.T) {
 				if config.MinVersion != tls.VersionTLS13 {
 					t.Errorf("Expected TLS 1.3, got %d", config.MinVersion)
 				}
-				if len(config.CipherSuites) == 0 {
-					t.Error("Expected cipher suites to be set")
+				// Go ignores Config.CipherSuites for TLS 1.3
+				// (golang/go#29349), so leaving it unset is correct.
+				if config.CipherSuites != nil {
+					t.Errorf("Expected CipherSuites to be left unset for TLS 1.3, got %v", config.CipherSuites)
 				}
 			},
 		},
@@ -161,13 +163,85 @@ func TestConvertTLSProfile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ConvertTLSProfile(tt.profile)
+			got, _, err := BuildTLSConfig(tt.profile, Options{})
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ConvertTLSProfile() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("BuildTLSConfig() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !tt.wantErr && tt.checkFn != nil {
 				tt.checkFn(t, got)
+			}
+		})
+	}
+}
+
+// A cluster profile may name ciphers that only OpenSSL-based servers can
+// offer. Those must be reported, not rejected: the old converter returned an
+// error here and the configurator would have refused to reconcile.
+func TestBuildTLSConfigReportsUnsupportedCiphersInsteadOfFailing(t *testing.T) {
+	profile := &configv1.TLSSecurityProfile{
+		Type: configv1.TLSProfileCustomType,
+		Custom: &configv1.CustomTLSProfile{
+			TLSProfileSpec: configv1.TLSProfileSpec{
+				MinTLSVersion: configv1.VersionTLS12,
+				Ciphers: []string{
+					"ECDHE-RSA-AES128-GCM-SHA256", // supported by Go
+					"DHE-RSA-AES128-GCM-SHA256",   // OpenSSL only
+				},
+			},
+		},
+	}
+
+	cfg, unsupported, err := BuildTLSConfig(profile, Options{})
+	if err != nil {
+		t.Fatalf("BuildTLSConfig() error = %v, want nil", err)
+	}
+	if len(cfg.CipherSuites) != 1 || cfg.CipherSuites[0] != tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 {
+		t.Errorf("CipherSuites = %v, want only TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", cfg.CipherSuites)
+	}
+	if len(unsupported) != 1 || unsupported[0] != "DHE-RSA-AES128-GCM-SHA256" {
+		t.Errorf("unsupported = %v, want [DHE-RSA-AES128-GCM-SHA256]", unsupported)
+	}
+}
+
+// The cluster profile says nothing about ALPN, so every server has to set it.
+func TestBuildTLSConfigSetsALPN(t *testing.T) {
+	profile := &configv1.TLSSecurityProfile{Type: configv1.TLSProfileIntermediateType}
+
+	cfg, _, err := BuildTLSConfig(profile, Options{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.NextProtos) == 0 {
+		t.Error("NextProtos is empty; the cluster profile does not set ALPN, so we must")
+	}
+
+	cfg, _, err = BuildTLSConfig(profile, Options{NextProtos: []string{"http/1.1"}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.NextProtos) != 1 || cfg.NextProtos[0] != "http/1.1" {
+		t.Errorf("NextProtos = %v, want [http/1.1]", cfg.NextProtos)
+	}
+}
+
+func TestShouldHonorClusterTLSProfile(t *testing.T) {
+	tests := []struct {
+		adherence configv1.TLSAdherencePolicy
+		want      bool
+	}{
+		{configv1.TLSAdherencePolicyNoOpinion, false},
+		{configv1.TLSAdherencePolicyLegacyAdheringComponentsOnly, false},
+		{configv1.TLSAdherencePolicyStrictAllComponents, true},
+		// Unknown values must honor the profile, for forward compatibility
+		// with a stricter policy added later.
+		{configv1.TLSAdherencePolicy("SomethingStricterAddedLater"), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.adherence), func(t *testing.T) {
+			if got := ShouldHonorClusterTLSProfile(tt.adherence); got != tt.want {
+				t.Errorf("ShouldHonorClusterTLSProfile(%q) = %v, want %v", tt.adherence, got, tt.want)
 			}
 		})
 	}
@@ -188,97 +262,9 @@ func TestSecureTLSConfig(t *testing.T) {
 	}
 }
 
-func TestGetModernCipherSuites(t *testing.T) {
-	suites := GetModernCipherSuites()
-	if len(suites) == 0 {
-		t.Error("Modern cipher suites should not be empty")
-	}
-
-	// Check for TLS 1.3 ciphers
-	found := false
-	for _, suite := range suites {
-		if suite == tls.TLS_AES_128_GCM_SHA256 {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("Modern profile should include TLS_AES_128_GCM_SHA256")
-	}
-}
-
-func TestGetIntermediateCipherSuites(t *testing.T) {
-	suites := GetIntermediateCipherSuites()
-	if len(suites) == 0 {
-		t.Error("Intermediate cipher suites should not be empty")
-	}
-
-	// Should include both TLS 1.3 and TLS 1.2 ciphers
-	has13 := false
-	has12 := false
-
-	for _, suite := range suites {
-		if suite == tls.TLS_AES_128_GCM_SHA256 {
-			has13 = true
-		}
-		if suite == tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 {
-			has12 = true
-		}
-	}
-
-	if !has13 {
-		t.Error("Intermediate profile should include TLS 1.3 ciphers")
-	}
-	if !has12 {
-		t.Error("Intermediate profile should include TLS 1.2 ciphers")
-	}
-}
-
 func TestDefaultTLSVersion(t *testing.T) {
 	version := DefaultTLSVersion()
 	if version != tls.VersionTLS12 {
 		t.Errorf("DefaultTLSVersion() = %d, want TLS 1.2 (%d)", version, tls.VersionTLS12)
-	}
-}
-
-func TestCipherSuitesFallback(t *testing.T) {
-	tests := []struct {
-		name      string
-		ianaNames []string
-		wantErr   bool
-	}{
-		{
-			name:      "valid TLS 1.3 cipher",
-			ianaNames: []string{"TLS_AES_128_GCM_SHA256"},
-			wantErr:   false,
-		},
-		{
-			name:      "valid TLS 1.2 cipher",
-			ianaNames: []string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"},
-			wantErr:   false,
-		},
-		{
-			name:      "multiple valid ciphers",
-			ianaNames: []string{"TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384"},
-			wantErr:   false,
-		},
-		{
-			name:      "invalid cipher",
-			ianaNames: []string{"INVALID_CIPHER"},
-			wantErr:   true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := convertCipherSuitesFallback(tt.ianaNames)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("convertCipherSuitesFallback() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !tt.wantErr && len(got) != len(tt.ianaNames) {
-				t.Errorf("convertCipherSuitesFallback() returned %d suites, want %d", len(got), len(tt.ianaNames))
-			}
-		})
 	}
 }

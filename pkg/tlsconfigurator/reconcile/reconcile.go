@@ -16,11 +16,17 @@ limitations under the License.
 // Package reconcile provides a long-running controller that keeps operator
 // workloads in sync with the cluster-wide TLS security profile at runtime.
 //
-// The cluster APIServer CR ("cluster") .spec.tlsSecurityProfile is treated as
-// the source of truth. Whenever it changes, the reconciler recomputes a hash of
-// the effective (optionally post-quantum) TLS configuration and stamps it onto
-// the target Deployments' pod template, which triggers a rolling restart so the
-// pods pick up the new TLS settings.
+// The cluster APIServer CR ("cluster") is treated as the source of truth for
+// both .spec.tlsSecurityProfile and .spec.tlsAdherence. Whenever either
+// changes, the reconciler recomputes a hash of the effective (optionally
+// post-quantum) TLS configuration and stamps it onto the target Deployments'
+// pod template, which triggers a rolling restart so the pods pick up the new
+// TLS settings.
+//
+// This is the "downstream operator for upstream operand" shape from the TLS
+// Profile Compliance implementation reference: the operator reads the cluster
+// TLS settings through the documented APIs and then reconfigures its operand
+// through the operand's own mechanism -- here, a pod-template rollout.
 package reconcile
 
 import (
@@ -34,6 +40,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/trustification/trusted-profile-analyzer-operator/pkg/tlsconfigurator/client"
 	"github.com/trustification/trusted-profile-analyzer-operator/pkg/tlsconfigurator/config"
+	"github.com/trustification/trusted-profile-analyzer-operator/pkg/tlsconfigurator/crypto"
 	"k8s.io/apimachinery/pkg/watch"
 )
 
@@ -42,6 +49,10 @@ type Reconciler struct {
 	apiServerClient *client.APIServerClient
 	workloadsClient *client.WorkloadsClient
 	cfg             *config.Config
+
+	// lastAdherence suppresses repeat logging of an unchanged tlsAdherence
+	// policy across resync ticks. Only touched from the single Run goroutine.
+	lastAdherence *configv1.TLSAdherencePolicy
 }
 
 // NewReconciler creates a Reconciler from the application configuration.
@@ -147,12 +158,14 @@ func (r *Reconciler) consumeWatch(ctx context.Context, w watch.Interface, ticker
 // reconcileOnce resolves the desired TLS configuration and ensures every target
 // deployment carries the matching hash, rolling out only those that differ.
 func (r *Reconciler) reconcileOnce(ctx context.Context) error {
-	profile, err := r.apiServerClient.GetEffectiveTLSProfile(ctx)
+	settings, err := r.apiServerClient.GetClusterTLSSettings(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to read cluster TLS profile: %w", err)
+		return fmt.Errorf("failed to read cluster TLS settings: %w", err)
 	}
 
-	hash, err := TLSConfigHash(profile, r.cfg.EnablePQC)
+	r.logAdherence(settings.Adherence)
+
+	hash, err := TLSConfigHash(settings, r.cfg.EnablePQC)
 	if err != nil {
 		return err
 	}
@@ -180,15 +193,43 @@ func (r *Reconciler) reconcileOnce(ctx context.Context) error {
 	return nil
 }
 
-// TLSConfigHash returns a stable hash of the effective TLS configuration. The
-// PQC flag is part of the hash so that toggling post-quantum forces a rollout.
-func TLSConfigHash(profile *configv1.TLSSecurityProfile, enablePQC bool) (string, error) {
+// logAdherence reports the cluster's tlsAdherence policy once per distinct
+// value. The reconciler always propagates the profile -- it is an adhering
+// component and has no TLS settings of its own to prefer -- but the policy is
+// worth surfacing because it tells operators whether the cluster considers
+// adherence mandatory.
+func (r *Reconciler) logAdherence(adherence configv1.TLSAdherencePolicy) {
+	if r.lastAdherence != nil && *r.lastAdherence == adherence {
+		return
+	}
+	r.lastAdherence = &adherence
+
+	switch {
+	case crypto.ShouldHonorClusterTLSProfile(adherence):
+		log.Printf("Cluster tlsAdherence=%q: all components are required to honor the cluster TLS profile",
+			orUnset(adherence))
+	default:
+		log.Printf("Cluster tlsAdherence=%q: honoring the cluster TLS profile is optional; "+
+			"this operator honors it regardless", orUnset(adherence))
+	}
+}
+
+// TLSConfigHash returns a stable hash of the effective TLS configuration.
+//
+// It hashes the *resolved* TLSProfileSpec rather than the raw
+// TLSSecurityProfile, so that renaming the same settings -- unset to
+// "Intermediate", or a Custom profile spelling out exactly what a built-in
+// already says -- does not roll the workloads. The adherence policy and the
+// PQC flag are part of the hash so that flipping either one does.
+func TLSConfigHash(settings client.ClusterTLSSettings, enablePQC bool) (string, error) {
 	payload := struct {
-		Profile *configv1.TLSSecurityProfile `json:"profile"`
-		PQC     bool                         `json:"pqc"`
+		Spec      configv1.TLSProfileSpec     `json:"spec"`
+		Adherence configv1.TLSAdherencePolicy `json:"adherence"`
+		PQC       bool                        `json:"pqc"`
 	}{
-		Profile: profile,
-		PQC:     enablePQC,
+		Spec:      settings.Spec,
+		Adherence: settings.Adherence,
+		PQC:       enablePQC,
 	}
 
 	data, err := json.Marshal(payload)
@@ -198,6 +239,13 @@ func TLSConfigHash(profile *configv1.TLSSecurityProfile, enablePQC bool) (string
 
 	sum := sha256.Sum256(data)
 	return fmt.Sprintf("%x", sum), nil
+}
+
+func orUnset(adherence configv1.TLSAdherencePolicy) string {
+	if adherence == configv1.TLSAdherencePolicyNoOpinion {
+		return "<unset>"
+	}
+	return string(adherence)
 }
 
 func orNone(s string) string {

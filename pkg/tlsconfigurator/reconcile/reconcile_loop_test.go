@@ -25,6 +25,7 @@ import (
 	configfake "github.com/openshift/client-go/config/clientset/versioned/fake"
 	"github.com/trustification/trusted-profile-analyzer-operator/pkg/tlsconfigurator/client"
 	"github.com/trustification/trusted-profile-analyzer-operator/pkg/tlsconfigurator/config"
+	"github.com/trustification/trusted-profile-analyzer-operator/pkg/tlsconfigurator/crypto"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -556,6 +557,50 @@ func TestRunRollsOnProfileChange(t *testing.T) {
 	}
 }
 
+// Tightening tlsAdherence is a cluster-wide policy change with no change to
+// the profile itself. The workloads still have to be rolled.
+func TestRunRollsOnAdherencePolicyChange(t *testing.T) {
+	modern := &configv1.TLSSecurityProfile{Type: configv1.TLSProfileModernType}
+
+	h := newHarness(t, harnessOpts{
+		profile:     modern,
+		deployments: []*appsv1.Deployment{deploymentWithHash("server", "")},
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() { done <- h.r.Run(ctx) }()
+
+	waitFor(t, "the startup reconcile", func() bool {
+		return len(h.patchedDeployments()) == 1
+	})
+	beforeHash := h.storedHash(t, "server")
+
+	// Same profile, stricter adherence policy.
+	updated := apiServerCR(modern)
+	updated.Spec.TLSAdherence = configv1.TLSAdherencePolicyStrictAllComponents
+	if _, err := h.configClient.ConfigV1().APIServers().Update(
+		ctx, updated, metav1.UpdateOptions{},
+	); err != nil {
+		t.Fatalf("failed to update the APIServer CR: %v", err)
+	}
+	h.watcher.Modify(updated)
+
+	waitFor(t, "the adherence change to drive a rollout", func() bool {
+		return len(h.patchedDeployments()) == 2
+	})
+	if got := h.storedHash(t, "server"); got == beforeHash {
+		t.Errorf("hash unchanged at %q after tlsAdherence moved to StrictAllComponents", got)
+	}
+
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run() error = %v, want context.Canceled", err)
+	}
+}
+
 // A cluster that is not ready yet must not kill the reconciler on startup.
 func TestRunSurvivesInitialReconcileFailure(t *testing.T) {
 	h := newHarness(t, harnessOpts{
@@ -629,7 +674,11 @@ func assertPatched(t *testing.T, got, want []string) {
 // mustHashFor is the table-friendly form of TLSConfigHash; the inputs are all
 // static, so a failure here is a programming error in the test.
 func mustHashFor(profile *configv1.TLSSecurityProfile, enablePQC bool) string {
-	hash, err := TLSConfigHash(profile, enablePQC)
+	spec, err := crypto.ResolveProfileSpec(profile)
+	if err != nil {
+		panic(err)
+	}
+	hash, err := TLSConfigHash(client.ClusterTLSSettings{Profile: profile, Spec: spec}, enablePQC)
 	if err != nil {
 		panic(err)
 	}

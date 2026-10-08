@@ -13,20 +13,57 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
+// Package crypto turns an OpenShift TLSSecurityProfile into a crypto/tls.Config.
+//
+// It is a thin adapter over the two packages Red Hat documents for this in the
+// "TLS Profile Compliance -- Implementation Reference":
+//
+//   - github.com/openshift/controller-runtime-common/pkg/tls -- profile
+//     resolution (GetTLSProfileSpec) and tls.Config construction
+//     (NewTLSConfigFromProfile, SetNextProtos).
+//   - github.com/openshift/library-go/pkg/crypto -- TLS version and cipher
+//     name conversion, and ShouldHonorClusterTLSProfile.
+//
+// Nothing here re-implements those conversions. The local additions are the
+// post-quantum helpers, which the upstream packages do not provide because the
+// PQC key-exchange group now arrives through the profile's Groups field rather
+// than through a separate switch.
 package crypto
 
 import (
 	"crypto/tls"
 	"fmt"
-	"strings"
 
 	configv1 "github.com/openshift/api/config/v1"
+	ocptls "github.com/openshift/controller-runtime-common/pkg/tls"
+	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 )
 
-// PQCCurvePreferences returns the post-quantum key-exchange groups to negotiate,
-// most-preferred first. X25519MLKEM768 is the hybrid group (classical X25519 +
-// ML-KEM-768, NIST FIPS 203) enabled by default in Go's crypto/tls since Go 1.24;
-// plain X25519 is kept as the classical fallback for peers without PQC support.
+// DefaultNextProtos is the ALPN list applied when a caller does not pick one.
+// The cluster TLS profile deliberately says nothing about ALPN, so every server
+// has to set NextProtos itself.
+var DefaultNextProtos = ocptls.HTTP2NextProtos
+
+// Options are the local hardening choices layered on top of the cluster
+// profile. Everything that the cluster profile itself expresses -- minimum
+// version, ciphers, key-exchange groups -- comes from the profile, not from
+// here.
+type Options struct {
+	// EnablePQC forces TLS 1.3 and guarantees that the hybrid post-quantum
+	// group X25519MLKEM768 is offered even if the cluster profile omits it.
+	EnablePQC bool
+
+	// NextProtos is the ALPN list to advertise. Nil means DefaultNextProtos;
+	// an explicitly empty, non-nil slice leaves ALPN unset.
+	NextProtos []string
+}
+
+// PQCCurvePreferences returns the post-quantum key-exchange groups to
+// negotiate, most-preferred first. X25519MLKEM768 is the hybrid group
+// (classical X25519 + ML-KEM-768, NIST FIPS 203) enabled by default in Go's
+// crypto/tls since Go 1.24; plain X25519 is kept as the classical fallback for
+// peers without PQC support.
 func PQCCurvePreferences() []tls.CurveID {
 	return []tls.CurveID{
 		tls.X25519MLKEM768,
@@ -34,135 +71,99 @@ func PQCCurvePreferences() []tls.CurveID {
 	}
 }
 
-// ConvertTLSProfile converts an OpenShift TLS security profile to a crypto/tls.Config
-func ConvertTLSProfile(profile *configv1.TLSSecurityProfile) (*tls.Config, error) {
-	return ConvertTLSProfileWithPQC(profile, false)
+// PQCGroups returns the same preference list in the OpenShift API's vocabulary,
+// for writing into a TLSProfileSpec.Groups field.
+func PQCGroups() []configv1.TLSGroup {
+	return []configv1.TLSGroup{
+		configv1.TLSGroupX25519MLKEM768,
+		configv1.TLSGroupX25519,
+	}
 }
 
-// ConvertTLSProfileWithPQC converts an OpenShift TLS security profile to a
-// crypto/tls.Config, optionally enforcing post-quantum, TLS 1.3-only settings.
-func ConvertTLSProfileWithPQC(profile *configv1.TLSSecurityProfile, enablePQC bool) (*tls.Config, error) {
-	tlsConfig, err := convertTLSProfile(profile)
+// ResolveProfileSpec resolves a TLSSecurityProfile to the concrete
+// TLSProfileSpec it stands for: built-in types expand from
+// configv1.TLSProfiles, Custom returns its embedded spec, and nil or an
+// unknown type falls back to Intermediate.
+func ResolveProfileSpec(profile *configv1.TLSSecurityProfile) (configv1.TLSProfileSpec, error) {
+	spec, err := ocptls.GetTLSProfileSpec(profile)
 	if err != nil {
-		return nil, err
+		return configv1.TLSProfileSpec{}, fmt.Errorf("failed to resolve TLS security profile: %w", err)
 	}
-	if enablePQC {
-		EnablePQC(tlsConfig)
-	}
-	return tlsConfig, nil
+	return spec, nil
 }
 
-// convertTLSProfile converts an OpenShift TLS security profile to a crypto/tls.Config
-func convertTLSProfile(profile *configv1.TLSSecurityProfile) (*tls.Config, error) {
-	if profile == nil {
-		// Use default intermediate profile
-		return GetDefaultTLSConfig(), nil
-	}
-
-	var minVersion uint16
-	var cipherSuites []uint16
-	var err error
-
-	switch profile.Type {
-	case configv1.TLSProfileCustomType:
-		if profile.Custom == nil {
-			return nil, fmt.Errorf("custom TLS profile requires custom configuration")
-		}
-		minVersion, cipherSuites, err = convertCustomProfile(profile.Custom)
-		if err != nil {
-			return nil, err
-		}
-
-	case configv1.TLSProfileModernType:
-		minVersion = tls.VersionTLS13
-		cipherSuites = GetModernCipherSuites()
-
-	case configv1.TLSProfileIntermediateType:
-		minVersion = tls.VersionTLS12
-		cipherSuites = GetIntermediateCipherSuites()
-
-	case configv1.TLSProfileOldType:
-		minVersion = tls.VersionTLS10
-		cipherSuites = GetOldCipherSuites()
-
-	default:
-		return nil, fmt.Errorf("unknown TLS profile type: %s", profile.Type)
-	}
-
-	tlsConfig := &tls.Config{
-		MinVersion:   minVersion,
-		CipherSuites: cipherSuites,
-	}
-
-	// Apply secure baseline configuration
-	SecureTLSConfig(tlsConfig)
-
-	return tlsConfig, nil
-}
-
-// convertCustomProfile converts a custom TLS profile to TLS config values
-func convertCustomProfile(custom *configv1.CustomTLSProfile) (uint16, []uint16, error) {
-	if custom == nil {
-		return 0, nil, fmt.Errorf("custom profile cannot be nil")
-	}
-
-	// Convert TLS version
-	minVersion, err := TLSVersion(string(custom.MinTLSVersion))
+// BuildTLSConfig resolves a TLSSecurityProfile and converts it to a
+// crypto/tls.Config.
+//
+// The returned unsupported slice lists cipher and group names present in the
+// profile that Go's crypto/tls cannot honor. That is informational, not an
+// error: a cluster profile may legitimately name ciphers (DHE-RSA-*,
+// AES256-SHA256, ...) that only OpenSSL-based servers can offer. Callers should
+// log it.
+func BuildTLSConfig(profile *configv1.TLSSecurityProfile, opts Options) (
+	tlsConfig *tls.Config, unsupported []string, err error,
+) {
+	spec, err := ResolveProfileSpec(profile)
 	if err != nil {
-		return 0, nil, fmt.Errorf("invalid TLS version: %w", err)
+		return nil, nil, err
 	}
-
-	// Convert cipher suites
-	ianaNames := OpenSSLToIANACipherSuites(custom.Ciphers)
-	cipherSuites, err := CipherSuites(ianaNames)
-	if err != nil {
-		return 0, nil, fmt.Errorf("invalid cipher suites: %w", err)
-	}
-
-	return minVersion, cipherSuites, nil
+	cfg, unsupported := BuildTLSConfigFromSpec(spec, opts)
+	return cfg, unsupported, nil
 }
 
-// TLSVersion converts a TLS version string to the corresponding crypto/tls constant
-// This implements the pattern recommended by OpenShift library-go
+// BuildTLSConfigFromSpec converts an already-resolved TLSProfileSpec to a
+// crypto/tls.Config. Use this when the spec was obtained from a watch event or
+// cached elsewhere, so the profile is resolved exactly once.
+func BuildTLSConfigFromSpec(spec configv1.TLSProfileSpec, opts Options) (tlsConfig *tls.Config, unsupported []string) {
+	apply, unsupported := ocptls.NewTLSConfigFromProfile(spec)
+
+	cfg := &tls.Config{}
+	apply(cfg)
+
+	nextProtos := opts.NextProtos
+	if nextProtos == nil {
+		nextProtos = DefaultNextProtos
+	}
+	ocptls.SetNextProtos(nextProtos...)(cfg)
+
+	SecureTLSConfig(cfg)
+
+	if opts.EnablePQC {
+		EnablePQC(cfg)
+	}
+
+	return cfg, unsupported
+}
+
+// TLSVersion converts a TLS version string ("VersionTLS12") to the
+// corresponding crypto/tls constant.
 func TLSVersion(version string) (uint16, error) {
-	switch configv1.TLSProtocolVersion(version) {
-	case configv1.VersionTLS10:
-		return tls.VersionTLS10, nil
-	case configv1.VersionTLS11:
-		return tls.VersionTLS11, nil
-	case configv1.VersionTLS12:
-		return tls.VersionTLS12, nil
-	case configv1.VersionTLS13:
-		return tls.VersionTLS13, nil
-	default:
-		return 0, fmt.Errorf("unknown TLS version: %s", version)
-	}
+	return libgocrypto.TLSVersion(version)
 }
 
-// OpenSSLToIANACipherSuites converts OpenSSL cipher names to IANA names
-// This implements the pattern from OpenShift library-go/pkg/crypto
+// OpenSSLToIANACipherSuites converts OpenSSL cipher names to IANA names.
+// Names with no OpenSSL spelling are passed through unchanged, so already-IANA
+// input round-trips.
 func OpenSSLToIANACipherSuites(opensslNames []string) []string {
-	ianaNames := make([]string, 0, len(opensslNames))
-
-	for _, opensslName := range opensslNames {
-		ianaName := opensslToIANAMapping(opensslName)
-		if ianaName != "" {
-			ianaNames = append(ianaNames, ianaName)
-		} else {
-			// If no mapping found, assume it's already an IANA name
-			ianaNames = append(ianaNames, opensslName)
-		}
-	}
-
-	return ianaNames
+	return libgocrypto.OpenSSLToIANACipherSuites(opensslNames)
 }
 
-// CipherSuites converts IANA cipher suite names to crypto/tls constants
+// CipherSuites converts IANA cipher suite names to crypto/tls constants. It
+// fails on the first name Go does not know; use BuildTLSConfig instead when
+// unknown ciphers should be reported rather than rejected.
 func CipherSuites(ianaNames []string) ([]uint16, error) {
-	return convertCipherSuitesFallback(ianaNames)
+	suites := make([]uint16, 0, len(ianaNames))
+	for _, name := range ianaNames {
+		id, err := libgocrypto.CipherSuite(name)
+		if err != nil {
+			return nil, fmt.Errorf("unknown cipher suite: %s", name)
+		}
+		suites = append(suites, id)
+	}
+	return suites, nil
 }
 
-// CipherSuitesOrDie is like CipherSuites but panics on error
+// CipherSuitesOrDie is like CipherSuites but panics on error.
 func CipherSuitesOrDie(ianaNames []string) []uint16 {
 	suites, err := CipherSuites(ianaNames)
 	if err != nil {
@@ -171,7 +172,15 @@ func CipherSuitesOrDie(ianaNames []string) []uint16 {
 	return suites
 }
 
-// SecureTLSConfig applies secure baseline settings to a TLS config
+// ShouldHonorClusterTLSProfile reports whether a component must apply the
+// cluster-wide TLS profile given the cluster's .spec.tlsAdherence policy.
+// Unknown values return true, so a future, stricter policy is honored by
+// default.
+func ShouldHonorClusterTLSProfile(adherence configv1.TLSAdherencePolicy) bool {
+	return libgocrypto.ShouldHonorClusterTLSProfile(adherence)
+}
+
+// SecureTLSConfig applies secure baseline settings to a TLS config.
 func SecureTLSConfig(config *tls.Config) {
 	if config == nil {
 		return
@@ -200,6 +209,9 @@ func EnablePQC(config *tls.Config) {
 	if config.MinVersion < tls.VersionTLS13 {
 		config.MinVersion = tls.VersionTLS13
 	}
+	// Go ignores CipherSuites for TLS 1.3; leaving stale TLS 1.2 suites behind
+	// is just misleading.
+	config.CipherSuites = nil
 	config.CurvePreferences = PQCCurvePreferences()
 }
 
@@ -213,7 +225,7 @@ func IsPQCCompliant(config *tls.Config) (bool, []string) {
 
 	var reasons []string
 	if config.MinVersion < tls.VersionTLS13 {
-		reasons = append(reasons, fmt.Sprintf("MinVersion is %s, must be TLS 1.3", tlsVersionString(config.MinVersion)))
+		reasons = append(reasons, fmt.Sprintf("MinVersion is %s, must be TLS 1.3", TLSVersionName(config.MinVersion)))
 	}
 
 	hasPQCGroup := false
@@ -234,9 +246,9 @@ func IsPQCCompliant(config *tls.Config) (bool, []string) {
 func CurveName(id tls.CurveID) string {
 	switch id {
 	case tls.X25519MLKEM768:
-		return "X25519MLKEM768"
+		return string(configv1.TLSGroupX25519MLKEM768)
 	case tls.X25519:
-		return "X25519"
+		return string(configv1.TLSGroupX25519)
 	case tls.CurveP256:
 		return "CurveP256"
 	case tls.CurveP384:
@@ -248,166 +260,30 @@ func CurveName(id tls.CurveID) string {
 	}
 }
 
-func tlsVersionString(version uint16) string {
-	switch version {
-	case tls.VersionTLS10:
-		return "TLS 1.0"
-	case tls.VersionTLS11:
-		return "TLS 1.1"
-	case tls.VersionTLS12:
-		return "TLS 1.2"
-	case tls.VersionTLS13:
-		return "TLS 1.3"
-	case 0:
+// TLSVersionName renders a crypto/tls version constant for humans. The
+// library-go helper panics on unknown input, so this uses the stdlib one.
+func TLSVersionName(version uint16) string {
+	if version == 0 {
 		return "unset"
-	default:
-		return fmt.Sprintf("Unknown(0x%04x)", version)
 	}
+	return tls.VersionName(version)
 }
 
-// GetDefaultTLSConfig returns the default (Intermediate) TLS configuration
-func GetDefaultTLSConfig() *tls.Config {
-	return &tls.Config{
-		MinVersion:   tls.VersionTLS12,
-		CipherSuites: GetIntermediateCipherSuites(),
-	}
+// CipherSuiteName renders a crypto/tls cipher suite constant for humans. The
+// library-go helper panics on unknown input, so this uses the stdlib one.
+func CipherSuiteName(id uint16) string {
+	return tls.CipherSuiteName(id)
 }
 
-// DefaultTLSVersion returns the default TLS version (1.2)
+// DefaultTLSConfig returns the TLS configuration for the cluster default
+// profile (Intermediate), for callers that cannot reach the API server.
+func DefaultTLSConfig() *tls.Config {
+	cfg, _ := BuildTLSConfigFromSpec(*configv1.TLSProfiles[configv1.TLSProfileIntermediateType], Options{})
+	return cfg
+}
+
+// DefaultTLSVersion returns the minimum TLS version of the cluster default
+// profile.
 func DefaultTLSVersion() uint16 {
-	return tls.VersionTLS12
-}
-
-// GetModernCipherSuites returns cipher suites for the Modern profile (TLS 1.3)
-func GetModernCipherSuites() []uint16 {
-	return []uint16{
-		tls.TLS_AES_128_GCM_SHA256,
-		tls.TLS_AES_256_GCM_SHA384,
-		tls.TLS_CHACHA20_POLY1305_SHA256,
-	}
-}
-
-// GetIntermediateCipherSuites returns cipher suites for the Intermediate profile
-func GetIntermediateCipherSuites() []uint16 {
-	return []uint16{
-		// TLS 1.3 ciphers
-		tls.TLS_AES_128_GCM_SHA256,
-		tls.TLS_AES_256_GCM_SHA384,
-		tls.TLS_CHACHA20_POLY1305_SHA256,
-
-		// TLS 1.2 ciphers
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-	}
-}
-
-// GetOldCipherSuites returns cipher suites for the Old profile
-func GetOldCipherSuites() []uint16 {
-	suites := GetIntermediateCipherSuites()
-	// Add additional legacy ciphers
-	suites = append(suites,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-		tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-		tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_RSA_WITH_AES_128_CBC_SHA256,
-		tls.TLS_RSA_WITH_AES_128_CBC_SHA,
-		tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-	)
-	return suites
-}
-
-// opensslToIANAMapping converts OpenSSL cipher names to IANA names
-func opensslToIANAMapping(opensslName string) string {
-	// Common OpenSSL to IANA cipher suite name mappings
-	mapping := map[string]string{
-		// TLS 1.3 ciphers (same in both)
-		"TLS_AES_128_GCM_SHA256":       "TLS_AES_128_GCM_SHA256",
-		"TLS_AES_256_GCM_SHA384":       "TLS_AES_256_GCM_SHA384",
-		"TLS_CHACHA20_POLY1305_SHA256": "TLS_CHACHA20_POLY1305_SHA256",
-
-		// OpenSSL format to IANA format for TLS 1.2
-		"ECDHE-ECDSA-AES128-GCM-SHA256": "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
-		"ECDHE-RSA-AES128-GCM-SHA256":   "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
-		"ECDHE-ECDSA-AES256-GCM-SHA384": "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
-		"ECDHE-RSA-AES256-GCM-SHA384":   "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
-		"ECDHE-ECDSA-CHACHA20-POLY1305": "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
-		"ECDHE-RSA-CHACHA20-POLY1305":   "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305",
-		"ECDHE-ECDSA-AES128-SHA256":     "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256",
-		"ECDHE-RSA-AES128-SHA256":       "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256",
-		"ECDHE-ECDSA-AES128-SHA":        "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
-		"ECDHE-RSA-AES128-SHA":          "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
-		"ECDHE-ECDSA-AES256-SHA":        "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
-		"ECDHE-RSA-AES256-SHA":          "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
-		"AES128-GCM-SHA256":             "TLS_RSA_WITH_AES_128_GCM_SHA256",
-		"AES256-GCM-SHA384":             "TLS_RSA_WITH_AES_256_GCM_SHA384",
-		"AES128-SHA256":                 "TLS_RSA_WITH_AES_128_CBC_SHA256",
-		"AES128-SHA":                    "TLS_RSA_WITH_AES_128_CBC_SHA",
-		"AES256-SHA":                    "TLS_RSA_WITH_AES_256_CBC_SHA",
-	}
-
-	// Try exact match
-	if ianaName, ok := mapping[opensslName]; ok {
-		return ianaName
-	}
-
-	// Try case-insensitive match
-	for openssl, iana := range mapping {
-		if strings.EqualFold(opensslName, openssl) {
-			return iana
-		}
-	}
-
-	// Return empty string if no mapping found
-	return ""
-}
-
-// convertCipherSuitesFallback is a fallback cipher suite converter
-func convertCipherSuitesFallback(ianaNames []string) ([]uint16, error) {
-	mapping := map[string]uint16{
-		// TLS 1.3
-		"TLS_AES_128_GCM_SHA256":       tls.TLS_AES_128_GCM_SHA256,
-		"TLS_AES_256_GCM_SHA384":       tls.TLS_AES_256_GCM_SHA384,
-		"TLS_CHACHA20_POLY1305_SHA256": tls.TLS_CHACHA20_POLY1305_SHA256,
-
-		// TLS 1.2 ECDHE
-		"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256": tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-		"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256":   tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384": tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-		"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384":   tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-		"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305":  tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-		"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305":    tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-
-		// Legacy ciphers
-		"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256": tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
-		"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256":   tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
-		"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA":    tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-		"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA":      tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-		"TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA":    tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-		"TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA":      tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-		"TLS_RSA_WITH_AES_128_GCM_SHA256":         tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-		"TLS_RSA_WITH_AES_256_GCM_SHA384":         tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-		"TLS_RSA_WITH_AES_128_CBC_SHA256":         tls.TLS_RSA_WITH_AES_128_CBC_SHA256,
-		"TLS_RSA_WITH_AES_128_CBC_SHA":            tls.TLS_RSA_WITH_AES_128_CBC_SHA,
-		"TLS_RSA_WITH_AES_256_CBC_SHA":            tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-	}
-
-	suites := make([]uint16, 0, len(ianaNames))
-	for _, name := range ianaNames {
-		if id, ok := mapping[name]; ok {
-			suites = append(suites, id)
-		} else {
-			return nil, fmt.Errorf("unknown cipher suite: %s", name)
-		}
-	}
-
-	return suites, nil
+	return libgocrypto.TLSVersionOrDie(string(ocptls.DefaultMinTLSVersion))
 }

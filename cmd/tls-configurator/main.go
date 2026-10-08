@@ -40,7 +40,8 @@ var (
 	ingressController = flag.String("ingress-controller", "default", "Name of the IngressController to modify")
 	namespace         = flag.String("namespace", "openshift-ingress-operator", "Namespace of the IngressController")
 	action            = flag.String("action", "get",
-		"Action to perform: get, update, list, get-cluster, show-tlsconfig, check-version, validate, reconcile")
+		"Action to perform: get, update, list, get-cluster, get-adherence, show-tlsconfig, "+
+			"check-version, validate, reconcile")
 	tlsType       = flag.String("type", "Custom", "TLS profile type: Custom, Intermediate, Modern, Old")
 	minTLSVersion = flag.String("min-tls-version", "VersionTLS13",
 		"Minimum TLS version: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13")
@@ -114,6 +115,10 @@ func main() {
 		if err := getClusterAction(ctx, cfg); err != nil {
 			log.Fatalf("Failed to get cluster TLS profile: %v", err)
 		}
+	case "get-adherence":
+		if err := getAdherenceAction(ctx, cfg); err != nil {
+			log.Fatalf("Failed to get cluster TLS adherence policy: %v", err)
+		}
 	case "show-tlsconfig":
 		if err := showTLSConfigAction(ctx, cfg); err != nil {
 			log.Fatalf("Failed to show TLS config: %v", err)
@@ -128,8 +133,70 @@ func main() {
 		}
 	default:
 		log.Fatalf("Unknown action: %s. Valid actions are: get, update, list, get-cluster, "+
-			"show-tlsconfig, check-version, validate, reconcile", *action)
+			"get-adherence, show-tlsconfig, check-version, validate, reconcile", *action)
 	}
+}
+
+// newAPIServerClient builds the APIServer client the read-only actions share.
+func newAPIServerClient(cfg *config.Config) (*client.APIServerClient, error) {
+	k8sConfig, err := config.GetKubeConfig(cfg.Kubeconfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get kubernetes config: %w", err)
+	}
+
+	apiServerClient, err := client.NewAPIServerClient(k8sConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create APIServer client: %w", err)
+	}
+
+	return apiServerClient, nil
+}
+
+// printAdherence renders the cluster tlsAdherence policy and what it implies.
+func printAdherence(adherence configv1.TLSAdherencePolicy) {
+	value := string(adherence)
+	if value == "" {
+		value = "<unset>"
+	}
+
+	fmt.Printf("tlsAdherence:     %s\n", value)
+	if crypto.ShouldHonorClusterTLSProfile(adherence) {
+		fmt.Println("Enforcement:      all components must honor the cluster TLS profile")
+		return
+	}
+	fmt.Println("Enforcement:      legacy -- only already-adhering components honor the profile")
+	if adherence == configv1.TLSAdherencePolicyNoOpinion {
+		fmt.Println("                  (unset is treated as LegacyAdheringComponentsOnly; " +
+			"the TLSAdherence feature gate may be off on this cluster)")
+	}
+}
+
+// printUnsupported reports profile entries Go's crypto/tls cannot honor. This
+// is informational: a cluster profile may name OpenSSL-only ciphers.
+func printUnsupported(unsupported []string) {
+	if len(unsupported) == 0 {
+		return
+	}
+	fmt.Printf("\n⚠️  Not supported by Go's crypto/tls and therefore dropped: %s\n",
+		strings.Join(unsupported, ", "))
+}
+
+// getAdherenceAction prints the cluster's tlsAdherence policy.
+func getAdherenceAction(ctx context.Context, cfg *config.Config) error {
+	apiServerClient, err := newAPIServerClient(cfg)
+	if err != nil {
+		return err
+	}
+
+	adherence, err := apiServerClient.GetTLSAdherencePolicy(ctx)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Cluster TLS Adherence Policy (from APIServer 'cluster'):")
+	fmt.Println("========================================================")
+	printAdherence(adherence)
+	return nil
 }
 
 // reconcileAction runs the long-lived reconciler that rolls target workloads
@@ -142,44 +209,37 @@ func reconcileAction(ctx context.Context, cfg *config.Config) error {
 	return r.Run(ctx)
 }
 
-// validateAction reports whether the effective cluster TLS configuration is
-// post-quantum and TLS 1.3-only compliant. It exits non-zero when it is not.
+// validateAction reports whether the cluster TLS configuration as this
+// operator would apply it is post-quantum and TLS 1.3-only compliant. It exits
+// non-zero when it is not.
 func validateAction(ctx context.Context, cfg *config.Config) error {
-	k8sConfig, err := config.GetKubeConfig(cfg.Kubeconfig)
+	apiServerClient, err := newAPIServerClient(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to get kubernetes config: %w", err)
+		return err
 	}
 
-	apiServerClient, err := client.NewAPIServerClient(k8sConfig)
+	settings, err := apiServerClient.GetClusterTLSSettings(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create APIServer client: %w", err)
+		return fmt.Errorf("failed to get cluster TLS settings: %w", err)
 	}
 
-	profile, err := apiServerClient.GetEffectiveTLSProfile(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get cluster TLS profile: %w", err)
-	}
-
-	// Evaluate the profile as it would be enforced with PQC enabled.
-	tlsConfig, err := crypto.ConvertTLSProfileWithPQC(profile, true)
-	if err != nil {
-		return fmt.Errorf("failed to convert TLS profile: %w", err)
-	}
-
-	compliant, reasons := crypto.IsPQCCompliant(tlsConfig)
+	// Report the profile as it stands, then as it would be enforced with PQC.
+	asIs, unsupported := crypto.BuildTLSConfigFromSpec(settings.Spec, crypto.Options{})
+	hardened, _ := crypto.BuildTLSConfigFromSpec(settings.Spec, crypto.Options{EnablePQC: true})
 
 	fmt.Println("Post-Quantum / TLS 1.3 Compliance Check")
 	fmt.Println("=======================================")
-	fmt.Printf("MinVersion:       %s\n", tlsVersionName(tlsConfig.MinVersion))
-	fmt.Printf("Key-exchange:     ")
-	for i, c := range tlsConfig.CurvePreferences {
-		if i > 0 {
-			fmt.Print(", ")
-		}
-		fmt.Print(crypto.CurveName(c))
-	}
+	printAdherence(settings.Adherence)
 	fmt.Println()
+	fmt.Printf("Cluster profile:  MinVersion %s, key-exchange %s\n",
+		crypto.TLSVersionName(asIs.MinVersion), curveList(asIs.CurvePreferences))
+	fmt.Printf("With --enable-pqc: MinVersion %s, key-exchange %s\n",
+		crypto.TLSVersionName(hardened.MinVersion), curveList(hardened.CurvePreferences))
+	printUnsupported(unsupported)
 
+	// Compliance is judged on the cluster profile itself: --enable-pqc can
+	// always force compliance locally, so reporting that would say nothing.
+	compliant, reasons := crypto.IsPQCCompliant(asIs)
 	if compliant {
 		fmt.Println("\n✅ Status: COMPLIANT (post-quantum, TLS 1.3)")
 		return nil
@@ -189,7 +249,22 @@ func validateAction(ctx context.Context, cfg *config.Config) error {
 	for _, r := range reasons {
 		fmt.Printf("   - %s\n", r)
 	}
+	fmt.Println("\n   The cluster-wide profile does not mandate post-quantum TLS 1.3." +
+		"\n   Set modules.tlsConfigurator.pqc.enabled=true to enforce it for this" +
+		"\n   operator's workloads regardless, or raise the cluster profile.")
 	return fmt.Errorf("configuration is not PQC/TLS 1.3 compliant")
+}
+
+// curveList renders key-exchange groups in preference order.
+func curveList(curves []tls.CurveID) string {
+	if len(curves) == 0 {
+		return "<Go defaults>"
+	}
+	names := make([]string, 0, len(curves))
+	for _, c := range curves {
+		names = append(names, crypto.CurveName(c))
+	}
+	return strings.Join(names, ", ")
 }
 
 func getAction(ctx context.Context, ctrl *controller.TLSController) error {
@@ -236,10 +311,25 @@ func updateAction(ctx context.Context, ctrl *controller.TLSController) error {
 		tlsConfig.EnablePQC = true
 		if profileType == configv1.TLSProfileCustomType {
 			tlsConfig.MinTLSVersion = configv1.VersionTLS13
+
+			// TLSProfileSpec.Groups is how the PQC key-exchange group reaches
+			// the router, but it is gated on TLSGroupPreferences. Writing it
+			// on a cluster without the gate is rejected, so only set it when
+			// the gate is on.
+			supported, err := ctrl.SupportsTLSGroups(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to check the TLSGroupPreferences feature gate: %w", err)
+			}
+			if supported {
+				tlsConfig.Groups = crypto.PQCGroups()
+				log.Printf("TLSGroupPreferences is enabled: writing groups %v to the profile", tlsConfig.Groups)
+			} else {
+				log.Printf("TLSGroupPreferences is not enabled on this cluster: leaving " +
+					"TLSProfileSpec.Groups unset. The router will not advertise X25519MLKEM768; " +
+					"Go services still negotiate it via the runtime default (Go >= 1.24).")
+			}
 		}
 		log.Printf("PQC enabled: enforcing TLS 1.3 and X25519MLKEM768 key exchange")
-		log.Printf("Note: the OpenShift TLSSecurityProfile API cannot store key-exchange groups; " +
-			"the PQC group is negotiated by the Go runtime (>=1.24) and recorded in the workload rollout hash")
 	}
 
 	// Apply the configuration
@@ -306,32 +396,29 @@ func parseCiphers(cipherStr string) []string {
 
 // getClusterAction retrieves the cluster-wide TLS profile from APIServer (recommended approach)
 func getClusterAction(ctx context.Context, cfg *config.Config) error {
-	// Create k8s config
-	k8sConfig, err := config.GetKubeConfig(cfg.Kubeconfig)
+	apiServerClient, err := newAPIServerClient(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to get kubernetes config: %w", err)
+		return err
 	}
 
-	// Create APIServer client
-	apiServerClient, err := client.NewAPIServerClient(k8sConfig)
+	settings, err := apiServerClient.GetClusterTLSSettings(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create APIServer client: %w", err)
+		return fmt.Errorf("failed to get cluster TLS settings: %w", err)
 	}
 
-	// Get cluster TLS profile
-	profile, err := apiServerClient.GetEffectiveTLSProfile(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get cluster TLS profile: %w", err)
-	}
-
-	// Pretty print the profile
-	data, err := json.MarshalIndent(profile, "", "  ")
+	// Print the resolved spec: built-in profile types expand to the ciphers,
+	// groups and minimum version they actually stand for.
+	data, err := json.MarshalIndent(settings.Spec, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal profile: %w", err)
 	}
 
 	fmt.Println("Cluster-wide TLS Security Profile (from APIServer):")
 	fmt.Println("===================================================")
+	fmt.Printf("Configured type:  %s\n", profileTypeName(settings.Profile))
+	printAdherence(settings.Adherence)
+	fmt.Println()
+	fmt.Println("Resolved TLSProfileSpec:")
 	fmt.Println(string(data))
 	fmt.Println()
 	fmt.Println("ℹ️  This is the authoritative cluster-wide TLS configuration.")
@@ -340,59 +427,58 @@ func getClusterAction(ctx context.Context, cfg *config.Config) error {
 	return nil
 }
 
+// profileTypeName names the configured profile type, or reports that none is
+// set and the cluster default applies.
+func profileTypeName(profile *configv1.TLSSecurityProfile) string {
+	if profile == nil || profile.Type == "" {
+		return fmt.Sprintf("<unset> (defaults to %s)", configv1.TLSProfileIntermediateType)
+	}
+	return string(profile.Type)
+}
+
 // showTLSConfigAction demonstrates converting OpenShift profile to crypto/tls.Config
 func showTLSConfigAction(ctx context.Context, cfg *config.Config) error {
-	// Create k8s config
-	k8sConfig, err := config.GetKubeConfig(cfg.Kubeconfig)
+	apiServerClient, err := newAPIServerClient(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to get kubernetes config: %w", err)
+		return err
 	}
 
-	// Create APIServer client
-	apiServerClient, err := client.NewAPIServerClient(k8sConfig)
+	settings, err := apiServerClient.GetClusterTLSSettings(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create APIServer client: %w", err)
-	}
-
-	// Get cluster TLS profile
-	profile, err := apiServerClient.GetEffectiveTLSProfile(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get cluster TLS profile: %w", err)
+		return fmt.Errorf("failed to get cluster TLS settings: %w", err)
 	}
 
 	fmt.Println("OpenShift TLS Security Profile:")
 	fmt.Println("================================")
-	profileData, _ := json.MarshalIndent(profile, "", "  ")
+	fmt.Printf("Configured type:  %s\n", profileTypeName(settings.Profile))
+	printAdherence(settings.Adherence)
+	fmt.Println()
+	profileData, _ := json.MarshalIndent(settings.Spec, "", "  ")
 	fmt.Println(string(profileData))
 	fmt.Println()
 
-	// Convert to crypto/tls.Config
-	tlsConfig, err := crypto.ConvertTLSProfileWithPQC(profile, *enablePQC)
-	if err != nil {
-		return fmt.Errorf("failed to convert TLS profile: %w", err)
-	}
+	tlsConfig, unsupported := crypto.BuildTLSConfigFromSpec(settings.Spec, crypto.Options{EnablePQC: *enablePQC})
 
 	// Display crypto/tls.Config
 	fmt.Println("Converted to crypto/tls.Config:")
 	fmt.Println("================================")
-	fmt.Printf("MinVersion: %s\n", tlsVersionName(tlsConfig.MinVersion))
-	fmt.Printf("MaxVersion: %s\n", tlsVersionName(tlsConfig.MaxVersion))
+	fmt.Printf("MinVersion: %s\n", crypto.TLSVersionName(tlsConfig.MinVersion))
+	fmt.Printf("MaxVersion: %s\n", crypto.TLSVersionName(tlsConfig.MaxVersion))
+	fmt.Printf("NextProtos (ALPN): %s\n", strings.Join(tlsConfig.NextProtos, ", "))
 	fmt.Printf("SessionTicketsDisabled: %v\n", tlsConfig.SessionTicketsDisabled)
 	fmt.Printf("Renegotiation: %s\n", renegotiationName(tlsConfig.Renegotiation))
-	if len(tlsConfig.CurvePreferences) > 0 {
-		fmt.Printf("Key-exchange groups: ")
-		for i, c := range tlsConfig.CurvePreferences {
-			if i > 0 {
-				fmt.Print(", ")
-			}
-			fmt.Print(crypto.CurveName(c))
+	fmt.Printf("Key-exchange groups: %s\n", curveList(tlsConfig.CurvePreferences))
+
+	if tlsConfig.MinVersion >= tls.VersionTLS13 {
+		fmt.Println("\nCipher Suites: not configurable -- Go always enables all TLS 1.3 AEAD " +
+			"suites and ignores Config.CipherSuites (golang/go#29349)")
+	} else {
+		fmt.Printf("\nCipher Suites (%d configured):\n", len(tlsConfig.CipherSuites))
+		for i, suite := range tlsConfig.CipherSuites {
+			fmt.Printf("  %2d. %s (0x%04x)\n", i+1, crypto.CipherSuiteName(suite), suite)
 		}
-		fmt.Println()
 	}
-	fmt.Printf("\nCipher Suites (%d configured):\n", len(tlsConfig.CipherSuites))
-	for i, suite := range tlsConfig.CipherSuites {
-		fmt.Printf("  %2d. %s (0x%04x)\n", i+1, cipherSuiteName(suite), suite)
-	}
+	printUnsupported(unsupported)
 
 	fmt.Println()
 	fmt.Println("ℹ️  This configuration can be directly used with:")
@@ -405,23 +491,6 @@ func showTLSConfigAction(ctx context.Context, cfg *config.Config) error {
 }
 
 // Helper functions for pretty printing
-func tlsVersionName(version uint16) string {
-	switch version {
-	case tls.VersionTLS10:
-		return "TLS 1.0"
-	case tls.VersionTLS11:
-		return "TLS 1.1"
-	case tls.VersionTLS12:
-		return "TLS 1.2"
-	case tls.VersionTLS13:
-		return "TLS 1.3"
-	case 0:
-		return "Not specified"
-	default:
-		return fmt.Sprintf("Unknown (0x%04x)", version)
-	}
-}
-
 func renegotiationName(r tls.RenegotiationSupport) string {
 	switch r {
 	case tls.RenegotiateNever:
@@ -433,36 +502,6 @@ func renegotiationName(r tls.RenegotiationSupport) string {
 	default:
 		return fmt.Sprintf("Unknown (%d)", r)
 	}
-}
-
-func cipherSuiteName(id uint16) string {
-	names := map[uint16]string{
-		tls.TLS_AES_128_GCM_SHA256:                        "TLS_AES_128_GCM_SHA256",
-		tls.TLS_AES_256_GCM_SHA384:                        "TLS_AES_256_GCM_SHA384",
-		tls.TLS_CHACHA20_POLY1305_SHA256:                  "TLS_CHACHA20_POLY1305_SHA256",
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256:       "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256:         "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384:       "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
-		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384:         "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
-		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256: "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
-		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256:   "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305",
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256:       "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256",
-		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256:         "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256",
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA:          "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
-		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA:            "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA:          "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
-		tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA:            "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
-		tls.TLS_RSA_WITH_AES_128_GCM_SHA256:               "TLS_RSA_WITH_AES_128_GCM_SHA256",
-		tls.TLS_RSA_WITH_AES_256_GCM_SHA384:               "TLS_RSA_WITH_AES_256_GCM_SHA384",
-		tls.TLS_RSA_WITH_AES_128_CBC_SHA256:               "TLS_RSA_WITH_AES_128_CBC_SHA256",
-		tls.TLS_RSA_WITH_AES_128_CBC_SHA:                  "TLS_RSA_WITH_AES_128_CBC_SHA",
-		tls.TLS_RSA_WITH_AES_256_CBC_SHA:                  "TLS_RSA_WITH_AES_256_CBC_SHA",
-	}
-
-	if name, ok := names[id]; ok {
-		return name
-	}
-	return fmt.Sprintf("Unknown_Cipher_0x%04x", id)
 }
 
 // checkVersionAction checks the OpenShift cluster version

@@ -17,6 +17,11 @@ rules:
 - apiGroups: ["config.openshift.io"]
   resources: ["clusterversions"]
   verbs: ["get", "list"]
+# Reading the FeatureGate CR tells the configurator whether the cluster accepts
+# TLSProfileSpec.Groups (gated on TLSGroupPreferences) before it writes them.
+- apiGroups: ["config.openshift.io"]
+  resources: ["featuregates"]
+  verbs: ["get", "list"]
 - apiGroups: ["operator.openshift.io"]
   resources: ["ingresscontrollers"]
   verbs: ["get", "list", "watch", "update", "patch"]
