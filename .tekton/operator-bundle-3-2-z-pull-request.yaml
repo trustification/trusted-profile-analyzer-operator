@@ -6,6 +6,7 @@ metadata:
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
     build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
+    build.appstudio.openshift.io/build-nudge-files: ".*Dockerfile.*, .*.yaml, .*Containerfile.*, .*.json"
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
@@ -18,6 +19,10 @@ metadata:
   namespace: trusted-content-tenant
 spec:
   params:
+  - name: version
+    value: "v3.2.0"
+  - name: version-postfix-qe
+    value: "-rc"
   - name: git-url
     value: '{{source_url}}'
   - name: revision
@@ -486,6 +491,8 @@ spec:
         value: $(tasks.build-image-index.results.IMAGE_URL)
       - name: IMAGE_DIGEST
         value: $(tasks.build-image-index.results.IMAGE_DIGEST)
+      - name: ADDITIONAL_TAGS
+        value: ['$(params.version)$(params.version-postfix-qe)', '{{revision}}']    
       runAfter:
       - build-image-index
       taskRef:
