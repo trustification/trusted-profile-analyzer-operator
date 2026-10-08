@@ -1,0 +1,288 @@
+# RHTPA on OpenShift with CCO manual/STS credentials for *both* S3 and RDS.
+#
+# Variant of trusted-profile-analyzer-ocp-cco-manual-aws-s3.yaml: instead of an in-cluster
+# PostgreSQL with a static password, the database is an AWS RDS instance reached
+# with IAM authentication, using the same projected ServiceAccount token and IAM
+# role that already back the S3 access.
+#
+# Prerequisites (see devel/README.md for the ccoctl walk-through):
+#   1. devel/cco/aws-credentialRequest.yaml must also list "rds-db:connect" in its
+#      statementEntries, otherwise the role ccoctl creates cannot log into RDS.
+#   2. The RDS instance has IAM database authentication enabled.
+#   3. A `rds-connection-details` Secret with PGHOST / PGPORT / PGDATABASE /
+#      PGUSER. No PGPASSWORD is needed: PGUSER is the RDS master user here and
+#      it has been granted rds_iam, so every connection authenticates with a
+#      token.
+#
+#      Granting rds_iam *disables* password login for that role — it is
+#      all-or-nothing per role, so every connection that uses PGUSER (server,
+#      importer, migrate-db, create-db, create-importers) must be on IAM auth.
+#      Do not set `iamAuth: false` anywhere while PGUSER holds rds_iam; that
+#      connection will fail with `PAM authentication failed`.
+#
+#      Reusing the master as the application role is fine for a dev cluster but
+#      is not least-privilege, and it leaves no password break-glass. For a
+#      separate app role: create it as the master, GRANT it rds_iam plus
+#      CREATE ON SCHEMA public, and point `database.username` at it.
+kind: TrustedProfileAnalyzer
+apiVersion: rhtpa.io/v1
+metadata:
+  name: rhtpa-demo
+  namespace: trustify
+spec:
+  appDomain: -change-me
+  collector: {}
+
+  # --- CCO manual/STS integration, for S3 and RDS (see devel/README.md) ---
+  cloudProvider: aws
+  ccoMode: manual
+  ccoRds:
+    enabled: true
+    # Region of the RDS instance; used to sign the IAM auth token.
+    region: <your-region>
+  cloudCredentials:
+    aws:
+      statementEntries:
+        - effect: Allow
+          action:
+            - "s3:GetObject"
+            - "s3:PutObject"
+            - "s3:DeleteObject"
+            - "s3:ListBucket"
+            - "s3:GetBucketLocation"
+            - "s3:ListBucketMultipartUploads"
+            - "s3:AbortMultipartUpload"
+            - "s3:ListMultipartUploadParts"
+            # Required for RDS IAM auth. Narrow the resource to
+            # arn:aws:rds-db:<region>:<account>:dbuid:<db-resource-id>/<db-user>
+            # for a least-privilege policy.
+            - "rds-db:connect"
+          resource: "*"
+      # Fill in with the role ARN printed by `ccoctl aws create-iam-roles`.
+      # It must be a :role/ ARN — AssumeRoleWithWebIdentity rejects a :user/ ARN,
+      # which fails credential resolution in every pod that talks to AWS
+      # (including the rds-auth-token init container).
+      stsIAMRoleARN: "arn:aws:iam::<ACCOUNT_ID>:role/rhtpa-demo-trustify-rhtpa-demo-cloud-creds"
+  # ------------------------------------------------------------------------
+
+  # No password: with ccoRds.enabled the chart omits TRUSTD_DB_PASSWORD, sets
+  # TRUSTD_DB_IAM_AUTH=true / TRUSTD_DB_IAM_REGION, and forces sslMode to
+  # "require" (RDS IAM auth mandates TLS).
+  database:
+    host:
+      valueFrom:
+        secretKeyRef:
+          name: rds-connection-details
+          key: PGHOST
+    port:
+      valueFrom:
+        secretKeyRef:
+          name: rds-connection-details
+          key: PGPORT
+    name:
+      valueFrom:
+          secretKeyRef:
+            name: rds-connection-details
+            key: PGDATABASE
+    username:
+      valueFrom:
+        secretKeyRef:
+          name: rds-connection-details
+          key: PGUSER
+    # trustd's 25/75 default is unworkable over RDS IAM auth: each connection
+    # costs a PAM round-trip, and opening 25 at once starves them all inside
+    # trustd's 8s acquire timeout (not configurable from this chart), so the
+    # pool never yields even one connection and startup fails.
+    # Start the pool small and let it grow on demand. The server and the
+    # importer share these values — there is no per-module override.
+    minimumConnections: 2
+    maximumConnections: 20
+
+  # Bootstrap connection used by the create-database job. On this instance the
+  # RDS master user and the application (MASTER_PGUSER), and it
+  # has already been granted rds_iam (IAMDatabaseAuthenticationEnabled)— which permanently disables password login
+  # for it. So this connection uses IAM auth too: no `iamAuth: false`, no
+  # password. The chart gives the job an `rds-auth-token` init container that
+  # mints a token for MASTER_PGUSER, exactly as it does for create-importers.
+  #
+  # Being the master, that role can still run the `GRANT rds_iam` in init.sql
+  # (a no-op here, since it is already a member).
+  #
+  # Only `name` differs from `.Values.database`: the bootstrap connection has to
+  # attach to an existing database before `CREATE DATABASE` can run. An RDS token
+  # is bound to host+port+user and not to a database, so the `\connect :db_name`
+  # later in init.sql reuses the same token.
+  createDatabase:
+    name: postgres
+    username:
+      valueFrom:
+        secretKeyRef:
+          name: rds-connection-details
+          key: MASTER_PGUSER
+
+  # Runs `trustd db migrate`, which speaks RDS IAM auth natively. No iamAuth
+  # override and no password: it connects as the application user with a token,
+  # exactly like the server and importer. That user therefore must own (or be
+  # able to create) the schema objects.
+  migrateDatabase:
+    host:
+      valueFrom:
+        secretKeyRef:
+          name: rds-connection-details
+          key: PGHOST
+    port:
+      valueFrom:
+        secretKeyRef:
+          name: rds-connection-details
+          key: PGPORT
+    name:
+      valueFrom:
+        secretKeyRef:
+          name: rds-connection-details
+          key: PGDATABASE
+    username:
+      valueFrom:
+        secretKeyRef:
+          name: rds-connection-details
+          key: PGUSER
+    # trustd defaults to a 25/75 pool, which a one-shot `db migrate` does not
+    # need and a small RDS instance may not have room for — the server and the
+    # importer are already holding 25 each by the time this job runs.
+    minimumConnections: 1
+    maximumConnections: 5
+
+  infrastructure:
+    port: 9010
+  ingress: {
+    className: openshift-default,
+    additionalAnnotations: {
+      haproxy.router.openshift.io/timeout: 5m
+    }
+  }
+  metrics:
+    enabled: false
+  modules:
+    # Both jobs shell out to `psql`, which cannot mint an RDS IAM token itself.
+    # Whenever the connection they make uses IAM auth, the chart prepends an
+    # `rds-auth-token` init container (the operator image) that mints the token
+    # onto a shared in-memory volume; the job then reads it into PGPASSWORD.
+    # Here that applies to create-importers, which connects as the `trustify`
+    # user; create-db connects as the RDS master user and keeps its password.
+    createDatabase:
+      enabled: true
+      image: {}
+    createImporters:
+      enabled: true
+      image: {}
+      importers:
+        redhat-sboms:
+          sbom:
+            description: All Red Hat SBOMs
+            period: 1d
+            source: https://access.redhat.com/security/data/sbom/beta/
+            keys:
+              - https://access.redhat.com/security/data/97f5eac4.txt#77E79ABE93673533ED09EBE2DCE3823597F5EAC4
+            disabled: true
+            fetchRetries: 50
+        redhat-csaf:
+          csaf:
+            description: All Red Hat CSAF data
+            period: 1d
+            source: redhat.com
+            disabled: true
+            fetchRetries: 50
+        cve:
+          cve:
+            description: CVE list v5
+            period: 1d
+            source: https://github.com/CVEProject/cvelistV5
+            disabled: false
+        osv-github:
+          osv:
+            description: GitHub Advisory Database
+            period: 1d
+            source: https://github.com/github/advisory-database
+            path: advisories
+            disabled: false
+        quay-redhat-user-workloads:
+          quay:
+            description: SBOMs from konflux image attachments
+            period: 1d
+            source: quay.io
+            namespace: redhat-user-workloads
+            disabled: true
+    importer:
+      concurrency: 4
+      enabled: true
+      image: {}
+      infrastructure: {}
+      metrics: {}
+      replicas: 1
+      resources:
+        requests:
+          cpu: 1
+          memory: 8Gi
+      rust: {}
+      tracing: {}
+      workingDirectory:
+        size: 32Gi
+    migrateDatabase:
+      enabled: true
+      image: {}
+    server:
+      enabled: true
+      image: {}
+      infrastructure: {}
+      ingress: {}
+      metrics: {}
+      replicas: 1
+      resources:
+        requests:
+          cpu: 1
+          memory: 8Gi
+      rust: {}
+      tracing: {}
+  oidc:
+    uiScope: ""
+    loadUser: true
+    clients:
+      frontend: { }
+      cli:
+        clientSecret:
+  openshift:
+    useServiceCa: true
+  partOf: trustify
+  # The database is RDS, so the in-cluster PostgreSQL from the
+  # trustify-infrastructure chart is not used.
+  postgresql:
+    enabled: false
+  replicas: 1
+  rust: {}
+  # CCO manual/STS mode: no accessKey/secretKey — the AWS SDK uses the
+  # projected SA token + role injected by the operator.
+  storage: {
+    type: s3,
+    bucket: <your-bucket-name>,
+    region: <your-region>
+  }
+
+  # Trust the cluster's router CA so trustd can reach the Keycloak route over TLS.
+  # Requires the `ingress-trust-anchor` ConfigMap (see devel/README.md).
+  tls: {
+    additionalTrustAnchor: /etc/trust-anchor/tls.crt
+  }
+
+  # The path above must actually exist in every pod that reads it — the init
+  # jobs included, since TRUSTD_S3_TRUST_ANCHORS is set chart-wide.
+  extraVolumes:
+  - name: trust-anchor
+    configMap:
+      name: ingress-trust-anchor
+
+  extraVolumeMounts:
+  - name: trust-anchor
+    readOnly: true
+    mountPath: /etc/trust-anchor
+
+  tracing:
+    enabled: false

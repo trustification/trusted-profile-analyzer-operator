@@ -36,9 +36,16 @@ data:
     $$ language plpgsql;
 
     SELECT add_user_if_not_exists(:'db_user');
+    {{- if eq (include "trustification.cco.rds.isConnectionIamAuth" (dict "root" . "database" .Values.database)) "true" }}
+
+    -- the user authenticates with an RDS IAM token, so it has no password;
+    -- granting rds_iam is what enables token login (and disables password login)
+    GRANT rds_iam TO :db_user;
+    {{- else }}
 
     -- now set the password
     ALTER USER :db_user WITH PASSWORD :'db_password';
+    {{- end }}
 
     -- grant permission to connect
     GRANT CONNECT ON DATABASE :db_name TO :db_user;
