@@ -293,6 +293,233 @@ Because the override always wins over the CR, the operator writes to `defaultTok
 
 The operator requires a ClusterRole with permissions on `cloudcredential.openshift.io/credentialsrequests` (create, delete, get, list, patch, update, watch). This is configured in `config/rbac/clusterrole.yaml` and bound via `config/rbac/clusterrolebinding_cco.yaml`.
 
+## TLS Configurator & Post-Quantum Cryptography (PQC)
+
+### How the TLS Configurator is wired in
+
+Detailed documentation lives in `docs/tls-configurator/`:
+
+- `DEPLOYMENT.md` — per-platform configuration (OpenShift 4.22+, OpenShift
+  < 4.22, plain Kubernetes), verification and troubleshooting. `devel/README.md`
+  has the runnable CRC version.
+- `TLS_ADHERENCE.md` — how the component implements Red Hat's *TLS Profile
+  Compliance — Implementation Reference*.
+- `FINAL_PROJECT_STATUS.md` — component inventory (predates the adherence
+  work).
+
+The chart ships an optional `tlsConfigurator` module (disabled by default).
+
+**The configurator now lives in this repo and ships in the operator image.** It
+was previously an external component built from the sibling
+`tls-openshift-configurator` repo and published as its own image. Its source is
+now:
+
+```
+cmd/tls-configurator/        CLI entry point, flag parsing, action dispatch
+pkg/tlsconfigurator/
+  client/                    IngressController, APIServer, ClusterVersion, Deployment clients
+  config/                    Config building / kubeconfig handling
+  controller/                One-shot TLS controller orchestration
+  crypto/                    OpenShift TLSSecurityProfile -> crypto/tls.Config (+ PQC)
+  reconcile/                 Long-running runtime reconciler (watch -> roll workloads)
+test/tlsconfigurator/        Ginkgo/Gomega integration suite
+```
+
+Both `Dockerfile` and `Dockerfile.rhtpa-operator.rh` build a second binary
+alongside `manager` and install it at `/usr/local/bin/tls-configurator`. The
+image `ENTRYPOINT` remains `/manager`, so the configurator Deployment selects it
+with an explicit `command:`. `make build-tls-configurator` builds it standalone.
+
+- Toggle: `modules.tlsConfigurator.enabled` (`values.yaml`, default `false`)
+- Image: `modules.tlsConfigurator.image.fullName` — the **operator's own image**.
+  `watches.yaml` sets `overrideValues` to expand
+  `$RELATED_IMAGE_TLS_CONFIGURATOR` into this key, so the configurator always
+  runs the exact digest of the operator that rendered the chart.
+  `RELATED_IMAGE_TLS_CONFIGURATOR` is set on the manager container
+  (`config/manager/manager.yaml`, and the generated CSV) and mirrored into the
+  CSV `relatedImages` under the name `tls-configurator` so disconnected installs
+  pull it. **When the operator image digest changes, all three must move
+  together**: the manager `image:`, the env var, and the `relatedImages` entry.
+- Rendered resources live under
+  `helm-charts/redhat-trusted-profile-analyzer/templates/init/tls-configure/`:
+  ServiceAccount (`010`), ClusterRole (`015`), namespaced Role (`016`),
+  RoleBinding (`017`), ClusterRoleBinding (`018`), and a **Deployment** (`020`).
+
+Sharing an image does **not** mean sharing a pod: the configurator still runs as
+its own Deployment with its own ServiceAccount and cluster RBAC.
+
+**Architecture change (runtime reconciliation).** The module used to be a Helm
+`pre-install,pre-upgrade` hook **Job** that ran `--action=update` once. It is now
+a long-running **Deployment** that runs `--action=reconcile`: it reconciles once
+on startup (covering the old install-time behaviour) and then watches the
+cluster-wide TLS profile so a change **at runtime** rolls the affected
+workloads. The RBAC resources are therefore plain (non-hook) objects that live
+for the lifetime of the release, in `.Release.Namespace`.
+
+The Deployment invokes:
+
+```
+--action=reconcile
+--enable-pqc={{ .Values.modules.tlsConfigurator.pqc.enabled }}
+--target-namespace={{ .Release.Namespace }}
+--target-deployments={{ join "," .Values.modules.tlsConfigurator.targetDeployments }}
+--resync-period={{ .Values.modules.tlsConfigurator.resyncPeriod }}
+```
+
+### Upstream packages (do not reimplement these)
+
+Profile resolution and `tls.Config` construction are delegated to the packages
+Red Hat documents for this, not hand-rolled:
+
+- `github.com/openshift/controller-runtime-common/pkg/tls` —
+  `GetTLSProfileSpec`, `NewTLSConfigFromProfile`, `SetNextProtos`,
+  `APIServerName`.
+- `github.com/openshift/library-go/pkg/crypto` — TLS version and cipher name
+  conversion, and `ShouldHonorClusterTLSProfile`.
+
+`pkg/tlsconfigurator/crypto` is a thin adapter over those two. It must not
+regrow local cipher-name tables or per-profile cipher lists: the built-in
+profiles live in `configv1.TLSProfiles` and already carry `Groups`, including
+`X25519MLKEM768`. `BuildTLSConfig` returns an `unsupported []string` rather
+than erroring on ciphers Go cannot offer — a cluster profile may legitimately
+name OpenSSL-only suites, and failing there would stop reconciliation.
+
+### `tlsAdherence`
+
+`APIServer.spec.tlsAdherence` (feature gate `TLSAdherence`) says whether
+components *must* honor the cluster profile. The configurator honors it in
+every mode — it has no competing TLS settings of its own — but the policy is
+part of the rollout hash, so tightening it to `StrictAllComponents` rolls the
+workloads even when the profile is unchanged. It is logged once per distinct
+value and reported by `--action=get-adherence`, `get-cluster`,
+`show-tlsconfig` and `validate`.
+
+### Runtime update flow (TLS change → workload rollout)
+
+1. The reconciler watches the cluster `APIServer` CR (`cluster`) — both
+   `.spec.tlsSecurityProfile` and `.spec.tlsAdherence`, the authoritative
+   cluster-wide TLS config.
+2. On any change it computes a hash of the **resolved** `TLSProfileSpec` plus
+   the adherence policy and the PQC flag, and compares it to each target
+   Deployment's `rhtpa.io/tls-config-hash` pod-template annotation. Hashing the
+   resolved spec means equivalent spellings (unset vs. explicit
+   `Intermediate`, a `Custom` profile that restates a built-in) do not churn
+   the workloads.
+3. Deployments whose hash differs are patched, changing the pod template and
+   triggering a **rolling restart** so pods re-read the new TLS settings. This
+   reuses the same idea as the chart's existing `configHash/auth` annotation on
+   the server Deployment. Kubernetes does not restart pods on ConfigMap/Secret
+   change by itself, so this explicit hash bump is required.
+4. `rhtpa.io/tls-config-hash` is intentionally **not** in the Helm templates so
+   the operator's periodic re-render does not fight the reconciler.
+
+`targetDeployments` (default `[server]`) must match the rendered Deployment
+names of the TLS-serving workloads (the server Deployment renders as `server`).
+
+### When the module must be on, and when it must be off
+
+The module is OpenShift-only, and the chart *enforces* the matrix rather than
+just documenting it:
+
+| Platform | `modules.tlsConfigurator.enabled` | Enforced by |
+| --- | --- | --- |
+| OpenShift >= 4.22 | **required `true`** | install fails unless `allowDisabled: true` |
+| OpenShift < 4.22 | optional | nothing — `reconcile` has no version gate, so it runs fine, it is just not mandatory |
+| plain Kubernetes | **required `false`** (the default) | install fails if enabled |
+
+The deeper reason for the plain-Kubernetes row is not just the missing
+`config.openshift.io/v1` API. `trustification.openshift.useServiceCa` resolves
+to `false` off OpenShift, so the chart never sets `HTTP_SERVER_TLS_ENABLED` and
+the server listens on **plain HTTP** — TLS terminates at the ingress
+controller. There is no `tls.Config` in the RHTPA pods for a cluster profile to
+apply to, which is the reference's "plaintext behind a TLS-terminating router:
+out of scope". User-facing per-platform configuration (including where TLS
+*is* configured on plain Kubernetes) is in
+`docs/tls-configurator/DEPLOYMENT.md` and `devel/README.md`.
+
+Enforcement lives in
+`helm-charts/redhat-trusted-profile-analyzer/templates/init/tls-configure/000-validate.yaml`.
+It renders no resources and is deliberately **not** gated on
+`.enabled` — it has to run in the disabled case too. Details:
+
+- Platform detection reuses the chart's existing
+  `trustification.openshift.detect` helper (`route.openshift.io/v1` +
+  `openshift.enabled`). Escape hatch for wrong detection:
+  `openshift.enabled: true`.
+- The 4.22 check uses `lookup "config.openshift.io/v1" "ClusterVersion" ""
+  "version"` and parses `.status.desired.version`. `lookup` returns nothing
+  under `helm template` / `--dry-run`, so the check is **skipped** there rather
+  than failing on an unreadable version. Do not "fix" that by failing closed —
+  it would break every dry run and the operator's own rendering paths.
+- `modules.tlsConfigurator.allowDisabled` (default `false`) is consulted only
+  when `enabled` is `false`. It is an explicit acknowledgement that a runtime
+  TLS profile change will not roll the workloads.
+
+User-facing versions of this live in the chart `README.md` and in
+`values.yaml` comments; `values.schema.json` is the schema Helm actually
+enforces, so `allowDisabled` had to be added there (the `.yaml` schema is the
+source but is not what Helm reads).
+
+### Enabling Post-Quantum Cryptography
+
+PQC in TLS 1.3 is delivered through the hybrid **key-exchange group**
+`X25519MLKEM768` (X25519 + ML-KEM-768, NIST FIPS 203) — **not** through the
+cipher suites, which stay the same. Hybrid PQC key exchange requires TLS 1.3.
+
+PQC support (a `--enable-pqc` flag, `CurvePreferences=[X25519MLKEM768, X25519]`,
+forced TLS 1.3, a `validate` action) and the runtime `reconcile` mode are built
+into the configurator. Because it now ships in the operator image, there is no
+separate image to rebuild or republish — an operator build carries it.
+
+**Groups come from the cluster profile.** `TLSProfileSpec.Groups []TLSGroup`
+exists in the `openshift/api` this repo depends on, and the built-in `Old`,
+`Intermediate` and `Modern` profiles all list `TLSGroupX25519MLKEM768` first.
+Because the config is now built by `NewTLSConfigFromProfile`, those groups land
+in `CurvePreferences` automatically — a cluster on `Modern` is post-quantum
+without `--enable-pqc`.
+
+**Router-level PQC is implemented, gated on `TLSGroupPreferences`.**
+`--action=update --enable-pqc` with a `Custom` profile writes
+`Groups: [X25519MLKEM768, X25519]` onto the IngressController profile. The
+field is behind the `TLSGroupPreferences` feature gate and the API server
+rejects it when the gate is off, so `controller.SupportsTLSGroups` reads the
+`FeatureGate` CR first and the field is skipped (with a log line) on clusters
+without it. `--enable-pqc` additionally forces TLS 1.3 locally, since hybrid
+key exchange is only defined for TLS 1.3.
+
+To enable from the operator side:
+
+1. Set `modules.tlsConfigurator.enabled: true`. The image is the operator's own;
+   no value needs pointing at a separate registry.
+2. Set `modules.tlsConfigurator.pqc.enabled: true`.
+3. Confirm `modules.tlsConfigurator.targetDeployments` lists the TLS-serving
+   Deployments to roll on change.
+
+### RBAC
+
+The reconciler needs: `watch` on `config.openshift.io/apiservers`, `get,list` on
+`clusterversions` and on `featuregates`, `get,list,watch,update,patch` on
+`operator.openshift.io/ingresscontrollers` (ClusterRole `015`), and
+`get,list,watch,update,patch` on `apps/deployments` in the release namespace
+(Role `016`). These are provided by the chart. Reading `.spec.tlsAdherence`
+needs nothing extra — it rides on the same `APIServer` get as the profile.
+
+Because this is a Helm operator, it can only *grant* permissions it holds
+itself (RBAC escalation prevention). `config/rbac/role_cluster_rbac_manager.yaml`
+(`rhtpa-rbac-manager`) was therefore widened to also hold `apiservers` (watch),
+`featuregates`, `ingresscontrollers`, `apps/deployments`, and namespaced
+`roles`/`rolebindings` so the operator can create the reconciler's RBAC and
+Deployment.
+
+**Follow-up / known issue:** `config/rbac/role_cluster_tlsconfigurator.yaml` +
+`role_binding_tlsconfigurator.yaml` + the `tls-configurator` entry in
+`config/rbac/service_account.yaml` are static bundle copies from the old hook-Job
+design. They now duplicate (by name) the ClusterRole/ClusterRoleBinding/SA the
+Helm chart creates, and the static binding still targets
+`openshift-ingress-operator` while the reconciler SA now lives in the release
+namespace. Decide whether to remove the static copies (let the chart own them) or
+keep them as the bundle grant — this is a packaging call left open on purpose.
+
 ## Linting
 
 The project uses golangci-lint with configuration in `.golangci.yml`. Enabled linters include:

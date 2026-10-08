@@ -66,6 +66,13 @@ spec:
         name: manager
         # [RDS_AUTH_TOKEN] RELATED_IMAGE_RDS_AUTH_TOKEN is added by the
         # ../rds-auth-token component, which is enabled from config/default.
+        env:
+          # The TLS configurator ships in this same image. watches.yaml expands
+          # this into modules.tlsConfigurator.image.fullName so the configurator
+          # Deployment always runs the operator's own digest. Keep this in sync
+          # with the manager image and with the CSV relatedImages entry.
+          - name: RELATED_IMAGE_TLS_CONFIGURATOR
+            value: controller:latest
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

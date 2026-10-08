@@ -1,0 +1,61 @@
+{{/*
+Platform guard for the TLS configurator module. Renders no resources.
+
+The reconciler is OpenShift-specific: it reads the cluster-wide TLS profile from
+the config.openshift.io APIServer CR ("cluster") and rolls the target workloads
+when that profile changes. The API does not exist on plain Kubernetes.
+
+  OpenShift >= 4.22   the module is required; refuse to render with it disabled
+  OpenShift <  4.22   optional -- the reconcile action has no version gate, so
+                      it works there, it is just not mandatory
+  plain Kubernetes    must stay disabled; refuse to render with it enabled
+
+Both guards can be overridden -- see the messages below -- so an operator can
+still make a deliberate choice.
+*/}}
+{{- $tls := .Values.modules.tlsConfigurator }}
+{{- $isOpenShift := eq (include "trustification.openshift.detect" .) "true" }}
+
+{{- if and (not $isOpenShift) $tls.enabled }}
+{{- fail (printf `modules.tlsConfigurator.enabled is true, but this cluster does not expose the OpenShift API (route.openshift.io/v1).
+
+The TLS configurator reads the cluster-wide TLS profile from the
+config.openshift.io APIServer CR, which does not exist on plain Kubernetes. The
+reconciler would fail every attempt and retry indefinitely without ever serving
+its purpose.
+
+On plain Kubernetes, leave it off:
+    modules.tlsConfigurator.enabled: false   (the chart default)
+
+If this really is OpenShift and detection is wrong, force it with:
+    openshift.enabled: true`) }}
+{{- end }}
+
+{{- if and $isOpenShift (not $tls.enabled) (not $tls.allowDisabled) }}
+{{/*
+lookup returns nothing during `helm template` and dry runs, so the version check
+is skipped there rather than failing on an unknown version.
+*/}}
+{{- $clusterVersion := lookup "config.openshift.io/v1" "ClusterVersion" "" "version" }}
+{{- if $clusterVersion }}
+{{- $version := dig "status" "desired" "version" "" $clusterVersion }}
+{{- $parts := splitList "." $version }}
+{{- if ge (len $parts) 2 }}
+{{- $major := atoi (index $parts 0) }}
+{{- $minor := atoi (index $parts 1) }}
+{{- if or (gt $major 4) (and (eq $major 4) (ge $minor 22)) }}
+{{- fail (printf `modules.tlsConfigurator.enabled is false, but this is OpenShift %s where the TLS configurator is required.
+
+From OpenShift 4.22 the cluster-wide TLS security profile can change at runtime,
+and RHTPA workloads only pick up the new settings when something rolls them. The
+configurator is what does that.
+
+Enable it:
+    modules.tlsConfigurator.enabled: true
+
+To install without it anyway, acknowledge the choice explicitly:
+    modules.tlsConfigurator.allowDisabled: true` $version) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
