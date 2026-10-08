@@ -411,6 +411,6 @@ spec:
     name: Red Hat
     url: https://github.com/trustification/trusted-profile-analyzer-operator
   relatedImages:
-    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:6fe313427a462a19795cfd3be80e5bafff54011119836a69e0d61daa1337c63e
+    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:c2bd4c8ad667f5519874345b2a8a0014a31a607df46a85040b5a33256dfc2b60
       name: manager
   version: 3.2.0
