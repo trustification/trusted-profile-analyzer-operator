@@ -50,12 +50,42 @@ Arguments (dict):
 - name: TRUSTD_STORAGE_STRATEGY
   value: s3
 
+{{- if not (eq (include "trustification.cco.isManualMode" .) "true") }}
 - name: TRUSTD_S3_ACCESS_KEY
+  {{- if and .root.Values.cloudProvider (not .storage.accessKey) }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ .root.Release.Name }}-cloud-creds
+      key: aws_access_key_id
+  {{- else }}
   {{- include "trustification.common.envVarValue" .storage.accessKey | nindent 2 }}
+  {{- end }}
 - name: TRUSTD_S3_SECRET_KEY
+  {{- if and .root.Values.cloudProvider (not .storage.secretKey) }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ .root.Release.Name }}-cloud-creds
+      key: aws_secret_access_key
+  {{- else }}
   {{- include "trustification.common.envVarValue" .storage.secretKey | nindent 2 }}
+  {{- end }}
+{{- end }}
 - name: TRUSTD_S3_REGION
   {{- include "trustification.common.envVarValue" .storage.region | nindent 2 }}
+{{- /*
+  In manual (STS) mode the AWS SDK exchanges the projected service-account token for
+  credentials via AssumeRoleWithWebIdentity, and needs a region to resolve the STS
+  endpoint. TRUSTD_S3_REGION only reaches the S3 client, not the credential provider
+  chain, and nothing else in the pod sets a region — so mirror it into AWS_REGION.
+  Skipped when the region is an endpoint URL: those are S3-compatible backends, which
+  do not use STS.
+*/ -}}
+{{- if eq (include "trustification.cco.isManualMode" .) "true" }}
+{{- if not (and (kindIs "string" .storage.region) (hasPrefix "http" .storage.region)) }}
+- name: AWS_REGION
+  {{- include "trustification.common.envVarValue" .storage.region | nindent 2 }}
+{{- end }}
+{{- end }}
 - name: TRUSTD_S3_BUCKET
   value: {{ .storage.bucket | quote }}
 
