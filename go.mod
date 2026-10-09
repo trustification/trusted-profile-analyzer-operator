@@ -7,8 +7,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/rds/auth v1.7.3
 	github.com/onsi/ginkgo/v2 v2.33.0
 	github.com/onsi/gomega v1.44.0
-	github.com/openshift/api v0.0.0-20261002115817-f8795cdde518
-	github.com/openshift/client-go v0.0.0-20261001003915-dcaad1dc7fe8
+	github.com/openshift/api v0.0.0-20261006163836-502232e87aad
+	github.com/openshift/client-go v0.0.0-20261006222332-348fc1ca8bb1
 	github.com/openshift/controller-runtime-common v0.0.0-20261005093240-b39eb7218441
 	github.com/openshift/library-go v0.0.0-20261007171047-6b65bdf70bbb
 	github.com/operator-framework/helm-operator-plugins v0.9.1
