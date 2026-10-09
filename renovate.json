@@ -1,0 +1,38 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "useBaseBranchConfig": "merge",
+  "automerge": false,
+  "autoApprove": false,
+  "automergeType": "pr",
+  "platformAutomerge": true,
+  "automergeStrategy": "merge-commit",
+  "ignoreTests": false,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "autoApprove": true
+  },
+  "packageRules": [
+    {
+      "description": "Konflux: Tekton task bundles and pipeline definitions in .tekton/ are automerged, except when the update notes mention a migration, which the Konflux migration guard workflow blocks",
+      "matchManagers": ["tekton"],
+      "groupName": "konflux",
+      "automerge": true,
+      "autoApprove": true
+    },
+    {
+      "description": "Golang: Go module dependencies and the Go toolchain version are automerged",
+      "matchManagers": ["gomod"],
+      "groupName": "golang",
+      "automerge": true,
+      "autoApprove": true
+    },
+    {
+      "description": "Base images: builder and runtime images referenced by the Dockerfiles are automerged",
+      "matchManagers": ["dockerfile"],
+      "groupName": "base images",
+      "automerge": true,
+      "autoApprove": true
+    }
+  ]
+}
