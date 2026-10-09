@@ -1,0 +1,82 @@
+name: Konflux migration guard
+
+# Tekton task bumps that ship a pipeline migration rewrite the pipelines in
+# .tekton/, so they need human review. Failing this check keeps the branch red,
+# which stops Renovate automerge because ignoreTests is false: Renovate waits
+# for every check on the branch, not only the ones branch protection marks
+# required. The approval Renovate gave itself is dismissed as well.
+#
+# This guard deliberately does not rely on GitHub's native auto-merge being
+# held back, because that only waits for required status checks and would
+# happily merge a migration PR during the runner queue delay. renovate.json
+# therefore sets platformAutomerge:false on the konflux group; keep it that way
+# or this check becomes advisory. Marking "Check update notes for task
+# migrations" required in branch protection is a useful second layer, but
+# nothing here depends on it.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  migration-notes:
+    name: Check update notes for task migrations
+    if: startsWith(github.head_ref, 'konflux/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: Scan the updates table
+        id: scan
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python3 -I .github/scripts/konflux_migration_guard.py
+
+      - name: Block automerge
+        if: steps.scan.outputs.migration == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          MESSAGE: >-
+            This update contains a Tekton task migration, so it needs human
+            review before it can be merged.
+        run: |
+          set -euo pipefail
+
+          # Nothing below can undo a merge, so say so loudly rather than
+          # dismissing reviews on a PR that has already landed.
+          pr=$(gh pr view "$PR" --repo "$REPO" --json state,autoMergeRequest)
+          if [ "$(jq -r '.state' <<<"$pr")" = "MERGED" ]; then
+            echo "::error::PR #$PR merged before this guard ran, so a task migration landed without review."
+            exit 1
+          fi
+
+          # --disable-auto errors when auto-merge was never armed, which is the
+          # normal case now that platformAutomerge is off; ask first so that a
+          # genuine failure to disarm it still fails the step.
+          if [ "$(jq -r '.autoMergeRequest // "null"' <<<"$pr")" != "null" ]; then
+            gh pr merge --disable-auto "$PR" --repo "$REPO"
+          fi
+
+          gh api --paginate "repos/$REPO/pulls/$PR/reviews" \
+            --jq '.[] | select(.state == "APPROVED") | .id' |
+            while read -r review; do
+              gh api -X PUT "repos/$REPO/pulls/$PR/reviews/$review/dismissals" \
+                -f message="$MESSAGE" -f event=DISMISS
+            done
+
+      - name: Fail on task migrations
+        if: steps.scan.outputs.migration == 'true'
+        run: |
+          echo "::error::Task migration found in the update notes; review and merge this PR manually."
+          exit 1
