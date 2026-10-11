@@ -1,0 +1,83 @@
+apiVersion: rhtpa.io/v1
+kind: TrustedProfileAnalyzer
+metadata:
+  name: e2e-test-instance
+  namespace: e2e-test
+spec:
+  appDomain: .e2e.local
+  partOf: trustify
+  replicas: 1
+
+  image:
+    fullName: ${APP_IMAGE}
+    pullPolicy: IfNotPresent
+
+  openshift:
+    useServiceCa: false
+
+  database:
+    host: postgresql
+    port: "5432"
+    name: trustify
+    username: trustify
+    password: trustify1234
+
+  migrateDatabase:
+    username: trustify
+    password: trustify1234
+
+  storage:
+    type: filesystem
+    size: 1Gi
+
+  oidc:
+    issuerUrl: http://keycloak.e2e-test.svc.cluster.local:8080/realms/master
+    clients:
+      frontend:
+        clientId: frontend
+      cli:
+        clientSecret: e2e-test-secret
+
+  ingress:
+    enabled: true
+
+  infrastructure:
+    port: 9010
+
+  metrics:
+    enabled: false
+
+  tracing:
+    enabled: false
+
+  collector: {}
+
+  rust: {}
+
+  tls: {}
+
+  modules:
+    server:
+      enabled: true
+      replicas: 1
+      image: {}
+      ingress: {}
+      infrastructure: {}
+      tracing: {}
+      metrics: {}
+      rust: {}
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+    importer:
+      enabled: false
+    createDatabase:
+      enabled: false
+    migrateDatabase:
+      enabled: false
+    createImporters:
+      enabled: false
