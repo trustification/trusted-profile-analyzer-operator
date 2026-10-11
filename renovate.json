@@ -1,0 +1,39 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "useBaseBranchConfig": "merge",
+  "automerge": false,
+  "autoApprove": false,
+  "automergeType": "pr",
+  "platformAutomerge": true,
+  "automergeStrategy": "merge-commit",
+  "ignoreTests": false,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "autoApprove": true
+  },
+  "packageRules": [
+    {
+      "description": "Konflux: Tekton task bundles and pipeline definitions in .tekton/ are automerged, except when the update notes mention a migration, which the Konflux migration guard workflow blocks. platformAutomerge is off for this group on purpose: GitHub auto-merge only waits for checks that branch protection marks required, so it can merge a migration PR in the seconds before the guard workflow has even started. Renovate's own automerge honours every check on the branch because ignoreTests is false, so a red guard keeps the PR open no matter how branch protection is configured.",
+      "matchManagers": ["tekton"],
+      "groupName": "konflux",
+      "automerge": true,
+      "autoApprove": true,
+      "platformAutomerge": false
+    },
+    {
+      "description": "Golang: Go module dependencies and the Go toolchain version are automerged",
+      "matchManagers": ["gomod"],
+      "groupName": "golang",
+      "automerge": true,
+      "autoApprove": true
+    },
+    {
+      "description": "Base images: builder and runtime images referenced by the Dockerfiles are automerged",
+      "matchManagers": ["dockerfile"],
+      "groupName": "base images",
+      "automerge": true,
+      "autoApprove": true
+    }
+  ]
+}
