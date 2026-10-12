@@ -1,7 +1,7 @@
 # TLS Configurator — Status
 
 **Last verified**: 2026-09-28 (branch `tls-configurator-merge`)
-**Go**: 1.26.7 (`go.mod`)
+**Go**: 1.27 (`go.mod`)
 **Build**: `go build ./...` clean · **Tests**: all `pkg/tlsconfigurator/...` and `test/tlsconfigurator` packages pass
 
 > Supersedes the earlier version of this file, which described the standalone
@@ -29,7 +29,7 @@ own Deployment.
 | Phase | Outcome |
 |---|---|
 | 1. Initial implementation | Standalone CLI: IngressController TLS management, unit + integration tests, container build |
-| 2. Toolchain refresh | Go 1.26, UBI10 base image, podman build/push |
+| 2. Toolchain refresh | Go 1.27, UBI10 base image, podman build/push |
 | 3. OpenShift best practices (PR #316) | APIServer cluster-wide profile as source of truth, `crypto/tls.Config` conversion, OpenSSL→IANA cipher mapping |
 | 4. Version-check guardrail | OpenShift 4.22+ detection and enforcement before updates |
 | 5. PQC support | `--enable-pqc`: TLS 1.3-only + `X25519MLKEM768` hybrid key exchange, `validate` action |
@@ -271,7 +271,7 @@ make podman-build             # operator image, which carries the configurator
 There is no `make build` or standalone `make docker-build` for this component —
 it is built as part of the operator image. Base image:
 `registry.access.redhat.com/ubi10/ubi-minimal`; builder:
-`registry.access.redhat.com/hi/go:1.26.7`.
+`registry.access.redhat.com/hi/go:1.27`.
 
 ### Test inventory
 
@@ -357,7 +357,7 @@ these describe the standalone repo and are stale on the following points:
 | Old doc says | Now |
 |---|---|
 | `pkg/crypto`, `pkg/client`, `test/suite` | `pkg/tlsconfigurator/...`, `test/tlsconfigurator` |
-| Go 1.25.5 | Go 1.26.7 |
+| Go 1.25.5 | Go 1.27 |
 | UBI9 base | UBI10 base |
 | `make build` / `make docker-build` | `make build-tls-configurator`; ships in the operator image |
 | Image `openshift/tls-configurator:latest` | No separate image; operator's own digest |

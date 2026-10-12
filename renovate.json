@@ -1,8 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "useBaseBranchConfig": "merge",
-  "automerge": false,
-  "autoApprove": false,
+  "automerge": true,
+  "autoApprove": true,
   "automergeType": "pr",
   "platformAutomerge": true,
   "automergeStrategy": "merge-commit",
