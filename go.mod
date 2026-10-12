@@ -1,6 +1,6 @@
 module github.com/trustification/trusted-profile-analyzer-operator
 
-go 1.26.7
+go 1.27.2
 
 require (
 	github.com/aws/aws-sdk-go-v2/config v1.33.6
