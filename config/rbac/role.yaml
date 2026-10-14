@@ -80,4 +80,12 @@ rules:
   - update
   - watch
 
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - apiservers
+  verbs:
+  - get
+  - list
+
 # +kubebuilder:scaffold:rules
