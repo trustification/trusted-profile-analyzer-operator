@@ -17,6 +17,10 @@ metadata:
   namespace: trusted-content-tenant
 spec:
   params:
+  - name: version
+    value: "v3.0.1"
+  - name: version-postfix-qe
+    value: "-rc"
   - name: git-url
     value: '{{source_url}}'
   - name: revision
@@ -27,6 +31,12 @@ spec:
     value: Dockerfile.rhtpa-operator.rh
   - name: path-context
     value: .
+  - name: build-source-image
+    value: "true"
+  - name: hermetic
+    value: "true"
+  - name: prefetch-input
+    value: '{"type": "gomod", "path": "."}'
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while maintaining trust after pipeline customization.
@@ -479,6 +489,8 @@ spec:
         value: $(tasks.build-image-index.results.IMAGE_URL)
       - name: IMAGE_DIGEST
         value: $(tasks.build-image-index.results.IMAGE_DIGEST)
+      - name: ADDITIONAL_TAGS
+        value: ['$(params.version)$(params.version-postfix-qe)', '{{revision}}']   
       runAfter:
       - build-image-index
       taskRef:
