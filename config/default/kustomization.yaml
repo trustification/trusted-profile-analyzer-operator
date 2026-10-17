@@ -38,6 +38,28 @@ resources:
 components:
 - ../rds-auth-token
 
+# [TLS_CONFIGURATOR] The TLS configurator binary ships inside the operator image
+# (see Dockerfile), so RELATED_IMAGE_TLS_CONFIGURATOR must track whatever image
+# the manager runs — watches.yaml expands it into
+# modules.tlsConfigurator.image.fullName. config/manager/manager.yaml can only
+# carry the `controller:latest` placeholder; without this replacement that
+# placeholder ships verbatim into the CSV env var and relatedImages, and
+# `make bundle` fails trying to resolve it to a digest.
+#
+# Pin a different image: replace the value in config/manager/manager.yaml and
+# comment out this block, which would otherwise overwrite it.
+replacements:
+- source:
+    fieldPath: spec.template.spec.containers.[name=manager].image
+    kind: Deployment
+    name: controller-manager
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.[name=manager].env.[name=RELATED_IMAGE_TLS_CONFIGURATOR].value
+    select:
+      kind: Deployment
+      name: controller-manager
+
 # Uncomment the patches line if you enable Metrics, and/or are using webhooks and cert-manager
 patches:
 # [METRICS] The following patch will enable the metrics endpoint using HTTPS and the port :8443.
