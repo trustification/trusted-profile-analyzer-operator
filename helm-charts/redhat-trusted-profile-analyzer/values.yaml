@@ -3,7 +3,7 @@ partOf: trustify
 replicas: 1
 
 image:
-  fullName: registry.redhat.io/rhtpa/rhtpa-rhel10@sha256:0f696e6f7ceadc6f4a2891eb4d65d375f241275da52127e0dcb302806b2a0292
+  fullName: registry.redhat.io/rhtpa/rhtpa-rhel10@sha256:bc0751abca5c845b304cdf45edb9a79a0872a468104a7701b29730b462d2118a
   pullPolicy: IfNotPresent
 
 rust: {}
@@ -180,6 +180,7 @@ modules:
     #   plain Kubernetes    leave false; the chart refuses to install with it
     #                       enabled
     enabled: false
+    #end PQC
     # Acknowledge running on OpenShift 4.22+ without the configurator. Only
     # consulted when enabled is false; it suppresses the install-time error and
     # accepts that a runtime TLS profile change will not roll the workloads.
