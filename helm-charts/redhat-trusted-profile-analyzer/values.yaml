@@ -190,7 +190,7 @@ modules:
       # operator this is overridden with the operator's own running image (see
       # RELATED_IMAGE_TLS_CONFIGURATOR in watches.yaml); this default only
       # applies to a standalone `helm install`.
-      fullName: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:ced5f0bd75a99c14701731fea2cabc7753376228ebc1516556a87a5b2904811f
+      fullName: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:f1ecad9e5c588fd9911037bf1c87be062c7ace9a7747bc86edb3452b698f8b10
       pullPolicy: IfNotPresent
     # Post-quantum cryptography: enforce TLS 1.3 + X25519MLKEM768 key exchange
     # and record it in the workload rollout hash.
