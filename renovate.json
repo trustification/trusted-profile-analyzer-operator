@@ -25,7 +25,9 @@
       "matchManagers": ["gomod"],
       "groupName": "golang",
       "automerge": true,
-      "autoApprove": true
+      "autoApprove": true,
+      "matchDepTypes": ["indirect"],
+      "enabled": true
     },
     {
       "description": "Base images: builder and runtime images referenced by the Dockerfiles are automerged",
