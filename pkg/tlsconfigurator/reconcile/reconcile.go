@@ -36,6 +36,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -193,7 +194,7 @@ func (r *Reconciler) reconcileOnce(ctx context.Context, trigger string) error {
 		return fmt.Errorf("failed to read cluster TLS settings: %w", err)
 	}
 
-	r.logAdherence(settings.Adherence)
+	r.logAdherence(trigger, settings.Adherence)
 
 	hash, err := TLSConfigHash(settings, r.cfg.EnablePQC)
 	if err != nil {
@@ -287,13 +288,26 @@ func (r *Reconciler) logRolloutProgress(trigger, name string, dep *appsv1.Deploy
 // pods are still being replaced. A rollout is in flight while any replica is
 // not yet updated to the current pod template, or an updated one is not yet
 // available.
+//
+// The replica counts are only meaningful once the Deployment controller has
+// observed the generation we patched: until then they still describe the
+// previous pod template, and the old pods -- updated, ready and available by
+// their own generation's reckoning -- would read as a finished rollout.
 func rolloutStatus(dep *appsv1.Deployment) (summary string, rolling bool) {
 	desired := replicaCount(dep.Spec.Replicas)
 	status := dep.Status
 
-	rolling = status.UpdatedReplicas < desired ||
+	observed := status.ObservedGeneration >= dep.Generation
+
+	rolling = !observed ||
+		status.UpdatedReplicas < desired ||
 		status.Replicas > status.UpdatedReplicas ||
 		status.AvailableReplicas < desired
+
+	if !observed {
+		return fmt.Sprintf("generation %d not yet observed (status is for generation %d)",
+			dep.Generation, status.ObservedGeneration), rolling
+	}
 
 	return fmt.Sprintf("%d/%d pods updated, %d ready, %d available",
 		status.UpdatedReplicas, desired, status.ReadyReplicas, status.AvailableReplicas), rolling
@@ -312,8 +326,10 @@ func replicaCount(replicas *int32) int32 {
 // value. The reconciler always propagates the profile -- it is an adhering
 // component and has no TLS settings of its own to prefer -- but the policy is
 // worth surfacing because it tells operators whether the cluster considers
-// adherence mandatory.
-func (r *Reconciler) logAdherence(adherence configv1.TLSAdherencePolicy) {
+// adherence mandatory. Like every other line a reconcile pass writes, it
+// carries the trigger, so a policy change observed mid-run can be correlated
+// with the event that surfaced it.
+func (r *Reconciler) logAdherence(trigger string, adherence configv1.TLSAdherencePolicy) {
 	if r.lastAdherence != nil && *r.lastAdherence == adherence {
 		return
 	}
@@ -321,11 +337,11 @@ func (r *Reconciler) logAdherence(adherence configv1.TLSAdherencePolicy) {
 
 	switch {
 	case crypto.ShouldHonorClusterTLSProfile(adherence):
-		log.Printf("Cluster tlsAdherence=%q: all components are required to honor the cluster TLS profile",
-			orUnset(adherence))
+		log.Printf("[%s] Cluster tlsAdherence=%q: all components are required to honor the cluster TLS profile",
+			trigger, orUnset(adherence))
 	default:
-		log.Printf("Cluster tlsAdherence=%q: honoring the cluster TLS profile is optional; "+
-			"this operator honors it regardless", orUnset(adherence))
+		log.Printf("[%s] Cluster tlsAdherence=%q: honoring the cluster TLS profile is optional; "+
+			"this operator honors it regardless", trigger, orUnset(adherence))
 	}
 }
 
@@ -445,9 +461,11 @@ func (s tlsSummary) diff(next tlsSummary) []string {
 	return changes
 }
 
-// listDelta renders what was added to and removed from a list, as a suffix to
-// append to a "x -> y" line. Two lists with the same members in a different
-// order report as reordered -- cipher order is preference order, so it matters.
+// listDelta renders what was added to, removed from and moved within a list, as
+// a suffix to append to a "x -> y" line. Cipher order is preference order, so a
+// move matters in its own right -- and a profile can change membership and
+// preference order in the same edit, so reordering is reported alongside
+// additions and removals rather than only in their absence.
 func listDelta(from, to []string) string {
 	added := missingFrom(to, from)
 	removed := missingFrom(from, to)
@@ -459,10 +477,34 @@ func listDelta(from, to []string) string {
 	if len(removed) > 0 {
 		parts = append(parts, "removed "+strings.Join(removed, ", "))
 	}
-	if len(parts) == 0 {
-		return " (reordered)"
+	if reordered(from, to) || len(parts) == 0 {
+		parts = append(parts, "reordered")
 	}
 	return " (" + strings.Join(parts, "; ") + ")"
+}
+
+// reordered reports whether the entries common to both lists appear in a
+// different relative order. Added and removed entries are ignored, so dropping
+// a cipher from the middle of an otherwise untouched list does not read as a
+// preference change.
+func reordered(from, to []string) bool {
+	return !slices.Equal(retained(from, to), retained(to, from))
+}
+
+// retained returns the entries of list that other also contains, in list order.
+func retained(list, other []string) []string {
+	have := make(map[string]struct{}, len(other))
+	for _, s := range other {
+		have[s] = struct{}{}
+	}
+
+	kept := make([]string, 0, len(list))
+	for _, s := range list {
+		if _, ok := have[s]; ok {
+			kept = append(kept, s)
+		}
+	}
+	return kept
 }
 
 // missingFrom returns the entries of list that other does not contain.

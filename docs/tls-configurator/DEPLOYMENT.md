@@ -150,7 +150,7 @@ full, so the log records the cluster state the workloads were stamped from:
 
 ```text
 Starting TLS reconciler (namespace=trustify, deployments=[server], pqc=false, resync=5m0s, annotation=rhtpa.io/tls-config-hash)
-Cluster tlsAdherence="<unset>": honoring the cluster TLS profile is optional; this operator honors it regardless
+[startup] Cluster tlsAdherence="<unset>": honoring the cluster TLS profile is optional; this operator honors it regardless
 [startup] Cluster TLS profile: type=Intermediate adherence=<unset> minVersion=TLS 1.2 pqcRequested=false hash=c998037ab4a9
 [startup] Key-exchange groups: X25519MLKEM768, X25519, CurveP256, CurveP384
 [startup] Ciphers from the profile (9): TLS_AES_128_GCM_SHA256, ...
@@ -160,8 +160,19 @@ Cluster tlsAdherence="<unset>": honoring the cluster TLS profile is optional; th
 [startup] Reconcile finished: 1 rolled out, 0 already up to date
 ```
 
-Afterwards only changes are logged. A cluster profile change prints the
-field-level diff, the rollout it causes, and the restart landing:
+Afterwards the log is driven by changes, with one deliberate exception: an
+`APIServer` event that turns out to change nothing still logs a line saying so,
+because an operator who just edited the CR is watching for a reaction and
+silence would be indistinguishable from the watch being dead:
+
+```text
+[apiserver-event] Observed APIServer "cluster" MODIFIED event, reconciling
+[apiserver-event] Cluster TLS profile unchanged (type=Intermediate hash=c998037ab4a9)
+[apiserver-event] Reconcile finished: 0 rolled out, 1 already up to date
+```
+
+A cluster profile change prints the field-level diff, the rollout it causes, and
+the restart landing:
 
 ```text
 [apiserver-event] Observed APIServer "cluster" MODIFIED event, reconciling
