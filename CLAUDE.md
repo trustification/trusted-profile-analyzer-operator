@@ -9,7 +9,7 @@ This is a **Kubernetes Helm Operator** that manages the deployment and lifecycle
 **Key Facts:**
 - Uses the Helm Operator pattern (operator-framework/helm-operator-plugins)
 - Manages a single Custom Resource: `TrustedProfileAnalyzer` (group: rhtpa.io/v1)
-- Written in Go 1.26
+- Written in Go 1.27
 - Deploys via Helm charts located in `helm-charts/redhat-trusted-profile-analyzer/`
 - The operator reconciles the CRD by applying Helm chart templates
 
