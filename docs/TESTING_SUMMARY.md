@@ -23,7 +23,7 @@ Successfully fixed all compilation errors and added comprehensive tests to the T
 
 ## New Tests Added
 
-### Unit Tests (`test/unit/`)
+### Unit Tests (`../test/unit`)
 Created 3 new test files with comprehensive coverage:
 
 1. **config_test.go** (7 test functions)
@@ -48,7 +48,7 @@ Created 3 new test files with comprehensive coverage:
    - `TestImporterOnlyCRFixture` - Validates importer-only configuration
    - `TestCRMustHaveAppDomain` - Validates required fields (4 sub-tests)
 
-### Test Fixtures (`test/fixtures/`)
+### Test Fixtures (`../test/fixtures`)
 Created 4 CR YAML fixtures for testing:
 - `minimal_cr.yaml` - Minimal valid CR with only required fields
 - `valid_cr.yaml` - Full CR with all common configurations
@@ -56,7 +56,7 @@ Created 4 CR YAML fixtures for testing:
 - `importer_only_cr.yaml` - CR with importer module enabled
 
 ### Documentation
-- Created `test/README.md` with comprehensive testing documentation
+- Created `../test/README.md` with comprehensive testing documentation
 
 ## Test Statistics
 
@@ -138,28 +138,28 @@ For further improvement, consider:
 
 ## Files Modified
 
-- `main_test.go` - Fixed default configuration test
-- `test/e2e/suite_test.go` - Fixed TestMain panic
-- `test/e2e/helpers_test.go` - Centralized helper functions
-- `test/e2e/operator_deployment_test.go` - Removed duplicates, fixed imports
-- `test/e2e/cr_lifecycle_test.go` - Removed duplicate helpers
-- `test/e2e/performance_test.go` - Added missing imports
-- `test/e2e/upgrade_test.go` - Fixed apiextensions client usage
-- `test/e2e/error_handling_test.go` - Fixed unused variable
-- `test/e2e/module_configuration_test.go` - Added missing imports
-- `test/e2e/operator_health_test.go` - (kept as is, no conflicts)
-- `test/integration/watches_test.go` - Fixed unused variable
+- `../main_test.go` - Fixed default configuration test
+- `../test/e2e/suite_test.go` - Fixed TestMain panic
+- `../test/e2e/helpers_test.go` - Centralized helper functions
+- `../test/e2e/operator_deployment_test.go` - Removed duplicates, fixed imports
+- `../test/e2e/cr_lifecycle_test.go` - Removed duplicate helpers
+- `../test/e2e/performance_test.go` - Added missing imports
+- `../test/e2e/upgrade_test.go` - Fixed apiextensions client usage
+- `../test/e2e/error_handling_test.go` - Fixed unused variable
+- `../test/e2e/module_configuration_test.go` - Added missing imports
+- `../test/e2e/operator_health_test.go` - (kept as is, no conflicts)
+- `../test/integration/watches_test.go` - Fixed unused variable
 
 ## Files Created
 
-- `test/unit/config_test.go` - New unit tests for configuration
-- `test/unit/validation_test.go` - New unit tests for validation
-- `test/unit/fixtures_test.go` - New unit tests for fixtures
-- `test/fixtures/minimal_cr.yaml` - Minimal CR fixture
-- `test/fixtures/valid_cr.yaml` - Full CR fixture
-- `test/fixtures/server_only_cr.yaml` - Server-only CR fixture
-- `test/fixtures/importer_only_cr.yaml` - Importer-only CR fixture
-- `test/README.md` - Test documentation
+- `../test/unit/config_test.go` - New unit tests for configuration
+- `../test/unit/validation_test.go` - New unit tests for validation
+- `../test/unit/fixtures_test.go` - New unit tests for fixtures
+- `../test/fixtures/minimal_cr.yaml` - Minimal CR fixture
+- `../test/fixtures/valid_cr.yaml` - Full CR fixture
+- `../test/fixtures/server_only_cr.yaml` - Server-only CR fixture
+- `../test/fixtures/importer_only_cr.yaml` - Importer-only CR fixture
+- `../test/README.md` - Test documentation
 
 ## Summary
 
