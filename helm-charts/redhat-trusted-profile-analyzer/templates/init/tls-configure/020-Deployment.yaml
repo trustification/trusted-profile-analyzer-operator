@@ -25,11 +25,13 @@ spec:
       serviceAccountName: tls-configurator
       containers:
         - name: tls-configurator
-          # Ships in the operator image. The operator overrides this value with
-          # its own running image (RELATED_IMAGE_TLS_CONFIGURATOR, wired through
-          # watches.yaml overrideValues) so the digest always matches the
-          # operator that rendered the chart, including in disconnected installs.
-          image: {{ .Values.modules.tlsConfigurator.image.fullName }}
+          # Ships in the operator image, so values.yaml carries no default: the
+          # operator fills this in with its own running image
+          # (RELATED_IMAGE_TLS_CONFIGURATOR, wired through watches.yaml
+          # overrideValues) so the digest always matches the operator that
+          # rendered the chart, including in disconnected installs. Only a
+          # standalone `helm install` has to supply it, hence the check.
+          image: {{ required "modules.tlsConfigurator.enabled is true but no image is set: the configurator ships in the operator image, which the operator injects via RELATED_IMAGE_TLS_CONFIGURATOR. For a standalone `helm install`, set modules.tlsConfigurator.image.fullName to an RHTPA operator image." .Values.modules.tlsConfigurator.image.fullName }}
           imagePullPolicy: {{ .Values.modules.tlsConfigurator.image.pullPolicy }}
           # The image ENTRYPOINT is the operator manager, so select the
           # configurator binary explicitly.

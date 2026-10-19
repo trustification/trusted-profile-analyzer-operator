@@ -51,8 +51,10 @@ which is what makes the hybrid group mandatory rather than merely preferred.
 Installed through the operator, the configurator runs the operator's own image —
 `watches.yaml` expands `$RELATED_IMAGE_TLS_CONFIGURATOR` into
 `modules.tlsConfigurator.image.fullName`, so there is no separate image to
-point at. The value in `values.yaml` only applies to a standalone
-`helm install`.
+point at. `values.yaml` therefore pins no default of its own; a standalone
+`helm install` with the module enabled has to set
+`modules.tlsConfigurator.image.fullName` to an RHTPA operator image, and
+rendering fails with a message if it does not.
 
 ### Disable it (plain Kubernetes)
 
