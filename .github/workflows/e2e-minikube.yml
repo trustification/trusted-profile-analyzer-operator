@@ -33,7 +33,7 @@ jobs:
       - name: Start Minikube
         uses: medyagh/setup-minikube@latest
         with:
-          minikube-version: 1.39.0
+          minikube-version: 1.38.1
           kubernetes-version: stable #v1.32.0
           driver: docker
           cpus: 4
