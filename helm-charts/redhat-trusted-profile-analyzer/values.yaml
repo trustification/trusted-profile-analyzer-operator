@@ -180,18 +180,21 @@ modules:
     #   plain Kubernetes    leave false; the chart refuses to install with it
     #                       enabled
     enabled: false
-    #end PQC
     # Acknowledge running on OpenShift 4.22+ without the configurator. Only
     # consulted when enabled is false; it suppresses the install-time error and
     # accepts that a runtime TLS profile change will not roll the workloads.
     allowDisabled: false
     name: tls-configurator
     image:
-      # The configurator ships inside the operator image. When installed via the
-      # operator this is overridden with the operator's own running image (see
-      # RELATED_IMAGE_TLS_CONFIGURATOR in watches.yaml); this default only
-      # applies to a standalone `helm install`.
-      fullName: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:b0a6433a734dc3a11ad68dc7d392f92f39a66f8ebade37a3add8d5c721fd12de
+      # The configurator ships inside the operator image, so there is no
+      # separate image to pin here. Installed through the operator this is
+      # filled in with the operator's own running digest (see
+      # RELATED_IMAGE_TLS_CONFIGURATOR in watches.yaml). A pinned default would
+      # be a second copy of the operator digest that has to be bumped in
+      # lockstep with it, so it is left empty: a standalone `helm install` with
+      # this module enabled must set it, and rendering fails with a message if
+      # it does not.
+      fullName: ""
       pullPolicy: IfNotPresent
     # Post-quantum cryptography: enforce TLS 1.3 + X25519MLKEM768 key exchange
     # and record it in the workload rollout hash.

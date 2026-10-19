@@ -186,10 +186,11 @@ modules:
 `targetDeployments` must match the rendered Deployment names of the TLS-serving
 workloads (the server Deployment renders as `server`).
 
-Under the operator, `image.fullName` is overridden with the operator's own
+Under the operator, `image.fullName` is filled in with the operator's own
 running image via `$RELATED_IMAGE_TLS_CONFIGURATOR` in `watches.yaml`, so
-nothing needs pointing at a separate registry. The `values.yaml` default only
-applies to a standalone `helm install`.
+nothing needs pointing at a separate registry. `values.yaml` carries no default
+— pinning one there would duplicate the operator digest — so a standalone
+`helm install` with the module enabled must set it.
 
 ### Disabling it (plain Kubernetes)
 

@@ -81,7 +81,7 @@ That is enough. The defaults cover the rest:
 | `resyncPeriod` | `5m` | Periodic drift correction, in case a watch event is missed. |
 | `pqc.enabled` | `false` | See [Post-quantum](#post-quantum-key-exchange) below. |
 | `allowDisabled` | `false` | Escape hatch for installing *without* the module. |
-| `image.fullName` | the operator's own image | Overridden by the operator via `RELATED_IMAGE_TLS_CONFIGURATOR`; do not set it. |
+| `image.fullName` | *(empty)* | Filled in by the operator with its own running image via `RELATED_IMAGE_TLS_CONFIGURATOR`; do not set it. Only a standalone `helm install` has to supply one — rendering fails with a message if the module is enabled and it is empty. |
 
 ### Full configuration
 

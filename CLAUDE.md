@@ -340,6 +340,10 @@ with an explicit `command:`. `make build-tls-configurator` builds it standalone.
   CSV `relatedImages` under the name `tls-configurator` so disconnected installs
   pull it. **When the operator image digest changes, all three must move
   together**: the manager `image:`, the env var, and the `relatedImages` entry.
+  `values.yaml` deliberately leaves `image.fullName` empty rather than pinning a
+  fourth copy of that digest — the chart `required`s it in the Deployment
+  template, so a standalone `helm install` with the module enabled fails with a
+  message telling it to set an operator image.
 - Rendered resources live under
   `helm-charts/redhat-trusted-profile-analyzer/templates/init/tls-configure/`:
   ServiceAccount (`010`), ClusterRole (`015`), namespaced Role (`016`),
