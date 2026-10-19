@@ -79,5 +79,21 @@ rules:
   - patch
   - update
   - watch
+# Operators are required to manage the network policies of their operands.
+# Enterprise Contract enforces this as
+# olm.required_network_policy_rbac_for_operands, which checks the CSV for
+# create, delete and update/patch on networking.k8s.io/networkpolicies.
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 
 # +kubebuilder:scaffold:rules
