@@ -305,7 +305,7 @@ func TestReconcileOnce(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := newHarness(t, tt.opts)
 
-			err := h.r.reconcileOnce(context.Background())
+			err := h.r.reconcileOnce(context.Background(), triggerStartup)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("reconcileOnce() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -330,7 +330,7 @@ func TestReconcileOnceIsIdempotent(t *testing.T) {
 	})
 
 	for i := 0; i < 3; i++ {
-		if err := h.r.reconcileOnce(context.Background()); err != nil {
+		if err := h.r.reconcileOnce(context.Background(), triggerStartup); err != nil {
 			t.Fatalf("reconcileOnce() call %d error = %v", i+1, err)
 		}
 	}

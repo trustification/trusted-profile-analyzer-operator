@@ -141,6 +141,47 @@ oc -n trustify get deployment server \
   -o jsonpath='{.spec.template.metadata.annotations.rhtpa\.io/tls-config-hash}{"\n"}'
 ```
 
+### Reading the log
+
+Every reconcile line is tagged with what triggered it: `[startup]`,
+`[apiserver-event]` (the cluster `APIServer` CR changed) or `[resync]` (the
+periodic drift check). On startup the reconciler prints the profile it found in
+full, so the log records the cluster state the workloads were stamped from:
+
+```text
+Starting TLS reconciler (namespace=trustify, deployments=[server], pqc=false, resync=5m0s, annotation=rhtpa.io/tls-config-hash)
+Cluster tlsAdherence="<unset>": honoring the cluster TLS profile is optional; this operator honors it regardless
+[startup] Cluster TLS profile: type=Intermediate adherence=<unset> minVersion=TLS 1.2 pqcRequested=false hash=c998037ab4a9
+[startup] Key-exchange groups: X25519MLKEM768, X25519, CurveP256, CurveP384
+[startup] Ciphers from the profile (9): TLS_AES_128_GCM_SHA256, ...
+[startup] Post-quantum key exchange is NOT active: MinVersion is TLS 1.2, must be TLS 1.3
+[startup] TLS config changed for trustify/server (none -> c998037ab4a9), rolling out
+[startup] Patched trustify/server pod template rhtpa.io/tls-config-hash=c998037ab4a9 (generation 4, 1 replica(s)): Kubernetes is restarting its pods so they re-read the TLS settings
+[startup] Reconcile finished: 1 rolled out, 0 already up to date
+```
+
+Afterwards only changes are logged. A cluster profile change prints the
+field-level diff, the rollout it causes, and the restart landing:
+
+```text
+[apiserver-event] Observed APIServer "cluster" MODIFIED event, reconciling
+[apiserver-event] Cluster TLS profile changed (hash c998037ab4a9 -> 81aa7cfd3171):
+[apiserver-event]   profile type: Intermediate -> Modern
+[apiserver-event]   minimum TLS version: TLS 1.2 -> TLS 1.3
+[apiserver-event]   ciphers: 9 -> 3 (removed ECDHE-ECDSA-AES128-GCM-SHA256, ...)
+[apiserver-event]   post-quantum key exchange: inactive -> active
+[apiserver-event] TLS config changed for trustify/server (c998037ab4a9 -> 81aa7cfd3171), rolling out
+[apiserver-event] Patched trustify/server pod template rhtpa.io/tls-config-hash=81aa7cfd3171 (generation 5, 1 replica(s)): Kubernetes is restarting its pods so they re-read the TLS settings
+[resync] Deployment trustify/server is still restarting pods for the current TLS config (1/1 pods updated, 0 ready, 0 available)
+[resync] Deployment trustify/server finished restarting with the current TLS config (1/1 pods updated, 1 ready, 1 available)
+```
+
+A resync that finds nothing to do logs nothing, so a steady cluster stays
+quiet — silence between the `[startup]` block and the next event means the
+profile has not moved. Rollout progress is only followed for restarts the
+reconciler itself triggered; a workload that is unhealthy for its own reasons is
+not reported here.
+
 Inspect the cluster-side inputs directly with the same binary:
 
 ```console
