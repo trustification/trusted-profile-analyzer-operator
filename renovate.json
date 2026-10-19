@@ -27,7 +27,7 @@
       "automerge": true,
       "autoApprove": true,
       "matchDepTypes": ["indirect"],
-      "enabled": true
+      "enabled": false
     },
     {
       "description": "Base images: builder and runtime images referenced by the Dockerfiles are automerged",
