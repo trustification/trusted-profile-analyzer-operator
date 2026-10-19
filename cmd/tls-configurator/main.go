@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -35,17 +36,30 @@ import (
 	"github.com/trustification/trusted-profile-analyzer-operator/pkg/tlsconfigurator/reconcile"
 )
 
+// flags is this command's own FlagSet, deliberately not flag.CommandLine.
+//
+// The configurator links in github.com/openshift/controller-runtime-common/pkg/tls,
+// which pulls in sigs.k8s.io/controller-runtime/pkg/client/config. That package
+// registers a "kubeconfig" flag on flag.CommandLine from its own init(), which
+// runs before this package's variable initialisation -- so registering
+// "kubeconfig" globally here panics with "flag redefined" before main() is ever
+// reached. Owning a FlagSet keeps the CLI surface ours alone and immune to
+// whatever global flags a dependency decides to register. Nothing in this binary
+// reads controller-runtime's global flag: kubeconfig is threaded through
+// config.Config and resolved by config.GetKubeConfig.
+var flags = flag.NewFlagSet("tls-configurator", flag.ExitOnError)
+
 var (
-	kubeconfig        = flag.String("kubeconfig", "", "Path to kubeconfig file (uses in-cluster config if not set)")
-	ingressController = flag.String("ingress-controller", "default", "Name of the IngressController to modify")
-	namespace         = flag.String("namespace", "openshift-ingress-operator", "Namespace of the IngressController")
-	action            = flag.String("action", "get",
+	kubeconfig        = flags.String("kubeconfig", "", "Path to kubeconfig file (uses in-cluster config if not set)")
+	ingressController = flags.String("ingress-controller", "default", "Name of the IngressController to modify")
+	namespace         = flags.String("namespace", "openshift-ingress-operator", "Namespace of the IngressController")
+	action            = flags.String("action", "get",
 		"Action to perform: get, update, list, get-cluster, get-adherence, show-tlsconfig, "+
 			"check-version, validate, reconcile")
-	tlsType       = flag.String("type", "Custom", "TLS profile type: Custom, Intermediate, Modern, Old")
-	minTLSVersion = flag.String("min-tls-version", "VersionTLS13",
+	tlsType       = flags.String("type", "Custom", "TLS profile type: Custom, Intermediate, Modern, Old")
+	minTLSVersion = flags.String("min-tls-version", "VersionTLS13",
 		"Minimum TLS version: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13")
-	ciphers = flag.String("ciphers", "", "Comma-separated list of ciphers")
+	ciphers = flags.String("ciphers", "", "Comma-separated list of ciphers")
 	// TODO: these two flags are accepted for CLI compatibility but are currently
 	// inert -- nothing reads them. The OpenShift 4.22 gate they relate to
 	// (controller.ValidateOpenShiftVersion) also has no callers, so there is
@@ -53,21 +67,25 @@ var (
 	// operator merge to avoid changing runtime behaviour; wire up or remove
 	// separately.
 	//nolint:unused // accepted for CLI compatibility; see TODO above
-	useCluster = flag.Bool("use-cluster-profile", false, "Use cluster-wide APIServer TLS profile (recommended)")
+	useCluster = flags.Bool("use-cluster-profile", false, "Use cluster-wide APIServer TLS profile (recommended)")
 	//nolint:unused // accepted for CLI compatibility; see TODO above
-	skipVersionCheck = flag.Bool("skip-version-check", false, "Skip OpenShift version check (not recommended)")
-	enablePQC        = flag.Bool("enable-pqc", false,
+	skipVersionCheck = flags.Bool("skip-version-check", false, "Skip OpenShift version check (not recommended)")
+	enablePQC        = flags.Bool("enable-pqc", false,
 		"Enforce post-quantum, TLS 1.3-only key exchange (X25519MLKEM768)")
-	targetNamespace = flag.String("target-namespace", "",
+	targetNamespace = flags.String("target-namespace", "",
 		"Namespace of the workloads to roll out on TLS change (reconcile mode)")
-	targetDeployments = flag.String("target-deployments", "",
+	targetDeployments = flags.String("target-deployments", "",
 		"Comma-separated Deployment names to roll out on TLS change (reconcile mode)")
-	resyncPeriod = flag.Duration("resync-period", 5*time.Minute,
+	resyncPeriod = flags.Duration("resync-period", 5*time.Minute,
 		"Periodic drift-correction interval (reconcile mode)")
 )
 
 func main() {
-	flag.Parse()
+	// ExitOnError means Parse never returns a non-nil error, but errcheck does
+	// not know that.
+	if err := flags.Parse(os.Args[1:]); err != nil {
+		log.Fatalf("Failed to parse flags: %v", err)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
