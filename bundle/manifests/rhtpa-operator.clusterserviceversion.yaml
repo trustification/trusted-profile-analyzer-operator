@@ -97,7 +97,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2026-10-19T10:38:51Z"
+    createdAt: "2026-10-19T12:05:00Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
@@ -231,6 +231,18 @@ spec:
                 - daemonsets
                 - replicasets
                 - statefulsets
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - networking.k8s.io
+              resources:
+                - networkpolicies
               verbs:
                 - create
                 - delete
@@ -480,11 +492,11 @@ spec:
     url: https://github.com/trustification/trusted-profile-analyzer-operator
   relatedImages:
     - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator/rhtpa-rhel10-operator@sha256:cd0aace5629c21a084e9a77eb2af5dec6b7adcb688ea14a1fb13966d7b67b57c
-      name: rds_auth_token
-    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator/rhtpa-rhel10-operator@sha256:cd0aace5629c21a084e9a77eb2af5dec6b7adcb688ea14a1fb13966d7b67b57c
-      name: tls_configurator
-    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator/rhtpa-rhel10-operator@sha256:cd0aace5629c21a084e9a77eb2af5dec6b7adcb688ea14a1fb13966d7b67b57c
       name: ""
     - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator/rhtpa-rhel10-operator@sha256:cd0aace5629c21a084e9a77eb2af5dec6b7adcb688ea14a1fb13966d7b67b57c
       name: manager
+    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator/rhtpa-rhel10-operator@sha256:cd0aace5629c21a084e9a77eb2af5dec6b7adcb688ea14a1fb13966d7b67b57c
+      name: rds_auth_token
+    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator/rhtpa-rhel10-operator@sha256:cd0aace5629c21a084e9a77eb2af5dec6b7adcb688ea14a1fb13966d7b67b57c
+      name: tls_configurator
   version: 3.2.0
