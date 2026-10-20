@@ -36,11 +36,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a \
     -ldflags="-w -s" \
     -o tls-configurator ./cmd/tls-configurator
 
-# Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-#FROM registry.access.redhat.com/ubi10/ubi-minimal:1792457309
 FROM registry.access.redhat.com/ubi10-micro:1792455566
-COPY --from=registry.access.redhat.com/ubi10/ubi-minimal:1792457309 \
+COPY --from=registry.access.redhat.com/ubi10/ubi-minimal:latest \
        /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem \
        /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
 
