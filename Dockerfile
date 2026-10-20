@@ -40,6 +40,10 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a \
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 #FROM registry.access.redhat.com/ubi10/ubi-minimal:1792457309
 FROM registry.access.redhat.com/ubi10-micro:1792455566
+COPY --from=registry.access.redhat.com/ubi10/ubi-minimal:1792457309 \
+       /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem \
+       /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+
 
 LABEL com.redhat.component="rhtpa-operator"
 LABEL description="Red Hat Trusted Profile Analyzer Operator"
