@@ -25,6 +25,7 @@ metadata:
               "enabled": false
             },
             "modules": {
+              "tlsConfigurator":{},
               "createDatabase": {
                 "enabled": false,
                 "image": {}
