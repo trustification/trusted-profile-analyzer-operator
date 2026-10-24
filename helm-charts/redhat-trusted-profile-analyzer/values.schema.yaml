@@ -425,7 +425,7 @@ properties:
                 type: object
                 description: The importers to create
                 additionalProperties:
-                  $ref: "https://raw.githubusercontent.com/guacsec/trustify/main/modules/importer/schema/importer.json"
+                  $ref: "https://raw.githubusercontent.com/guacsec/trustify/0.7.z/modules/importer/schema/importer.json"
 
   database:
     $ref: "#/definitions/PostgresConfig"
@@ -728,7 +728,7 @@ definitions:
           - content
         properties:
           content:
-            $ref: "https://raw.githubusercontent.com/guacsec/trustify/main/common/auth/schema/auth.json"
+            $ref: "https://raw.githubusercontent.com/guacsec/trustify/0.7.z/common/auth/schema/auth.json"
       - type: object
         additionalProperties: false
         required:
