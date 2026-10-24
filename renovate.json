@@ -21,15 +21,6 @@
       "autoApprove": true
     },
     {
-      "description": "Golang: Go module dependencies and the Go toolchain version are automerged",
-      "matchManagers": ["gomod"],
-      "groupName": "golang",
-      "automerge": true,
-      "autoApprove": true,
-      "matchDepTypes": ["indirect"],
-      "enabled": false
-    },
-    {
       "description": "Base images: builder and runtime images referenced by the Dockerfiles are automerged",
       "matchManagers": ["dockerfile"],
       "groupName": "base images",
