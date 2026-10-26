@@ -30,5 +30,10 @@ spec:
   database:
     host: postgres.test.svc
     name: testdb
+    username: testuser
+    password: testpassword
+  storage:
+    type: filesystem
+    size: 32Gi
   openshift:
     useServiceCa: true
