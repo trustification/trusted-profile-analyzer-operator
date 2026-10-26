@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AuthConfig",
+  "type": "object",
+  "properties": {
+    "disabled": {
+      "type": "boolean"
+    },
+    "authentication": {
+      "$ref": "#/$defs/AuthenticatorConfig"
+    },
+    "authorization": {
+      "$ref": "#/$defs/AuthorizerConfig",
+      "default": {}
+    }
+  },
+  "required": [
+    "authentication"
+  ],
+  "$defs": {
+    "AuthenticatorConfig": {
+      "type": "object",
+      "properties": {
+        "clients": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AuthenticatorClientConfig"
+          }
+        }
+      },
+      "required": [
+        "clients"
+      ]
+    },
+    "AuthenticatorClientConfig": {
+      "description": "Configuration for OIDC client used to authenticate on the server side",
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "description": "The ID of the client",
+          "type": "string"
+        },
+        "issuerUrl": {
+          "description": "The issuer URL",
+          "type": "string"
+        },
+        "scopeMappings": {
+          "description": "Mapping table for scopes returned by the issuer to permissions.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalPermissions": {
+          "description": "Additional scopes which get added for client\n\nThis can be useful if a client is considered to only provide identities which are supposed\nto have certain scopes, but don't provide them.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requiredAudience": {
+          "description": "Enforce an audience claim (`aud`) for tokens.\n\nIf present, the token must have one matching `aud` claim.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "groupSelector": {
+          "description": "JSON path extracting a list of groups from the access token",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "scopeSelector": {
+          "description": "JSON path extracting scopes from the access token (default: $['scope','scp'])",
+          "type": "string",
+          "default": "$['scope','scp']"
+        },
+        "groupMappings": {
+          "description": "Mapping table for groups returned found through the `groups_selector` to permissions.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "tlsInsecure": {
+          "description": "Ignore TLS checks when contacting the issuer",
+          "type": "boolean",
+          "default": false
+        },
+        "tlsCaCertificates": {
+          "description": "Add additional certificates as trust anchor for contacting the issuer",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "required": [
+        "clientId",
+        "issuerUrl"
+      ]
+    },
+    "AuthorizerConfig": {
+      "type": "object"
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "comment": "Vendored copies of the external JSON schemas referenced by the chart's values.schema.{yaml,json} via urn:. Regenerate with hack/vendor-values-schemas.py --fetch. Keys under 'schemas' are read by pkg/valuesschema at build time; 'upstream' describes provenance for the script only.",
+  "schemas": {
+    "k8s-EnvVarSource.json": {
+      "origin": "extracted",
+      "sha256": "4f8d7e6648ba69345cca5b6efaad78944abf0e550ecff26d447d615d67cd7bcf",
+      "urn": "urn:k8s:v1.29.0:EnvVarSource"
+    },
+    "k8s-Quantity.json": {
+      "origin": "extracted",
+      "sha256": "11f907c5a0709c407562d54529ed2caeedf794164124294e3802bc3ec3053624",
+      "urn": "urn:k8s:v1.29.0:Quantity"
+    },
+    "k8s-Volume.json": {
+      "origin": "extracted",
+      "sha256": "3a76a276c074bfe4292c09fded2c0cbe08c3ebadfc45e389f2ecd4862e85ea06",
+      "urn": "urn:k8s:v1.29.0:Volume"
+    },
+    "k8s-VolumeMount.json": {
+      "origin": "extracted",
+      "sha256": "ccfcbd9c3d43d343ec71d05dd98d3ce8d4aa4c4ffab1cc2760aa312fd787e371",
+      "urn": "urn:k8s:v1.29.0:VolumeMount"
+    },
+    "trustify-auth.json": {
+      "origin": "verbatim",
+      "sha256": "2abd148f14fd120d3945a5963277a05c0070e2cdc668fc78a715d9f180b0b48a",
+      "urn": "urn:trustify:auth"
+    },
+    "trustify-importer.json": {
+      "origin": "verbatim",
+      "sha256": "531c9742d2f5936aa1b5f1294e387ef7f6a9d7a0520aab9019863d1d8d98e6d5",
+      "urn": "urn:trustify:importer"
+    }
+  },
+  "upstream": {
+    "kubernetes": {
+      "files": {
+        "k8s-EnvVarSource.json": "io.k8s.api.core.v1.EnvVarSource",
+        "k8s-Quantity.json": "io.k8s.apimachinery.pkg.api.resource.Quantity",
+        "k8s-Volume.json": "io.k8s.api.core.v1.Volume",
+        "k8s-VolumeMount.json": "io.k8s.api.core.v1.VolumeMount"
+      },
+      "url": "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.29.0/_definitions.json"
+    },
+    "trustify": {
+      "files": {
+        "trustify-auth.json": "common/auth/schema/auth.json",
+        "trustify-importer.json": "modules/importer/schema/importer.json"
+      },
+      "ref": "release/0.7.z",
+      "repo": "https://github.com/guacsec/trustify"
+    }
+  }
+}
