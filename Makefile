@@ -106,8 +106,16 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
+.PHONY: vendor-schemas
+vendor-schemas: ## Refresh the vendored values schemas from upstream (needs network).
+	python3 hack/vendor-values-schemas.py --fetch
+
+.PHONY: verify-schemas
+verify-schemas: ## Check the vendored values schemas are intact and the chart has no remote $$refs.
+	python3 hack/vendor-values-schemas.py --check
+
 .PHONY: test
-test: manifests generate fmt vet envtest ## Run tests.
+test: manifests generate fmt vet verify-schemas envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
 
 ##@ Build
