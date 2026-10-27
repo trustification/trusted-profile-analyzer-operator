@@ -319,6 +319,22 @@
                 "storageClassName": {
                   "type": "string"
                 },
+                "envPrefixes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": [],
+                  "description": "Environment variable names or prefixes the importer is allowed to use as credentials.\nInjected as IMPORTER_ENV_PREFIXES, comma-joined on the importer Deployment.\nWhen empty, environment-variable credentials remain denied.\n"
+                },
+                "credentialPaths": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": [],
+                  "description": "Credential file paths the importer is allowed to read.\nInjected as IMPORTER_CREDENTIAL_PATHS, comma-joined on the importer Deployment.\nWhen empty, file-based credentials remain denied.\n"
+                },
                 "readOnly": {
                   "type": "boolean",
                   "description": "Enable read-only mode. When true, the server rejects all mutating API\nrequests with 503 and the importer suspends all import jobs.\n"

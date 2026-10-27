@@ -193,7 +193,8 @@ func TestImporterCredentialAllowlistsRenderOnImporterDeployment(t *testing.T) {
 	}
 
 	// When Helm renders the chart with those values.
-	rendered := renderChartForTest(t, values)
+	rendered, err := renderChartForTest(t, values)
+	require.NoError(t, err, "helm template should accept configured allowlists: %s", rendered)
 	importerEnv := importerEnvironmentFromRenderedChart(t, rendered)
 
 	// Then the importer receives comma-separated allowlists, and no other rendered resource gets them.
@@ -206,7 +207,8 @@ func TestImporterCredentialAllowlistsRenderOnImporterDeployment(t *testing.T) {
 // TestImporterCredentialAllowlistsAreUnsetByDefault verifies empty chart defaults preserve deny-by-default behavior.
 func TestImporterCredentialAllowlistsAreUnsetByDefault(t *testing.T) {
 	// Given the chart's default values with no importer allowlist overrides.
-	rendered := renderChartForTest(t, baseChartValuesForRenderTest())
+	rendered, err := renderChartForTest(t, baseChartValuesForRenderTest())
+	require.NoError(t, err, "helm template should accept default allowlists: %s", rendered)
 	importerEnv := importerEnvironmentFromRenderedChart(t, rendered)
 
 	// When checking the importer and all rendered resources.
@@ -215,6 +217,39 @@ func TestImporterCredentialAllowlistsAreUnsetByDefault(t *testing.T) {
 	assert.NotContains(t, importerEnv, "IMPORTER_CREDENTIAL_PATHS")
 	assert.NotContains(t, rendered, "IMPORTER_ENV_PREFIXES")
 	assert.NotContains(t, rendered, "IMPORTER_CREDENTIAL_PATHS")
+}
+
+// TestImporterCredentialAllowlistSchemaRejectsInvalidTypes verifies both allowlists require arrays of strings.
+func TestImporterCredentialAllowlistSchemaRejectsInvalidTypes(t *testing.T) {
+	tests := []struct {
+		name  string
+		field string
+		value interface{}
+	}{
+		{name: "envPrefixes scalar", field: "envPrefixes", value: "QUAY_API_TOKEN"},
+		{name: "envPrefixes non-string item", field: "envPrefixes", value: []int{42}},
+		{name: "credentialPaths scalar", field: "credentialPaths", value: "/var/run/secrets/importer/token"},
+		{name: "credentialPaths non-string item", field: "credentialPaths", value: []int{42}},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			// Given an importer allowlist with a value that violates its string-list contract.
+			values := baseChartValuesForRenderTest()
+			values["modules"] = map[string]interface{}{
+				"importer": map[string]interface{}{
+					testCase.field: testCase.value,
+				},
+			}
+
+			// When Helm validates and renders the chart.
+			output, err := renderChartForTest(t, values)
+
+			// Then schema validation rejects the invalid allowlist value.
+			require.Error(t, err, "invalid %s should be rejected", testCase.field)
+			assert.Contains(t, output, testCase.field)
+		})
+	}
 }
 
 // baseChartValuesForRenderTest supplies required database and storage values for a valid chart render.
@@ -235,7 +270,7 @@ func baseChartValuesForRenderTest() map[string]interface{} {
 }
 
 // renderChartForTest renders the operator's embedded chart with supplied values for integration tests.
-func renderChartForTest(t *testing.T, values map[string]interface{}) string {
+func renderChartForTest(t *testing.T, values map[string]interface{}) (string, error) {
 	t.Helper()
 
 	helmPath, err := exec.LookPath("helm")
@@ -254,8 +289,7 @@ func renderChartForTest(t *testing.T, values map[string]interface{}) string {
 	args = append(args, "-f", valuesPath)
 
 	output, err := exec.Command(helmPath, args...).CombinedOutput()
-	require.NoError(t, err, "helm template should succeed: %s", output)
-	return string(output)
+	return string(output), err
 }
 
 // importerEnvironmentFromRenderedChart returns the environment on the importer container in rendered chart output.
