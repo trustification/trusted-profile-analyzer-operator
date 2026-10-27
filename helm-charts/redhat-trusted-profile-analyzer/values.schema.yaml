@@ -272,6 +272,24 @@ properties:
                   The max number of import jobs that may run concurrently
               storageClassName:
                 type: string
+              envPrefixes:
+                type: array
+                items:
+                  type: string
+                default: []
+                description: |
+                  Environment variable names or prefixes the importer is allowed to use as credentials.
+                  Injected as IMPORTER_ENV_PREFIXES, comma-joined on the importer Deployment.
+                  When empty, environment-variable credentials remain denied.
+              credentialPaths:
+                type: array
+                items:
+                  type: string
+                default: []
+                description: |
+                  Credential file paths the importer is allowed to read.
+                  Injected as IMPORTER_CREDENTIAL_PATHS, comma-joined on the importer Deployment.
+                  When empty, file-based credentials remain denied.
               readOnly:
                 type: boolean
                 description: |
@@ -1008,4 +1026,3 @@ definitions:
         default: false
         description: |
           Allow insecure TLS connections with the EI OIDC issuer.
-

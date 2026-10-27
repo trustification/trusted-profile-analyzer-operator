@@ -18,7 +18,9 @@ package integration
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -177,4 +179,133 @@ func TestHelmIgnoreExists(t *testing.T) {
 
 	_, err := os.Stat(helmignorePath)
 	assert.NoError(t, err, ".helmignore should exist")
+}
+
+// TestImporterCredentialAllowlistsRenderOnImporterDeployment verifies configured allowlists reach only the importer.
+func TestImporterCredentialAllowlistsRenderOnImporterDeployment(t *testing.T) {
+	// Given importer allowlists containing multiple environment names and mounted credential paths.
+	values := baseChartValuesForRenderTest()
+	values["modules"] = map[string]interface{}{
+		"importer": map[string]interface{}{
+			"envPrefixes":     []string{"QUAY_API_TOKEN", "REGISTRY_PASSWORD"},
+			"credentialPaths": []string{"/var/run/secrets/importer/token", "/var/run/secrets/importer/ca.pem"},
+		},
+	}
+
+	// When Helm renders the chart with those values.
+	rendered := renderChartForTest(t, values)
+	importerEnv := importerEnvironmentFromRenderedChart(t, rendered)
+
+	// Then the importer receives comma-separated allowlists, and no other rendered resource gets them.
+	assert.Equal(t, "QUAY_API_TOKEN,REGISTRY_PASSWORD", importerEnv["IMPORTER_ENV_PREFIXES"])
+	assert.Equal(t, "/var/run/secrets/importer/token,/var/run/secrets/importer/ca.pem", importerEnv["IMPORTER_CREDENTIAL_PATHS"])
+	assert.Equal(t, 1, strings.Count(rendered, "name: IMPORTER_ENV_PREFIXES"))
+	assert.Equal(t, 1, strings.Count(rendered, "name: IMPORTER_CREDENTIAL_PATHS"))
+}
+
+// TestImporterCredentialAllowlistsAreUnsetByDefault verifies empty chart defaults preserve deny-by-default behavior.
+func TestImporterCredentialAllowlistsAreUnsetByDefault(t *testing.T) {
+	// Given the chart's default values with no importer allowlist overrides.
+	rendered := renderChartForTest(t, baseChartValuesForRenderTest())
+	importerEnv := importerEnvironmentFromRenderedChart(t, rendered)
+
+	// When checking the importer and all rendered resources.
+	// Then both credential source variables remain absent.
+	assert.NotContains(t, importerEnv, "IMPORTER_ENV_PREFIXES")
+	assert.NotContains(t, importerEnv, "IMPORTER_CREDENTIAL_PATHS")
+	assert.NotContains(t, rendered, "IMPORTER_ENV_PREFIXES")
+	assert.NotContains(t, rendered, "IMPORTER_CREDENTIAL_PATHS")
+}
+
+// baseChartValuesForRenderTest supplies required database and storage values for a valid chart render.
+func baseChartValuesForRenderTest() map[string]interface{} {
+	return map[string]interface{}{
+		"appDomain": "test.example.com",
+		"database": map[string]interface{}{
+			"host":     "postgres.example.com",
+			"name":     "trustify",
+			"username": "trustify",
+			"password": "test-only-placeholder",
+		},
+		"storage": map[string]interface{}{
+			"type": "filesystem",
+			"size": "1Gi",
+		},
+	}
+}
+
+// renderChartForTest renders the operator's embedded chart with supplied values for integration tests.
+func renderChartForTest(t *testing.T, values map[string]interface{}) string {
+	t.Helper()
+
+	helmPath, err := exec.LookPath("helm")
+	if err != nil {
+		t.Skip("helm command not available in test environment")
+	}
+
+	chartPath := filepath.Join("helm-charts", "redhat-trusted-profile-analyzer")
+	args := []string{"template", "test-release", chartPath}
+	valuesYAML, err := yaml.Marshal(values)
+	require.NoError(t, err, "values should be valid YAML")
+
+	valuesPath := filepath.Join(t.TempDir(), "values.yaml")
+	err = os.WriteFile(valuesPath, valuesYAML, 0644)
+	require.NoError(t, err, "values file should be writable")
+	args = append(args, "-f", valuesPath)
+
+	output, err := exec.Command(helmPath, args...).CombinedOutput()
+	require.NoError(t, err, "helm template should succeed: %s", output)
+	return string(output)
+}
+
+// importerEnvironmentFromRenderedChart returns the environment on the importer container in rendered chart output.
+func importerEnvironmentFromRenderedChart(t *testing.T, rendered string) map[string]string {
+	t.Helper()
+
+	var importerEnv map[string]string
+	importerFound := false
+	for _, doc := range strings.Split(rendered, "\n---\n") {
+		if strings.TrimSpace(doc) == "" {
+			continue
+		}
+
+		var deployment struct {
+			Kind     string `yaml:"kind"`
+			Metadata struct {
+				Name string `yaml:"name"`
+			} `yaml:"metadata"`
+			Spec struct {
+				Template struct {
+					Spec struct {
+						Containers []struct {
+							Name string `yaml:"name"`
+							Env  []struct {
+								Name  string `yaml:"name"`
+								Value string `yaml:"value"`
+							} `yaml:"env"`
+						} `yaml:"containers"`
+					} `yaml:"spec"`
+				} `yaml:"template"`
+			} `yaml:"spec"`
+		}
+		require.NoError(t, yaml.Unmarshal([]byte(doc), &deployment), "rendered resource should be valid YAML")
+		if deployment.Kind != "Deployment" || !strings.HasSuffix(deployment.Metadata.Name, "importer") {
+			continue
+		}
+
+		for _, container := range deployment.Spec.Template.Spec.Containers {
+			if container.Name != "service" {
+				continue
+			}
+			importerFound = true
+			importerEnv = make(map[string]string, len(container.Env))
+			for _, variable := range container.Env {
+				importerEnv[variable.Name] = variable.Value
+			}
+			break
+		}
+	}
+
+	require.True(t, importerFound, "rendered chart should contain the importer service container")
+	return importerEnv
 }
