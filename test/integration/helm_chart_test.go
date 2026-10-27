@@ -28,6 +28,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	chartImporterModuleName     = "importer"
+	chartServerModuleName       = "server"
+	chartEnvPrefixesField       = "envPrefixes"
+	chartCredentialPathsField   = "credentialPaths"
+	chartRecommendPatternsField = "recommendPatterns"
+)
+
 // ChartYaml represents the Chart.yaml structure
 type ChartYaml struct {
 	APIVersion  string `yaml:"apiVersion"`
@@ -186,9 +194,9 @@ func TestImporterCredentialAllowlistsRenderOnImporterDeployment(t *testing.T) {
 	// Given importer allowlists containing multiple environment names and mounted credential paths.
 	values := baseChartValuesForRenderTest()
 	values["modules"] = map[string]interface{}{
-		"importer": map[string]interface{}{
-			"envPrefixes":     []string{"QUAY_API_TOKEN", "REGISTRY_PASSWORD"},
-			"credentialPaths": []string{"/var/run/secrets/importer/token", "/var/run/secrets/importer/ca.pem"},
+		chartImporterModuleName: map[string]interface{}{
+			chartEnvPrefixesField:     []string{"QUAY_API_TOKEN", "REGISTRY_PASSWORD"},
+			chartCredentialPathsField: []string{"/var/run/secrets/importer/token", "/var/run/secrets/importer/ca.pem"},
 		},
 	}
 
@@ -226,10 +234,10 @@ func TestImporterCredentialAllowlistSchemaRejectsInvalidTypes(t *testing.T) {
 		field string
 		value interface{}
 	}{
-		{name: "envPrefixes scalar", field: "envPrefixes", value: "QUAY_API_TOKEN"},
-		{name: "envPrefixes non-string item", field: "envPrefixes", value: []int{42}},
-		{name: "credentialPaths scalar", field: "credentialPaths", value: "/var/run/secrets/importer/token"},
-		{name: "credentialPaths non-string item", field: "credentialPaths", value: []int{42}},
+		{name: "envPrefixes scalar", field: chartEnvPrefixesField, value: "QUAY_API_TOKEN"},
+		{name: "envPrefixes non-string item", field: chartEnvPrefixesField, value: []int{42}},
+		{name: "credentialPaths scalar", field: chartCredentialPathsField, value: "/var/run/secrets/importer/token"},
+		{name: "credentialPaths non-string item", field: chartCredentialPathsField, value: []int{42}},
 	}
 
 	for _, testCase := range tests {
@@ -237,7 +245,7 @@ func TestImporterCredentialAllowlistSchemaRejectsInvalidTypes(t *testing.T) {
 			// Given an importer allowlist with a value that violates its string-list contract.
 			values := baseChartValuesForRenderTest()
 			values["modules"] = map[string]interface{}{
-				"importer": map[string]interface{}{
+				chartImporterModuleName: map[string]interface{}{
 					testCase.field: testCase.value,
 				},
 			}
@@ -247,6 +255,105 @@ func TestImporterCredentialAllowlistSchemaRejectsInvalidTypes(t *testing.T) {
 
 			// Then schema validation rejects the invalid allowlist value.
 			require.Error(t, err, "invalid %s should be rejected", testCase.field)
+			assert.Contains(t, output, testCase.field)
+		})
+	}
+}
+
+// TestCommaDelimitedChartListItemsRejectCommas verifies comma-bearing entries cannot be misparsed.
+func TestCommaDelimitedChartListItemsRejectCommas(t *testing.T) {
+	tests := []struct {
+		name   string
+		module string
+		field  string
+		value  string
+	}{
+		{
+			name:   "environment prefix",
+			module: chartImporterModuleName,
+			field:  chartEnvPrefixesField,
+			value:  "QUAY_API_TOKEN,REGISTRY_",
+		},
+		{
+			name:   "credential path",
+			module: chartImporterModuleName,
+			field:  chartCredentialPathsField,
+			value:  "/var/run/secrets/quay,token",
+		},
+		{
+			name:   "recommendation pattern",
+			module: chartServerModuleName,
+			field:  chartRecommendPatternsField,
+			value:  "^pkg,foo$",
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			// Given a comma-containing item in a comma-delimited chart list.
+			values := baseChartValuesForRenderTest()
+			values["modules"] = map[string]interface{}{
+				testCase.module: map[string]interface{}{
+					testCase.field: []string{testCase.value},
+				},
+			}
+
+			// When Helm validates and renders the chart.
+			output, err := renderChartForTest(t, values)
+
+			// Then schema validation rejects the ambiguous list item.
+			require.Error(t, err, "comma-containing %s should be rejected", testCase.field)
+			assert.Contains(t, output, testCase.field)
+		})
+	}
+}
+
+// TestCommaFreeServerRecommendationPatternsStillRender verifies valid patterns remain configurable.
+func TestCommaFreeServerRecommendationPatternsStillRender(t *testing.T) {
+	// Given comma-free recommendation patterns.
+	values := baseChartValuesForRenderTest()
+	values["modules"] = map[string]interface{}{
+		chartServerModuleName: map[string]interface{}{
+			chartRecommendPatternsField: []string{"^foo$", "^bar$"},
+		},
+	}
+
+	// When Helm renders the chart.
+	rendered, err := renderChartForTest(t, values)
+	require.NoError(t, err, "helm template should accept comma-free recommendation patterns: %s", rendered)
+
+	// Then the server receives the list in its existing comma-separated format.
+	assert.Contains(t, rendered, "name: TRUSTD_RECOMMEND_PATTERNS")
+	assert.Contains(t, rendered, `value: "^foo$,^bar$"`)
+}
+
+// TestChartListSchemaRejectsEmptyItems verifies empty strings cannot broaden credential or recommendation access.
+func TestChartListSchemaRejectsEmptyItems(t *testing.T) {
+	tests := []struct {
+		name   string
+		module string
+		field  string
+	}{
+		{name: "environment prefix", module: chartImporterModuleName, field: chartEnvPrefixesField},
+		{name: "credential path", module: chartImporterModuleName, field: chartCredentialPathsField},
+		{name: "recommendation pattern", module: chartServerModuleName, field: chartRecommendPatternsField},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			// Given a chart list containing an empty string item.
+			values := baseChartValuesForRenderTest()
+			values["modules"] = map[string]interface{}{
+				testCase.module: map[string]interface{}{
+					testCase.field: []string{""},
+				},
+			}
+
+			// When Helm validates and renders the chart.
+			output, err := renderChartForTest(t, values)
+
+			// Then schema validation rejects the empty item.
+			require.Error(t, err, "empty %s item should be rejected", testCase.field)
 			assert.Contains(t, output, testCase.field)
 		})
 	}

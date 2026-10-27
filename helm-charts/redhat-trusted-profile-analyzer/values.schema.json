@@ -261,10 +261,12 @@
                 "recommendPatterns": {
                   "type": "array",
                   "items": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[^,]*$"
                   },
                   "default": [],
-                  "description": "List of regex patterns for PURL vendor rebuild recommendations.\nEach pattern must contain exactly one capture group extracting the upstream\nbase version (e.g. \"^(.+)\\\\.redhat-[0-9]+$\"). When empty, the server\nreturns no recommendations. Injected as TRUSTD_RECOMMEND_PATTERNS\ncomma-joined on the trustd Deployment.\n"
+                  "description": "List of regex patterns for PURL vendor rebuild recommendations.\nEach pattern must contain exactly one capture group extracting the upstream\nbase version (e.g. \"^(.+)\\\\.redhat-[0-9]+$\"). When empty, the server\nreturns no recommendations. Patterns must be non-empty and must not contain\ncommas because the list is injected as comma-joined TRUSTD_RECOMMEND_PATTERNS\non the trustd Deployment.\n"
                 }
               }
             }
@@ -322,18 +324,22 @@
                 "envPrefixes": {
                   "type": "array",
                   "items": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[^,]*$"
                   },
                   "default": [],
-                  "description": "Environment variable names or prefixes the importer is allowed to use as credentials.\nInjected as IMPORTER_ENV_PREFIXES, comma-joined on the importer Deployment.\nWhen empty, environment-variable credentials remain denied.\n"
+                  "description": "Environment variable names or prefixes the importer is allowed to use as credentials.\nEntries must be non-empty and must not contain commas. Injected as comma-joined\nIMPORTER_ENV_PREFIXES on the importer Deployment. When empty, environment-variable\ncredentials remain denied.\n"
                 },
                 "credentialPaths": {
                   "type": "array",
                   "items": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[^,]*$"
                   },
                   "default": [],
-                  "description": "Credential file paths the importer is allowed to read.\nInjected as IMPORTER_CREDENTIAL_PATHS, comma-joined on the importer Deployment.\nWhen empty, file-based credentials remain denied.\n"
+                  "description": "Credential file paths the importer is allowed to read.\nEntries must be non-empty and must not contain commas. Injected as comma-joined\nIMPORTER_CREDENTIAL_PATHS on the importer Deployment. When empty, file-based credentials\nremain denied.\n"
                 },
                 "readOnly": {
                   "type": "boolean",
