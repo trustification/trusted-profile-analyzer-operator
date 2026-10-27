@@ -207,7 +207,10 @@ func TestImporterCredentialAllowlistsRenderOnImporterDeployment(t *testing.T) {
 
 	// Then the importer receives comma-separated allowlists, and no other rendered resource gets them.
 	assert.Equal(t, "QUAY_API_TOKEN,REGISTRY_PASSWORD", importerEnv["IMPORTER_ENV_PREFIXES"])
-	assert.Equal(t, "/var/run/secrets/importer/token,/var/run/secrets/importer/ca.pem", importerEnv["IMPORTER_CREDENTIAL_PATHS"])
+	assert.Equal(t,
+		"/var/run/secrets/importer/token,/var/run/secrets/importer/ca.pem",
+		importerEnv["IMPORTER_CREDENTIAL_PATHS"],
+	)
 	assert.Equal(t, 1, strings.Count(rendered, "name: IMPORTER_ENV_PREFIXES"))
 	assert.Equal(t, 1, strings.Count(rendered, "name: IMPORTER_CREDENTIAL_PATHS"))
 }
@@ -386,7 +389,8 @@ func renderChartForTest(t *testing.T, values map[string]interface{}) (string, er
 	}
 
 	chartPath := filepath.Join("helm-charts", "redhat-trusted-profile-analyzer")
-	args := []string{"template", "test-release", chartPath}
+	args := make([]string, 0, 5)
+	args = append(args, "template", "test-release", chartPath)
 	valuesYAML, err := yaml.Marshal(values)
 	require.NoError(t, err, "values should be valid YAML")
 
