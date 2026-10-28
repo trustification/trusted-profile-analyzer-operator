@@ -47,6 +47,11 @@ spec:
     importer:
       concurrency: 1
       enabled: true
+      # Allowlist entries only; provide the actual credential through the environment or a mounted Secret.
+      envPrefixes:
+        - QUAY_API_TOKEN
+      credentialPaths:
+        - /var/run/secrets/importer/quay/token
       image: {}
       infrastructure: {}
       metrics: {}

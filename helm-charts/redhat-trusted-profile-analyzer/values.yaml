@@ -110,6 +110,10 @@ modules:
     tracing: {}
     metrics: {}
     rust: {}
+    # Environment variable names/prefixes allowed as importer credentials. Empty keeps access denied.
+    envPrefixes: []
+    # Credential file paths allowed to be read by the importer. Empty keeps access denied.
+    credentialPaths: []
     resources:
       requests:
         cpu: 1
