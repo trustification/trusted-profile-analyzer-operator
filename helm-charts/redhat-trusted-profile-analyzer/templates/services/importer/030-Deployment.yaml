@@ -53,6 +53,14 @@ spec:
             {{- include "trustification.application.proxy.envVars" $mod | nindent 12 }}
             {{- include "trustification.cco.envVars" $mod | nindent 12 }}
             {{- include "trustification.cco.rds.envVars" $mod | nindent 12 }}
+            {{- with $mod.module.envPrefixes }}
+            - name: IMPORTER_ENV_PREFIXES
+              value: {{ join "," . | quote }}
+            {{- end }}
+            {{- with $mod.module.credentialPaths }}
+            - name: IMPORTER_CREDENTIAL_PATHS
+              value: {{ join "," . | quote }}
+            {{- end }}
 
           ports:
             {{- include "trustification.application.infrastructure.podPorts" $mod | nindent 12 }}

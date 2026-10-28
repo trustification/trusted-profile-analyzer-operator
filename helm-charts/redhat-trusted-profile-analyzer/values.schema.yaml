@@ -315,13 +315,15 @@ properties:
                 type: array
                 items:
                   type: string
+                  minLength: 1
+                  pattern: "^[^,]*$"
                 default: []
                 description: |
                   List of regex patterns for PURL vendor rebuild recommendations.
                   Each pattern must contain exactly one capture group extracting the upstream
                   base version (e.g. "^(.+)\\.redhat-[0-9]+$"). When empty, the server
-                  returns no recommendations. Injected as TRUSTD_RECOMMEND_PATTERNS
-                  comma-joined on the trustd Deployment.
+                  returns no recommendations. Patterns must be non-empty and must not contain commas
+                  because the list is injected as comma-joined TRUSTD_RECOMMEND_PATTERNS on the trustd Deployment.
 
       importer:
         description: |
@@ -351,6 +353,30 @@ properties:
                   The max number of import jobs that may run concurrently
               storageClassName:
                 type: string
+              envPrefixes:
+                type: array
+                items:
+                  type: string
+                  minLength: 1
+                  pattern: "^[^,]*$"
+                default: []
+                description: |
+                  Environment variable names or prefixes the importer is allowed to use as credentials.
+                  Entries must be non-empty and must not contain commas. Injected as comma-joined IMPORTER_ENV_PREFIXES
+                  on the importer Deployment.
+                  When empty, environment-variable credentials remain denied.
+              credentialPaths:
+                type: array
+                items:
+                  type: string
+                  minLength: 1
+                  pattern: "^[^,]*$"
+                default: []
+                description: |
+                  Credential file paths the importer is allowed to read.
+                  Entries must be non-empty and must not contain commas. Injected as comma-joined IMPORTER_CREDENTIAL_PATHS
+                  on the importer Deployment.
+                  When empty, file-based credentials remain denied.
               readOnly:
                 type: boolean
                 description: |
@@ -1131,4 +1157,3 @@ definitions:
         default: false
         description: |
           Allow insecure TLS connections with the EI OIDC issuer.
-
