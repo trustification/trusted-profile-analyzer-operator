@@ -27,13 +27,13 @@
     "extraVolumes": {
       "type": "array",
       "items": {
-        "$ref": "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.29.0/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
+        "$ref": "urn:k8s:v1.29.0:Volume"
       }
     },
     "extraVolumeMounts": {
       "type": "array",
       "items": {
-        "$ref": "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.29.0/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeMount"
+        "$ref": "urn:k8s:v1.29.0:VolumeMount"
       }
     },
     "storage": {
@@ -300,7 +300,7 @@
                   ],
                   "properties": {
                     "size": {
-                      "$ref": "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.29.0/_definitions.json#/definitions/io.k8s.apimachinery.pkg.api.resource.Quantity"
+                      "$ref": "urn:k8s:v1.29.0:Quantity"
                     }
                   }
                 },
@@ -370,7 +370,7 @@
                   "type": "object",
                   "description": "The importers to create",
                   "additionalProperties": {
-                    "$ref": "https://raw.githubusercontent.com/guacsec/trustify/release/0.4.z/modules/importer/schema/importer.json"
+                    "$ref": "urn:trustify:importer"
                   }
                 }
               }
@@ -742,7 +742,7 @@
           ],
           "properties": {
             "content": {
-              "$ref": "https://raw.githubusercontent.com/guacsec/trustify/release/0.4.z/common/auth/schema/auth.json"
+              "$ref": "urn:trustify:auth"
             }
           }
         },
@@ -895,7 +895,7 @@
           ],
           "properties": {
             "valueFrom": {
-              "$ref": "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.29.0/_definitions.json#/definitions/io.k8s.api.core.v1.EnvVarSource"
+              "$ref": "urn:k8s:v1.29.0:EnvVarSource"
             }
           }
         },
@@ -1002,7 +1002,7 @@
           ]
         },
         "size": {
-          "$ref": "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.29.0/_definitions.json#/definitions/io.k8s.apimachinery.pkg.api.resource.Quantity"
+          "$ref": "urn:k8s:v1.29.0:Quantity"
         },
         "storageClassName": {
           "type": "string"

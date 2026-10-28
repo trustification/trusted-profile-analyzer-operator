@@ -25,6 +25,7 @@ import (
 	"github.com/operator-framework/helm-operator-plugins/pkg/annotation"
 	"github.com/operator-framework/helm-operator-plugins/pkg/reconciler"
 	"github.com/operator-framework/helm-operator-plugins/pkg/watches"
+	"github.com/trustification/trusted-profile-analyzer-operator/pkg/valuesschema"
 	ctrlruntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -73,6 +74,16 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	// The chart's values schema refers to the trustify and Kubernetes schemas
+	// by `urn:`; resolve those from copies embedded in this binary so values
+	// validation needs no network. Must happen before any chart is rendered.
+	urns, err := valuesschema.Register()
+	if err != nil {
+		setupLog.Error(err, "unable to register vendored values schemas")
+		os.Exit(1)
+	}
+	setupLog.Info("registered vendored values schemas", "urns", urns)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
