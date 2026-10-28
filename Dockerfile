@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM registry.access.redhat.com/hi/go:1.27.2 AS builder
+FROM registry.access.redhat.com/hi/go:1.27.3 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -13,6 +13,7 @@ RUN go mod download
 
 # Copy the go source
 COPY main.go main.go
+COPY pkg/ pkg/
 #TODO uncomment after adding golang api
 #COPY api/ api/
 #COPY controllers/ controllers/
