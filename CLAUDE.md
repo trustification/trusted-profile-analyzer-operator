@@ -142,6 +142,57 @@ make run
   - Must set `appDomain` for deployments
   - Module-based architecture with `modules.server`, `modules.importer`, etc.
 
+### Values schema and vendored upstream schemas
+
+`values.schema.yaml` is the hand-maintained source; `values.schema.json` is what
+Helm actually reads and enforces. Keep both in sync.
+
+The chart's values schema needs definitions owned by other projects: the
+trustify importer and auth configs, and four Kubernetes core types (`Volume`,
+`VolumeMount`, `Quantity`, `EnvVarSource`). It used to `$ref` them over the
+network, which made `helm template`/`install` fail outright in an air-gapped
+cluster.
+
+They are now referenced by **`urn:`** — `urn:trustify:importer`,
+`urn:trustify:auth`, `urn:k8s:v1.29.0:Volume`, etc. — and resolved from copies
+embedded in the operator binary. Nothing is inlined into the chart schemas.
+
+- Vendored copies, their URNs, source URLs and digests:
+  `pkg/valuesschema/schemas/` (outside the chart, so they are not packaged;
+  `SOURCES.json` is the manifest, read both by the script and at runtime).
+- `pkg/valuesschema` embeds them and installs `chartutil.URNResolver` from
+  `main.go` at startup, before any chart is rendered. Digests are verified on
+  load, so a hand-edited copy fails fast instead of quietly changing what the
+  chart accepts.
+- Refresh with `make vendor-schemas` (`hack/vendor-values-schemas.py --fetch`);
+  `make verify-schemas` asserts the copies are intact and that no remote `$ref`
+  has crept back in. `verify-schemas` runs as part of `make test`/`test-ci`.
+- To bump a version, edit `upstream` in
+  `pkg/valuesschema/schemas/SOURCES.json` and run `make vendor-schemas`.
+
+**Why `urn:` and not something else.** Helm >= 3.20 (this repo vendors 3.22)
+registers a loader for the `urn:` scheme backed by the exported
+`chartutil.URNResolver`, and an **unresolved** URN is not an error — Helm logs a
+warning and substitutes a permissive schema. So the operator gets complete
+offline validation, while a standalone `helm install` with no operator still
+renders offline, just without validating those subtrees. Neither a remote nor a
+relative `$ref` can do that: remote fails closed without network, and Helm
+resolves a relative `$ref` against the filesystem root rather than the chart
+directory, which a packaged chart has no files on anyway.
+
+Two constraints worth knowing before editing:
+
+- **URNs must not carry a JSON-pointer fragment.** The permissive fallback for
+  an unregistered URN is a bare `true` schema, and `#/$defs/X` cannot resolve
+  against it — so a fragment turns graceful degradation back into a hard
+  failure. The Kubernetes schemas are therefore vendored as self-contained
+  documents (definition + transitive closure) rather than pointers into
+  `_definitions.json`. `TestChartSchemasHaveNoRemoteRefs` enforces both this
+  and the no-remote-`$ref` rule.
+- **This raises the floor to Helm 3.20** for anyone installing the chart
+  standalone. 3.19 and earlier have no `urn:` loader and will error. The
+  operator path is unaffected.
+
 ### Custom Resource Spec
 
 The TrustedProfileAnalyzer CR spec uses `x-kubernetes-preserve-unknown-fields: true`, meaning it accepts arbitrary fields that are passed through to the Helm chart. Key fields:
