@@ -30,6 +30,8 @@ spec:
     value: bundle.Dockerfile
   - name: path-context
     value: .
+  - name: build-source-image
+    value: "true"
   - name: hermetic
     value: "true"
   - name: prefetch-input
