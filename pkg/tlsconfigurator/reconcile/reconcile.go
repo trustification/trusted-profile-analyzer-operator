@@ -364,9 +364,22 @@ type tlsSummary struct {
 
 // summarize resolves settings into the form logProfile reports.
 func (r *Reconciler) summarize(settings client.ClusterTLSSettings, hash string) tlsSummary {
-	tlsConfig, unsupported := crypto.BuildTLSConfigFromSpec(settings.Spec, crypto.Options{
+	tlsConfig, unsupported, err := crypto.BuildTLSConfigFromSpec(settings.Spec, crypto.Options{
 		EnablePQC: r.cfg.EnablePQC,
 	})
+	if err != nil {
+		// summarize only feeds logging. A profile we cannot convert must not
+		// stop the rollout, so report it and leave the derived fields empty.
+		return tlsSummary{
+			hash:        hash,
+			profileType: profileTypeName(settings.Profile),
+			adherence:   orUnset(settings.Adherence),
+			minVersion:  "unknown",
+			ciphers:     settings.Spec.Ciphers,
+			pqcReasons:  []string{err.Error()},
+			unsupported: unsupported,
+		}
+	}
 	pqc, reasons := crypto.IsPQCCompliant(tlsConfig)
 
 	return tlsSummary{

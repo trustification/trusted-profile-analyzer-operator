@@ -242,8 +242,14 @@ func validateAction(ctx context.Context, cfg *config.Config) error {
 	}
 
 	// Report the profile as it stands, then as it would be enforced with PQC.
-	asIs, unsupported := crypto.BuildTLSConfigFromSpec(settings.Spec, crypto.Options{})
-	hardened, _ := crypto.BuildTLSConfigFromSpec(settings.Spec, crypto.Options{EnablePQC: true})
+	asIs, unsupported, err := crypto.BuildTLSConfigFromSpec(settings.Spec, crypto.Options{})
+	if err != nil {
+		return err
+	}
+	hardened, _, err := crypto.BuildTLSConfigFromSpec(settings.Spec, crypto.Options{EnablePQC: true})
+	if err != nil {
+		return err
+	}
 
 	fmt.Println("Post-Quantum / TLS 1.3 Compliance Check")
 	fmt.Println("=======================================")
@@ -475,7 +481,10 @@ func showTLSConfigAction(ctx context.Context, cfg *config.Config) error {
 	fmt.Println(string(profileData))
 	fmt.Println()
 
-	tlsConfig, unsupported := crypto.BuildTLSConfigFromSpec(settings.Spec, crypto.Options{EnablePQC: *enablePQC})
+	tlsConfig, unsupported, err := crypto.BuildTLSConfigFromSpec(settings.Spec, crypto.Options{EnablePQC: *enablePQC})
+	if err != nil {
+		return err
+	}
 
 	// Display crypto/tls.Config
 	fmt.Println("Converted to crypto/tls.Config:")
