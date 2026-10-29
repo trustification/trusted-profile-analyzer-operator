@@ -107,15 +107,23 @@ func BuildTLSConfig(profile *configv1.TLSSecurityProfile, opts Options) (
 	if err != nil {
 		return nil, nil, err
 	}
-	cfg, unsupported := BuildTLSConfigFromSpec(spec, opts)
-	return cfg, unsupported, nil
+	return BuildTLSConfigFromSpec(spec, opts)
 }
 
 // BuildTLSConfigFromSpec converts an already-resolved TLSProfileSpec to a
 // crypto/tls.Config. Use this when the spec was obtained from a watch event or
 // cached elsewhere, so the profile is resolved exactly once.
-func BuildTLSConfigFromSpec(spec configv1.TLSProfileSpec, opts Options) (tlsConfig *tls.Config, unsupported []string) {
-	apply, unsupported := ocptls.NewTLSConfigFromProfile(spec)
+//
+// Unlike an unsupported cipher, an unparseable MinTLSVersion is a hard error:
+// upstream returns no apply function at all, so there is no config to fall back
+// to. Callers on the reconcile path must keep going rather than abort.
+func BuildTLSConfigFromSpec(spec configv1.TLSProfileSpec, opts Options) (
+	tlsConfig *tls.Config, unsupported []string, err error,
+) {
+	apply, unsupported, err := ocptls.NewTLSConfigFromProfile(spec)
+	if err != nil {
+		return nil, unsupported, fmt.Errorf("failed to build TLS config from profile: %w", err)
+	}
 
 	cfg := &tls.Config{}
 	apply(cfg)
@@ -132,7 +140,7 @@ func BuildTLSConfigFromSpec(spec configv1.TLSProfileSpec, opts Options) (tlsConf
 		EnablePQC(cfg)
 	}
 
-	return cfg, unsupported
+	return cfg, unsupported, nil
 }
 
 // TLSVersion converts a TLS version string ("VersionTLS12") to the
@@ -278,7 +286,9 @@ func CipherSuiteName(id uint16) string {
 // DefaultTLSConfig returns the TLS configuration for the cluster default
 // profile (Intermediate), for callers that cannot reach the API server.
 func DefaultTLSConfig() *tls.Config {
-	cfg, _ := BuildTLSConfigFromSpec(*configv1.TLSProfiles[configv1.TLSProfileIntermediateType], Options{})
+	// The built-in Intermediate profile is a constant with a valid
+	// MinTLSVersion, so the error cannot fire here.
+	cfg, _, _ := BuildTLSConfigFromSpec(*configv1.TLSProfiles[configv1.TLSProfileIntermediateType], Options{})
 	return cfg
 }
 
