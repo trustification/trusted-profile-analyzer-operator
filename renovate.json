@@ -12,6 +12,9 @@
     "automerge": true,
     "autoApprove": true
   },
+  "extends": [
+    ":enableVulnerabilityAlerts" 
+  ],
   "packageRules": [
     {
       "description": "Konflux: Tekton task bundles and pipeline definitions in .tekton/ are automerged, except when the update notes mention a migration, which the Konflux migration guard workflow blocks",
@@ -26,6 +29,37 @@
       "groupName": "base images",
       "automerge": true,
       "autoApprove": true
+    },
+     {
+      "description": "Enable lookups for indirect go.mod dependencies",
+      "enabled": true,
+      "matchDepTypes": [
+        "indirect"
+      ],
+      "matchManagers": [
+        "gomod"
+      ]
+    },
+    {
+      "description": "Disable non-security updates for indirect go.mod dependencies (vulnerability alerts use force to override this)",
+      "enabled": false,
+      "matchDepTypes": [
+        "indirect"
+      ],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch",
+        "pin",
+        "digest",
+        "pinDigest",
+        "lockFileMaintenance",
+        "rollback",
+        "replacement"
+      ]
     }
   ]
 }
