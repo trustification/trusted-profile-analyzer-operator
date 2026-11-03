@@ -4,10 +4,14 @@
 #   - watch the cluster-wide TLS source of truth (APIServer CR)
 #   - read the cluster version (4.22+ gate)
 #   - read/update the IngressController TLS profile
+#
+# Cluster-scoped, so the name is prefixed with the release namespace and name:
+# a fixed name would be claimed by whichever release installed first and block
+# every later one (see the clusterScopedName helper).
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: tls-configurator
+  name: {{ include "trustification.tlsConfigurator.clusterScopedName" . }}
   labels:
     app.kubernetes.io/name: tls-configurator
 rules:

@@ -399,6 +399,16 @@ with an explicit `command:`. `make build-tls-configurator` builds it standalone.
   `helm-charts/redhat-trusted-profile-analyzer/templates/init/tls-configure/`:
   ServiceAccount (`010`), ClusterRole (`015`), namespaced Role (`016`),
   RoleBinding (`017`), ClusterRoleBinding (`018`), and a **Deployment** (`020`).
+- **Naming.** The namespaced objects are plainly `tls-configurator`, like the
+  rest of the chart. The two *cluster-scoped* ones (ClusterRole,
+  ClusterRoleBinding) must not be: a fixed cluster-scoped name is claimed by
+  whichever release installs first, and Helm then refuses every later release
+  on that cluster with "exists and cannot be imported into the current
+  release". They are named
+  `{{ .Release.Namespace }}-{{ .Release.Name }}-tls-configurator` via
+  `trustification.tlsConfigurator.clusterScopedName`
+  (`templates/helpers/_tlsconfigurator.tpl`). Any cluster-scoped resource
+  added here needs the same treatment.
 
 Sharing an image does **not** mean sharing a pod: the configurator still runs as
 its own Deployment with its own ServiceAccount and cluster RBAC.
