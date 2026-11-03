@@ -113,6 +113,13 @@ ServiceAccount, a ClusterRole/ClusterRoleBinding for the cluster-scoped reads,
 and a namespaced Role/RoleBinding to patch the target Deployments. It shares
 the operator's *image* but not its pod.
 
+The namespaced resources are named `tls-configurator`. The ClusterRole and
+ClusterRoleBinding are cluster-scoped, so they are named
+`<release-namespace>-<release-name>-tls-configurator` — a fixed name would be
+owned by whichever release installed first, and every later install of the
+chart would fail with *"ClusterRole \"tls-configurator\" … exists and cannot be
+imported into the current release"*.
+
 The container runs:
 
 ```
@@ -289,10 +296,35 @@ with until something else restarts them.
 | --- | --- | --- |
 | Install fails: *"enabled is false, but this is OpenShift 4.x where the TLS configurator is required"* | 4.22+ with the module off | Set `enabled: true`, or `allowDisabled: true` to accept the consequence |
 | Install fails: *"enabled is true, but this cluster does not expose the OpenShift API"* | `route.openshift.io/v1` not detected | If it really is OpenShift, force detection with `.spec.openshift.enabled: true` |
-| Logs: `failed to read cluster TLS settings: ... forbidden` | ClusterRole not bound, or the operator could not grant it | Check `oc get clusterrole tls-configurator` and the operator's own `rhtpa-rbac-manager` — a Helm operator can only grant permissions it holds |
+| Logs: `failed to read cluster TLS settings: ... forbidden` | ClusterRole not bound, or the operator could not grant it | Check `oc get clusterrole <release-namespace>-<release-name>-tls-configurator` and the operator's own `rhtpa-rbac-manager` — a Helm operator can only grant permissions it holds |
+| Install fails: *"ClusterRole \"tls-configurator\" … exists and cannot be imported into the current release"* (or the same for `ClusterRoleBinding`) | Left over from a release installed before the cluster-scoped resources were named per release | Delete both, as **two separate commands** — see below. Do this only after every release has been upgraded to a chart that uses the per-release names |
 | Logs: `Custom TLS profile specified but Custom field is nil` | Cluster profile is `type: Custom` with no `custom:` block | Fix the cluster's `APIServer/cluster` — this is a malformed cluster config, not an RHTPA one |
 | Logs: *"Not supported by Go's crypto/tls"* | Cluster profile names OpenSSL-only ciphers (`DHE-RSA-*`, `AES256-SHA256`, …) | Informational. Go cannot offer those; the rest of the profile still applies |
 | Profile changed but `server` did not roll | `targetDeployments` does not match the rendered name | It is `server`, not `rhtpa-server` |
+
+### Removing the legacy unprefixed cluster-scoped resources
+
+Releases installed before the cluster-scoped resources were named per release
+left behind a `ClusterRole` and a `ClusterRoleBinding` both plainly named
+`tls-configurator`. Either one is enough to fail a later install. Delete them
+with **two commands, one per resource type**:
+
+```bash
+oc delete clusterrole tls-configurator
+oc delete clusterrolebinding tls-configurator
+```
+
+Do not combine them as `oc delete clusterrole tls-configurator clusterrolebinding
+tls-configurator`. `oc delete` takes a single type followed by a list of names,
+so that form asks for three *ClusterRoles* — `tls-configurator`,
+`clusterrolebinding` and `tls-configurator` — and silently leaves the
+ClusterRoleBinding in place. (`oc delete clusterrole/tls-configurator
+clusterrolebinding/tls-configurator`, with slashes, also works, but the two
+separate commands are harder to get wrong.)
+
+Only do this once **every** release on the cluster has been upgraded to a chart
+that uses the per-release names; a release still on the old chart is using
+those objects.
 
 ---
 

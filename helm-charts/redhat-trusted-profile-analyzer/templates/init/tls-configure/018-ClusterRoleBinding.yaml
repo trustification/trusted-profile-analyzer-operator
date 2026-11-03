@@ -1,15 +1,18 @@
 {{- if .Values.modules.tlsConfigurator.enabled }}
 
+# Cluster-scoped, so both this binding and the ClusterRole it references are
+# named per release (see the clusterScopedName helper). The subject is the
+# namespaced ServiceAccount, which keeps its plain name.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: tls-configurator
+  name: {{ include "trustification.tlsConfigurator.clusterScopedName" . }}
   labels:
     app.kubernetes.io/name: tls-configurator
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: tls-configurator
+  name: {{ include "trustification.tlsConfigurator.clusterScopedName" . }}
 subjects:
   - kind: ServiceAccount
     name: tls-configurator

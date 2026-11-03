@@ -230,8 +230,8 @@ spec:
 ```
 
 When `cloudProvider` is set:
-- A `CredentialsRequest` resource is created in the `openshift-cloud-credential-operator` namespace
-- CCO provisions a Secret named `<release-name>-cloud-creds` in the deployment namespace
+- A `CredentialsRequest` resource named `<release-namespace>-<release-name>-cloud-creds` is created in the `openshift-cloud-credential-operator` namespace. That namespace is shared by every release on the cluster, so the name carries the release namespace for the same reason the tls-configurator ClusterRole does — two same-named CRs in different namespaces would otherwise render the identical object and the second install would fail. Helper: `trustification.cco.credentialsRequestName` in `_cco.tpl`.
+- CCO provisions a Secret named `<release-name>-cloud-creds` in the deployment namespace. This one is namespaced, so it keeps the plain name, and it is what `_storage.tpl`/`_cco.tpl` reference (`trustification.cco.secretName`). The two names are deliberately different — do not collapse them back into one helper.
 - `storage.accessKey` and `storage.secretKey` become **optional** (auto-populated from the CCO secret)
 
 ### Disabling CCO
@@ -399,6 +399,16 @@ with an explicit `command:`. `make build-tls-configurator` builds it standalone.
   `helm-charts/redhat-trusted-profile-analyzer/templates/init/tls-configure/`:
   ServiceAccount (`010`), ClusterRole (`015`), namespaced Role (`016`),
   RoleBinding (`017`), ClusterRoleBinding (`018`), and a **Deployment** (`020`).
+- **Naming.** The namespaced objects are plainly `tls-configurator`, like the
+  rest of the chart. The two *cluster-scoped* ones (ClusterRole,
+  ClusterRoleBinding) must not be: a fixed cluster-scoped name is claimed by
+  whichever release installs first, and Helm then refuses every later release
+  on that cluster with "exists and cannot be imported into the current
+  release". They are named
+  `{{ .Release.Namespace }}-{{ .Release.Name }}-tls-configurator` via
+  `trustification.tlsConfigurator.clusterScopedName`
+  (`templates/helpers/_tlsconfigurator.tpl`). Any cluster-scoped resource
+  added here needs the same treatment.
 
 Sharing an image does **not** mean sharing a pod: the configurator still runs as
 its own Deployment with its own ServiceAccount and cluster RBAC.
