@@ -33,6 +33,9 @@ const (
 	fieldCcoRds           = "ccoRds"
 	kindCredentialsReq    = "CredentialsRequest"
 	ccoSecretName         = "test-release-cloud-creds"
+	// The CredentialsRequest lives in the cluster-wide CCO namespace, so it is
+	// named <release-namespace>-<release-name>-cloud-creds.
+	ccoCredentialsReqName = testRenderNamespace + "-" + ccoSecretName
 	ccoNamespace          = "openshift-cloud-credential-operator"
 	testBucket            = "trustify-storage"
 	testRegionUSEast1     = "us-east-1"
@@ -269,7 +272,8 @@ func TestHelmRenderAWSCredentialsRequest(t *testing.T) {
 
 	metadata, _ := cr[fieldMetadata].(map[string]interface{})
 	require.NotNil(t, metadata, "metadata should exist")
-	assert.Equal(t, ccoSecretName, metadata[fieldName], "CredentialsRequest name should match release")
+	assert.Equal(t, ccoCredentialsReqName, metadata[fieldName],
+		"CredentialsRequest name should be prefixed with the release namespace")
 	assert.Equal(t, ccoNamespace, metadata[fieldNamespace], "CredentialsRequest should be in CCO namespace")
 
 	spec, _ := cr[fieldSpec].(map[string]interface{})
@@ -305,7 +309,8 @@ func TestHelmRenderGCPCredentialsRequest(t *testing.T) {
 
 	metadata, _ := cr[fieldMetadata].(map[string]interface{})
 	require.NotNil(t, metadata, "metadata should exist")
-	assert.Equal(t, ccoSecretName, metadata[fieldName], "CredentialsRequest name should match release")
+	assert.Equal(t, ccoCredentialsReqName, metadata[fieldName],
+		"CredentialsRequest name should be prefixed with the release namespace")
 	assert.Equal(t, ccoNamespace, metadata[fieldNamespace], "CredentialsRequest should be in CCO namespace")
 
 	spec, _ := cr[fieldSpec].(map[string]interface{})

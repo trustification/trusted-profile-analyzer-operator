@@ -230,8 +230,8 @@ spec:
 ```
 
 When `cloudProvider` is set:
-- A `CredentialsRequest` resource is created in the `openshift-cloud-credential-operator` namespace
-- CCO provisions a Secret named `<release-name>-cloud-creds` in the deployment namespace
+- A `CredentialsRequest` resource named `<release-namespace>-<release-name>-cloud-creds` is created in the `openshift-cloud-credential-operator` namespace. That namespace is shared by every release on the cluster, so the name carries the release namespace for the same reason the tls-configurator ClusterRole does — two same-named CRs in different namespaces would otherwise render the identical object and the second install would fail. Helper: `trustification.cco.credentialsRequestName` in `_cco.tpl`.
+- CCO provisions a Secret named `<release-name>-cloud-creds` in the deployment namespace. This one is namespaced, so it keeps the plain name, and it is what `_storage.tpl`/`_cco.tpl` reference (`trustification.cco.secretName`). The two names are deliberately different — do not collapse them back into one helper.
 - `storage.accessKey` and `storage.secretKey` become **optional** (auto-populated from the CCO secret)
 
 ### Disabling CCO

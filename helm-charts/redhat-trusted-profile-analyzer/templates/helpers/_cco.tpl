@@ -18,9 +18,27 @@ Returns "true" when CCO manual mode is active (cloudProvider set AND ccoMode is 
 
 {{/*
 Returns the CCO secret name.
+
+This is the Secret that CCO provisions *in the release namespace*, so the
+release name alone is enough to keep it unique.
 */}}
 {{- define "trustification.cco.secretName" -}}
 {{ .root.Release.Name }}-cloud-creds
+{{- end -}}
+
+{{/*
+Returns the CredentialsRequest name.
+
+Unlike the Secret above, the CredentialsRequest is created in the fixed
+openshift-cloud-credential-operator namespace, shared by every release on the
+cluster. Naming it from the release name alone makes two same-named releases in
+different namespaces render the identical object, and the second install fails
+with "exists and cannot be imported into the current release" — so the release
+namespace is part of the name. Same reasoning as
+trustification.tlsConfigurator.clusterScopedName.
+*/}}
+{{- define "trustification.cco.credentialsRequestName" -}}
+{{ printf "%s-%s-cloud-creds" .root.Release.Namespace .root.Release.Name | trunc 253 | trimSuffix "-" }}
 {{- end -}}
 
 {{/*

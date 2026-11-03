@@ -38,6 +38,11 @@ const (
 	kindDeployment         = "kind: Deployment"
 	kindDeploymentResource = "Deployment"
 	testTrustify           = "trustify"
+
+	// Release name and namespace every renderHelmChart call uses. Both are
+	// pinned so names derived from them are reproducible.
+	testReleaseName     = "test-release"
+	testRenderNamespace = "rhtpa-test"
 )
 
 // minimalValues returns the smallest set of values that satisfies
@@ -434,8 +439,13 @@ func renderHelmChart(t *testing.T, chartPath string, values map[string]interface
 	err = os.WriteFile(valuesFile, valuesYAML, 0644)
 	require.NoError(t, err, "should be able to write values file")
 
-	// Run helm template
-	cmd := exec.Command("helm", "template", "test-release", chartPath, "-f", valuesFile)
+	// Run helm template. The namespace is pinned: without -n, Helm takes
+	// .Release.Namespace from the caller's current kubeconfig context, which
+	// makes anything rendered from it (the CredentialsRequest name, the
+	// tls-configurator ClusterRole name, RoleBinding subjects) differ between
+	// machines and CI.
+	cmd := exec.Command("helm", "template", testReleaseName, chartPath,
+		"--namespace", testRenderNamespace, "-f", valuesFile)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
