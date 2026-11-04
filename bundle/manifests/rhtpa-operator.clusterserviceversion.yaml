@@ -378,10 +378,10 @@ spec:
                       - --health-probe-bind-address=:8081
                     env:
                       - name: RELATED_IMAGE_RDS_AUTH_TOKEN
-                        value: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:cc2f6c96d7e995a7aa4bc6013411956ceb4413ef617d94d2b6e51bd29516fbd6
+                        value: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:a4bbeab98223aff223b452054ef31d6922f7bce6b9c2e8cf1a6c60e12fa7ec48
                       - name: RELATED_IMAGE_TLS_CONFIGURATOR
-                        value: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:cc2f6c96d7e995a7aa4bc6013411956ceb4413ef617d94d2b6e51bd29516fbd6
-                    image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:cc2f6c96d7e995a7aa4bc6013411956ceb4413ef617d94d2b6e51bd29516fbd6
+                        value: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:a4bbeab98223aff223b452054ef31d6922f7bce6b9c2e8cf1a6c60e12fa7ec48
+                    image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:a4bbeab98223aff223b452054ef31d6922f7bce6b9c2e8cf1a6c60e12fa7ec48
                     livenessProbe:
                       httpGet:
                         path: /healthz
@@ -492,12 +492,12 @@ spec:
     name: Red Hat
     url: https://github.com/trustification/trusted-profile-analyzer-operator
   relatedImages:
-    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:cc2f6c96d7e995a7aa4bc6013411956ceb4413ef617d94d2b6e51bd29516fbd6
+    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:a4bbeab98223aff223b452054ef31d6922f7bce6b9c2e8cf1a6c60e12fa7ec48
       name: ""
-    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:cc2f6c96d7e995a7aa4bc6013411956ceb4413ef617d94d2b6e51bd29516fbd6
+    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:a4bbeab98223aff223b452054ef31d6922f7bce6b9c2e8cf1a6c60e12fa7ec48
       name: manager
-    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:cc2f6c96d7e995a7aa4bc6013411956ceb4413ef617d94d2b6e51bd29516fbd6
+    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:a4bbeab98223aff223b452054ef31d6922f7bce6b9c2e8cf1a6c60e12fa7ec48
       name: rds_auth_token
-    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:cc2f6c96d7e995a7aa4bc6013411956ceb4413ef617d94d2b6e51bd29516fbd6
+    - image: registry.redhat.io/rhtpa/rhtpa-rhel10-operator@sha256:a4bbeab98223aff223b452054ef31d6922f7bce6b9c2e8cf1a6c60e12fa7ec48
       name: tls_configurator
   version: 3.2.0
