@@ -74,7 +74,7 @@ func mustHashWithAdherence(t *testing.T, profile *configv1.TLSSecurityProfile,
 	adherence configv1.TLSAdherencePolicy, enablePQC bool,
 ) string {
 	t.Helper()
-	hash, err := TLSConfigHash(settingsFor(t, profile, adherence), enablePQC)
+	hash, err := TLSConfigHash(settingsFor(t, profile, adherence), enablePQC, nil)
 	if err != nil {
 		t.Fatalf("TLSConfigHash() unexpected error = %v", err)
 	}

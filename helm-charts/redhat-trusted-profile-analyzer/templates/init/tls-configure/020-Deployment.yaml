@@ -14,6 +14,20 @@ metadata:
     app.kubernetes.io/name: tls-configurator
 spec:
   replicas: 1
+  # The reconciler is a singleton that does not do leader election. Each pass
+  # reads the cluster profile, then writes the operand ConfigMap and stamps the
+  # matching hash on the target Deployments -- so two instances running at once
+  # can interleave: the older one lands its stale snapshot after the newer one
+  # published the current profile, and the workloads serve the stale settings
+  # until a later pass corrects them.
+  #
+  # The default RollingUpdate strategy creates exactly that overlap, because
+  # maxSurge rounds up to 1 at replicas: 1 and the new pod starts before the
+  # old one is terminated. Recreate guarantees a single writer instead. The few
+  # seconds with no reconciler cost nothing: the new pod reconciles on startup,
+  # and a profile change during the gap is caught by that same startup pass.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: tls-configurator
@@ -43,4 +57,11 @@ spec:
             - "--target-namespace={{ .Release.Namespace }}"
             - "--target-deployments={{ join "," .Values.modules.tlsConfigurator.targetDeployments }}"
             - "--resync-period={{ .Values.modules.tlsConfigurator.resyncPeriod }}"
+            {{- if eq ( include "trustification.tlsConfigurator.operandTls" . ) "true" }}
+            # Publish the resolved profile as the workloads' own HTTP server
+            # settings. Without this the reconciler restarts them on a profile
+            # change but they keep serving TLS with trustd's compiled-in
+            # defaults, which is the shipped behaviour.
+            - {{ printf "--operand-config-map=%s" (include "trustification.tlsConfigurator.operandConfigMapName" .) | quote }}
+            {{- end }}
 {{- end }}

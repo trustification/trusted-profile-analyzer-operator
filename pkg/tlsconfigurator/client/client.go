@@ -13,6 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
+// Package client wraps the OpenShift and Kubernetes APIs the TLS
+// configurator reads and writes: the cluster APIServer CR that holds the
+// TLS profile and adherence policy, the ClusterVersion and FeatureGate CRs
+// it gates behaviour on, the IngressControllers it can update, and the
+// Deployments it rolls.
 package client
 
 import (

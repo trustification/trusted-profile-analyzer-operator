@@ -36,6 +36,40 @@ Arguments (dict):
 {{- end }}
 
 {{/*
+envFrom sources for the HTTP server side.
+
+The cluster-wide TLS profile, rendered by the TLS reconciler as the HTTP
+server's own TLS settings (minimum version, cipher list, TLS 1.3 ciphersuites,
+key-exchange groups). Without this the server honors none of them: it has no
+way to read the cluster profile itself, and falls back to the "modern" profile
+compiled into trustd whatever the cluster says.
+
+Two deliberate choices:
+
+  * optional: true -- the ConfigMap is written by the reconciler at runtime, so
+    on a fresh install the pods may well start before it exists. Starting on
+    trustd's own defaults and being restarted a moment later with the real
+    settings is strictly better than refusing to start.
+  * envFrom, not env -- a variable set in env wins over the same name from
+    envFrom, so the keys the chart sets directly (HTTP_SERVER_TLS_ENABLED and
+    the certificate paths) stay authoritative and the reconciler cannot
+    accidentally take the listener down by writing them.
+
+Arguments (dict):
+  * root - .
+  * module - module object
+*/}}
+{{- define "trustification.application.httpServer.envFrom" -}}
+
+{{- if eq ( include "trustification.tlsConfigurator.operandTls" .root ) "true" }}
+- configMapRef:
+    name: {{ include "trustification.tlsConfigurator.operandConfigMapName" .root | quote }}
+    optional: true
+{{- end }}
+
+{{- end }}
+
+{{/*
 Volume mounts matching the HTTP server side configuration.
 
 Arguments (dict):

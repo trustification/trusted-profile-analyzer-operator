@@ -459,6 +459,19 @@ workloads even when the profile is unchanged. It is logged once per distinct
 value and reported by `--action=get-adherence`, `get-cluster`,
 `show-tlsconfig` and `validate`.
 
+**`StrictAllComponents` is enforced, not just logged.** The configurator
+adhering is not the same as RHTPA adhering: with `operandTls` off the server's
+own listener keeps serving trustd's compiled-in profile, so a strict cluster
+would be quietly non-adherent. `000-validate.yaml` therefore `lookup`s the
+`APIServer` CR and refuses to render when adherence is `StrictAllComponents`,
+the server is TLS-serving (`useServiceCa`), and publishing is off — with
+`modules.tlsConfigurator.operandTls.allowDisabled: true` as the explicit
+acknowledgement, mirroring the module's own `allowDisabled`. As with the 4.22
+guard, `lookup` is empty under `helm template`/`--dry-run` so the check is
+skipped there; do not make it fail closed. A policy tightened *after* install
+is caught by the operator's next re-render, and the reconciler logs a warning
+on every observation in the meantime.
+
 ### Runtime update flow (TLS change → workload rollout)
 
 1. The reconciler watches the cluster `APIServer` CR (`cluster`) — both
@@ -477,9 +490,124 @@ value and reported by `--action=get-adherence`, `get-cluster`,
    change by itself, so this explicit hash bump is required.
 4. `rhtpa.io/tls-config-hash` is intentionally **not** in the Helm templates so
    the operator's periodic re-render does not fight the reconciler.
+5. The hash only describes the *cluster profile*, so it cannot notice the
+   operand ConfigMap being deleted or hand-edited underneath — a pod that
+   started in that window serves the wrong settings under a hash that is
+   already current, and re-patching the same value is a no-op the API server
+   never turns into a restart. Whenever `ApplyProfileConfigMap` reports that it
+   had to write (`changed`), the reconciler therefore stamps a second
+   annotation, `rhtpa.io/tls-restarted-at`, to force the rollout. It is written
+   *only* on that repair path, so a steady cluster never acquires one and
+   resync ticks do not churn the workloads.
 
 `targetDeployments` (default `[server]`) must match the rendered Deployment
 names of the TLS-serving workloads (the server Deployment renders as `server`).
+
+### Reaching the operand's own listener (`operandTls`)
+
+A rollout only matters if the pod reads something new when it restarts, and by
+default it does not: `trustd` cannot reach the cluster `APIServer` CR and uses
+the profile compiled into it (`TlsSecurityProfile::Modern`) whatever the
+cluster says. `modules.tlsConfigurator.operandTls.enabled` (**default
+`false`**, like everything else in this module) closes that loop.
+
+- The reconciler renders the resolved `TLSProfileSpec` into trustd's own
+  vocabulary — `pkg/tlsconfigurator/crypto/operand.go`, `OperandEnv` — and
+  writes it to a ConfigMap (`operandTls.configMapName`, default
+  `tls-configurator-profile`) in the release namespace.
+- The server Deployment reads it through an **optional** `envFrom`
+  (`trustification.application.httpServer.envFrom` in `_http.tpl`). Optional
+  because the ConfigMap is written at runtime and may not exist when the pods
+  first start.
+- **The ConfigMap is owned by the reconciler, not templated by the chart** —
+  same reasoning as the hash annotation: the operator re-renders the chart
+  periodically and would overwrite it. Do not add a template for it.
+- `operandTls.configMapName` is **validated as an RFC 1123 DNS subdomain** and
+  quoted at every use. It is user-supplied — through the operator it comes
+  straight from the CR `.spec`, which any tenant who can create a
+  `TrustedProfileAnalyzer` controls — and it is interpolated into the
+  reconciler's `args`, the server's `envFrom` and the reconciler's Role
+  `resourceNames`. Unvalidated, a value carrying a quote and a newline closes
+  the scalar it sits in and appends arbitrary YAML to the rendered manifests.
+  Two independent layers: a `pattern`/`maxLength` in both values schemas, and
+  a `fail` in `trustification.tlsConfigurator.operandConfigMapName` — the
+  template guard is the one that counts, since the operator's render path does
+  not necessarily apply `values.schema.json`. Quote new call sites too: bare
+  `no`/`y`/`on` are legal ConfigMap names that go-yaml resolves as booleans.
+- That ownership is **enforced, not assumed**. `operandTls.configMapName` is
+  user-settable and the publish replaces `Data` wholesale, so an existing
+  ConfigMap without `app.kubernetes.io/managed-by: tls-configurator` is left
+  alone and the pass fails with an error naming the collision. Otherwise a
+  typo pointed at another component's ConfigMap would silently erase it.
+- The reconciler Deployment is **`strategy: Recreate`**, not the default
+  RollingUpdate. It does no leader election, and each pass writes the
+  ConfigMap and the workload hashes from a profile snapshot it read moments
+  earlier — so two overlapping instances can interleave and leave the stale
+  snapshot winning. `maxSurge` rounds up to 1 even at `replicas: 1`, so
+  RollingUpdate guarantees that overlap on every upgrade. Keep it a singleton.
+- `envFrom`, never `env`: a name set in `env` wins, so the keys the chart sets
+  directly (`HTTP_SERVER_TLS_ENABLED`, the certificate paths) stay
+  authoritative and the reconciler cannot take the listener down.
+- The published env is part of the rollout hash (`TLSConfigHash`'s
+  `operandEnv` field). This is what makes *enabling* publishing roll the
+  workloads, which the cluster profile alone would not — a nil map hashes to
+  the pre-existing payload, so the default path does not churn.
+- Publishing happens **before** the rollout; a failure aborts the pass without
+  stamping any hash.
+- Group names are an allowlist (`openSSLGroups`), not a pass-through: OpenSSL
+  rejects an entire group list containing one unknown name, and trustd treats
+  that as a fatal startup error. Unknown entries are dropped and logged —
+  what survives is a *subset* of what the cluster permits, so narrowing is
+  safe. **Dropping every group is not**, since the variable would then be
+  omitted and OpenSSL's defaults are wider than any profile. In that one case
+  `operandGroups` substitutes `X25519MLKEM768:X25519` (`pqcGroupNames`) and
+  reports it in `dropped`. A profile naming *no* groups is untouched — it
+  expresses no opinion, so the defaults are correct.
+- Empty lists are omitted rather than written empty. An empty
+  `HTTP_SERVER_TLS_CIPHERSUITES` disables every TLS 1.3 suite in OpenSSL and
+  bricks a TLS 1.3-only listener.
+- **Omission falls back to OpenSSL's defaults, which can be wider than the
+  profile.** The two cipher variables are deliberately *not* symmetric here:
+  - Profile names ciphers but none usable below TLS 1.3, while the minimum
+    still permits TLS 1.2: omitting `HTTP_SERVER_TLS_CIPHERS` would hand
+    TLS 1.2 OpenSSL's default list, accepting suites the profile never
+    allowed. An empty list cannot be published instead (OpenSSL rejects a
+    cipher list that selects nothing, so trustd would not start), so
+    `OperandEnv` **raises the minimum version to 1.3** and reports it in
+    `dropped`. With no permitted pre-1.3 cipher, nothing below 1.3 could have
+    completed a handshake anyway.
+  - Profile names no TLS 1.3 suites: left to OpenSSL's defaults on purpose.
+    `TLSProfileSpec.Ciphers` states that "TLS 1.3 cipher suites are not
+    configurable and are always enabled when TLS 1.3 is negotiated", so this
+    is the specified behaviour, not a gap. Do not "close" it — forcing an
+    empty ciphersuite list would disable TLS 1.3 on a profile that permits it.
+  - Profile names no ciphers at all: no opinion expressed, defaults stand and
+    the minimum version is left alone.
+- **An unrecognised `minTLSVersion` falls back to 1.3, not 1.2.** The field is
+  required and enum-validated by the CRD, so a value `minVersionNames` does not
+  carry can only come from an OpenShift API newer than this build — i.e. a
+  version *above* anything it can spell. Falling back downwards would publish a
+  weaker floor than the cluster policy states. 1.3 is the closest enforceable
+  approximation; it is reported in `dropped`.
+- RBAC: Role `016` gains `configmaps` only when this is on, pinned to the one
+  name via `resourceNames` (plus an unpinned `create`, which the authorizer
+  cannot match a name on).
+
+This can **loosen** the listener: the server is TLS 1.3-only out of the box, so
+a cluster on `Old`/`Intermediate` will bring it down to TLS 1.0/1.2. That is
+the point of honoring a cluster profile, and it is why this is a separate
+opt-in from `enabled` rather than implied by it — and why a cluster on
+`tlsAdherence: StrictAllComponents` is made to *choose* (the guard above)
+rather than having publishing switched on for it.
+
+**Trustify-side support.** The env vars are read by
+`common/infrastructure/src/app/http.rs` in the sibling `trustify` repo.
+`HTTP_SERVER_TLS_GROUPS` → `SslContextBuilder::set_groups_list` was added for
+this and applies to every profile, since key-exchange groups are orthogonal to
+cipher suites — hybrid PQC is a *group*, not a cipher. Hybrid PQC needs OpenSSL
+≥ 3.5; the RHEL 10 based images carry 3.5.x, and its default group list already
+leads with `X25519MLKEM768`, so PQC key exchange happens even unconfigured —
+just unenforced.
 
 ### When the module must be on, and when it must be off
 
@@ -491,6 +619,13 @@ just documenting it:
 | OpenShift >= 4.22 | **required `true`** | install fails unless `allowDisabled: true` |
 | OpenShift < 4.22 | optional | nothing — `reconcile` has no version gate, so it runs fine, it is just not mandatory |
 | plain Kubernetes | **required `false`** (the default) | install fails if enabled |
+
+A second row applies to `operandTls` rather than the module as a whole:
+
+| Cluster | `modules.tlsConfigurator.operandTls.enabled` | Enforced by |
+| --- | --- | --- |
+| `tlsAdherence: StrictAllComponents`, TLS-serving server | **required `true`** | install fails unless `operandTls.allowDisabled: true` |
+| anything else | optional (default `false`) | nothing |
 
 The deeper reason for the plain-Kubernetes row is not just the missing
 `config.openshift.io/v1` API. `trustification.openshift.useServiceCa` resolves

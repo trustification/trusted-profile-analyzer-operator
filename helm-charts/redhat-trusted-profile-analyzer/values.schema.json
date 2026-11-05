@@ -530,6 +530,26 @@
                     }
                   }
                 },
+                "operandTls": {
+                  "type": "object",
+                  "description": "Apply the cluster-wide TLS profile to the RHTPA workloads' own HTTPS listener, not just to the router. Off by default: with it off the reconciler restarts the workloads on a profile change but they keep serving TLS with the profile compiled into trustd. No effect off OpenShift, where the server listens on plain HTTP.\n",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean",
+                      "description": "Honor the cluster TLS profile in the workloads' own TLS listener.\n"
+                    },
+                    "allowDisabled": {
+                      "type": "boolean",
+                      "description": "Acknowledge a cluster with tlsAdherence StrictAllComponents without publishing the profile to the server's listener. Only consulted when enabled is false; it suppresses the install-time error.\n"
+                    },
+                    "configMapName": {
+                      "type": "string",
+                      "description": "Name of the ConfigMap, in the release namespace, that the reconciler writes the resolved profile into and the server Deployment reads through envFrom. Must be a valid ConfigMap name (RFC 1123 DNS subdomain): it is rendered into the reconciler's arguments, the server's envFrom and the reconciler's Role.\n",
+                      "maxLength": 253,
+                      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+                    }
+                  }
+                },
                 "targetDeployments": {
                   "type": "array",
                   "description": "Deployment names in the release namespace to roll out when the cluster-wide TLS configuration changes at runtime.\n",

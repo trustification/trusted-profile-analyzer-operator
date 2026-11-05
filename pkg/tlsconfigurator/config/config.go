@@ -13,6 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
+// Package config holds the TLS configurator's runtime configuration and
+// resolves the Kubernetes client config it runs against, in-cluster or from
+// a kubeconfig.
 package config
 
 import (
@@ -50,6 +54,14 @@ type Config struct {
 	TargetNamespace   string        // namespace of the workloads to roll out
 	TargetDeployments []string      // deployment names to annotate on TLS change
 	ResyncPeriod      time.Duration // periodic drift-correction interval
+
+	// OperandConfigMap is the ConfigMap, in TargetNamespace, into which the
+	// resolved cluster TLS profile is published as the operand's own HTTP
+	// server settings. Empty -- the default -- means do not publish: the
+	// reconciler only rolls the workloads, which is the behaviour that shipped
+	// before the operand could be configured this way, and a rollout on its own
+	// changes nothing about how the operand serves TLS.
+	OperandConfigMap string
 }
 
 // TLSConfig represents the desired TLS configuration

@@ -14,6 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Command manager is the RHTPA Helm operator. It installs the offline values
+// schema resolver, loads the CRD-to-chart mapping from watches.yaml, and runs
+// one Helm reconciler per watch.
 package main
 
 import (
