@@ -13,6 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 // Package reconcile provides a long-running controller that keeps operator
 // workloads in sync with the cluster-wide TLS security profile at runtime.
 //
@@ -118,6 +119,13 @@ func (r *Reconciler) Run(ctx context.Context) error {
 	log.Printf("Starting TLS reconciler (namespace=%s, deployments=%v, pqc=%t, resync=%s, annotation=%s)",
 		r.cfg.TargetNamespace, r.cfg.TargetDeployments, r.cfg.EnablePQC, r.cfg.ResyncPeriod,
 		client.TLSConfigHashAnnotation)
+	if r.cfg.OperandConfigMap == "" {
+		log.Printf("Publishing the cluster TLS profile to the workloads is off: they will be " +
+			"restarted when it changes, but keep serving TLS with their own defaults")
+	} else {
+		log.Printf("Publishing the cluster TLS profile to configmap %s/%s, which the workloads "+
+			"read as their HTTP server settings", r.cfg.TargetNamespace, r.cfg.OperandConfigMap)
+	}
 
 	if err := r.reconcileOnce(ctx, triggerStartup); err != nil {
 		// Do not exit on the initial failure; the watch/resync loop retries.
@@ -196,12 +204,24 @@ func (r *Reconciler) reconcileOnce(ctx context.Context, trigger string) error {
 
 	r.logAdherence(trigger, settings.Adherence)
 
-	hash, err := TLSConfigHash(settings, r.cfg.EnablePQC)
+	operandEnv := r.operandEnv(trigger, settings)
+
+	hash, err := TLSConfigHash(settings, r.cfg.EnablePQC, operandEnv)
 	if err != nil {
 		return err
 	}
 
 	r.logProfile(trigger, r.summarize(settings, hash))
+
+	// Publish before rolling: a pod reads the ConfigMap when it starts, so the
+	// new settings have to be in place before the restart that is supposed to
+	// pick them up. A failure here returns without stamping any hash, leaving
+	// the workloads on the configuration they are actually running until the
+	// next pass succeeds.
+	republished, err := r.publishOperandConfig(ctx, trigger, operandEnv)
+	if err != nil {
+		return err
+	}
 
 	var errs []error
 	var rolled, upToDate int
@@ -214,14 +234,27 @@ func (r *Reconciler) reconcileOnce(ctx context.Context, trigger string) error {
 			continue
 		}
 		current := client.TLSHashOf(dep)
-		if current == hash {
+		if current == hash && !republished {
 			upToDate++
 			r.logRolloutProgress(trigger, name, dep)
 			continue // already up to date, no rollout
 		}
-		log.Printf("[%s] TLS config changed for %s/%s (%.12s -> %.12s), rolling out",
-			trigger, r.cfg.TargetNamespace, name, orNone(current), hash)
-		patched, err := r.workloadsClient.SetDeploymentTLSHash(ctx, r.cfg.TargetNamespace, name, hash)
+		// A rewritten ConfigMap under an unchanged hash is the drift case: the
+		// pods may have started while it held something else, and patching the
+		// same hash back would not restart them. Force it with a stamp.
+		var restartedAt string
+		if current == hash {
+			restartedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			log.Printf("[%s] The operand TLS settings under %s/%s were rewritten but its TLS "+
+				"hash is unchanged, so its pods may be running what was in the configmap "+
+				"before: forcing a restart",
+				trigger, r.cfg.TargetNamespace, name)
+		} else {
+			log.Printf("[%s] TLS config changed for %s/%s (%.12s -> %.12s), rolling out",
+				trigger, r.cfg.TargetNamespace, name, orNone(current), hash)
+		}
+		patched, err := r.workloadsClient.SetDeploymentTLSAnnotations(
+			ctx, r.cfg.TargetNamespace, name, hash, restartedAt)
 		if err != nil {
 			log.Printf("[%s] Failed to roll out deployment %s/%s: %v",
 				trigger, r.cfg.TargetNamespace, name, err)
@@ -248,6 +281,59 @@ func (r *Reconciler) reconcileOnce(ctx context.Context, trigger string) error {
 			trigger, rolled, upToDate)
 	}
 	return nil
+}
+
+// operandEnv renders the cluster profile as the operand's own HTTP server
+// settings, or nil when publishing is switched off.
+//
+// Dropped entries are logged on every pass that computes them rather than only
+// on change: they say that part of the cluster profile is not reaching the
+// workloads, which stays true for as long as the profile names it.
+func (r *Reconciler) operandEnv(trigger string, settings client.ClusterTLSSettings) map[string]string {
+	if r.cfg.OperandConfigMap == "" {
+		return nil
+	}
+
+	env, dropped := crypto.OperandEnv(settings.Spec, crypto.Options{EnablePQC: r.cfg.EnablePQC})
+	for _, d := range dropped {
+		log.Printf("[%s] Operand TLS settings: %s", trigger, d)
+	}
+	return env
+}
+
+// publishOperandConfig writes the operand's TLS settings to the ConfigMap the
+// workloads read through envFrom. It is a no-op when publishing is switched
+// off, which is the default: without it the reconciler rolls the workloads but
+// leaves them on their own compiled-in TLS defaults.
+//
+// The returned changed reports whether the ConfigMap's contents actually moved,
+// and the caller must treat that as a reason to roll the workloads in its own
+// right. The hash says which cluster profile a pod was started for, so it is
+// silent about the ConfigMap being deleted or hand-edited underneath: a pod
+// that started in that window read the wrong settings and will never be
+// corrected by a hash that is already current.
+func (r *Reconciler) publishOperandConfig(
+	ctx context.Context, trigger string, env map[string]string,
+) (changed bool, err error) {
+	if env == nil {
+		return false, nil
+	}
+
+	changed, err = r.workloadsClient.ApplyProfileConfigMap(
+		ctx, r.cfg.TargetNamespace, r.cfg.OperandConfigMap, env)
+	if err != nil {
+		return false, fmt.Errorf("failed to publish the operand TLS settings: %w", err)
+	}
+	if !changed {
+		return false, nil
+	}
+
+	log.Printf("[%s] Wrote the operand TLS settings to configmap %s/%s:",
+		trigger, r.cfg.TargetNamespace, r.cfg.OperandConfigMap)
+	for _, line := range crypto.OperandEnvSummary(env) {
+		log.Printf("[%s]   %s", trigger, line)
+	}
+	return true, nil
 }
 
 // markRollingOut records that a rollout was just triggered for a deployment,
@@ -339,6 +425,19 @@ func (r *Reconciler) logAdherence(trigger string, adherence configv1.TLSAdherenc
 	case crypto.ShouldHonorClusterTLSProfile(adherence):
 		log.Printf("[%s] Cluster tlsAdherence=%q: all components are required to honor the cluster TLS profile",
 			trigger, orUnset(adherence))
+		// The chart refuses to install into this combination unless the
+		// operator set operandTls.allowDisabled, so reaching here means the
+		// non-adherence was acknowledged -- or that the policy was tightened
+		// after the install, which no render-time guard can catch before the
+		// next re-render. Either way it is worth saying on every observation:
+		// the workloads restart on a profile change but do not adopt it.
+		if r.cfg.OperandConfigMap == "" {
+			log.Printf("[%s] WARNING: the cluster requires adherence, but publishing to the "+
+				"workloads is off, so their TLS listener keeps serving trustd's compiled-in "+
+				"profile and this deployment does not adhere. Set "+
+				"modules.tlsConfigurator.operandTls.enabled=true to honor the cluster profile",
+				trigger)
+		}
 	default:
 		log.Printf("[%s] Cluster tlsAdherence=%q: honoring the cluster TLS profile is optional; "+
 			"this operator honors it regardless", trigger, orUnset(adherence))
@@ -568,15 +667,27 @@ func groupNames(curves []tls.CurveID) []string {
 // "Intermediate", or a Custom profile spelling out exactly what a built-in
 // already says -- does not roll the workloads. The adherence policy and the
 // PQC flag are part of the hash so that flipping either one does.
-func TLSConfigHash(settings client.ClusterTLSSettings, enablePQC bool) (string, error) {
+//
+// operandEnv is the configuration published to the workloads themselves, or
+// nil when publishing is switched off. Hashing it covers the case the rest of
+// the payload cannot: switching publishing on changes what the pods must read
+// without changing the cluster profile at all, so without this the workloads
+// would keep their old hash and never restart to pick the ConfigMap up. A nil
+// map hashes to the same payload as before this was added, so the common
+// publishing-off path does not churn.
+func TLSConfigHash(
+	settings client.ClusterTLSSettings, enablePQC bool, operandEnv map[string]string,
+) (string, error) {
 	payload := struct {
-		Spec      configv1.TLSProfileSpec     `json:"spec"`
-		Adherence configv1.TLSAdherencePolicy `json:"adherence"`
-		PQC       bool                        `json:"pqc"`
+		Spec       configv1.TLSProfileSpec     `json:"spec"`
+		Adherence  configv1.TLSAdherencePolicy `json:"adherence"`
+		PQC        bool                        `json:"pqc"`
+		OperandEnv map[string]string           `json:"operandEnv,omitempty"`
 	}{
-		Spec:      settings.Spec,
-		Adherence: settings.Adherence,
-		PQC:       enablePQC,
+		Spec:       settings.Spec,
+		Adherence:  settings.Adherence,
+		PQC:        enablePQC,
+		OperandEnv: operandEnv,
 	}
 
 	data, err := json.Marshal(payload)

@@ -78,6 +78,10 @@ var (
 		"Comma-separated Deployment names to roll out on TLS change (reconcile mode)")
 	resyncPeriod = flags.Duration("resync-period", 5*time.Minute,
 		"Periodic drift-correction interval (reconcile mode)")
+	operandConfigMap = flags.String("operand-config-map", "",
+		"ConfigMap to publish the resolved cluster TLS profile into, as the operand's "+
+			"HTTP server settings (reconcile mode). Empty disables publishing, leaving the "+
+			"operand on its own TLS defaults and the reconciler on rollouts alone.")
 )
 
 func main() {
@@ -99,6 +103,7 @@ func main() {
 	cfg.TargetNamespace = *targetNamespace
 	cfg.TargetDeployments = parseCiphers(*targetDeployments)
 	cfg.ResyncPeriod = *resyncPeriod
+	cfg.OperandConfigMap = *operandConfigMap
 
 	// The reconcile action runs its own long-lived controller and does not use
 	// the one-shot TLSController.

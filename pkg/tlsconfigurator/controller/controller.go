@@ -13,6 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
+// Package controller implements the one-shot TLS actions: reading the
+// cluster profile, applying one to an IngressController, and the version and
+// feature-gate checks those depend on. The long-running watch lives in
+// package reconcile.
 package controller
 
 import (

@@ -74,6 +74,10 @@ type harnessOpts struct {
 	enablePQC bool
 	resync    time.Duration
 	watchErr  error
+	// operandConfigMap, when set, turns on publishing the resolved profile to
+	// the workloads. Empty -- the default -- is the shipped default: roll the
+	// workloads, but leave their own TLS settings alone.
+	operandConfigMap string
 }
 
 type harness struct {
@@ -123,6 +127,7 @@ func newHarness(t *testing.T, o harnessOpts) *harness {
 				TargetDeployments: targets,
 				EnablePQC:         o.enablePQC,
 				ResyncPeriod:      resync,
+				OperandConfigMap:  o.operandConfigMap,
 			},
 		},
 	}
@@ -144,11 +149,23 @@ func (h *harness) patchedDeployments() []string {
 
 func (h *harness) storedHash(t *testing.T, name string) string {
 	t.Helper()
+	return h.podTemplateAnnotation(t, name, client.TLSConfigHashAnnotation)
+}
+
+// restartStamp returns the forced-restart annotation on a deployment's pod
+// template, or "" if it carries none.
+func (h *harness) restartStamp(t *testing.T, name string) string {
+	t.Helper()
+	return h.podTemplateAnnotation(t, name, client.TLSRestartAnnotation)
+}
+
+func (h *harness) podTemplateAnnotation(t *testing.T, name, annotation string) string {
+	t.Helper()
 	dep, err := h.kube.AppsV1().Deployments(testNamespace).Get(context.Background(), name, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("failed to read back deployment %q: %v", name, err)
 	}
-	return dep.Spec.Template.Annotations[client.TLSConfigHashAnnotation]
+	return dep.Spec.Template.Annotations[annotation]
 }
 
 func waitFor(t *testing.T, desc string, cond func() bool) {
@@ -398,7 +415,7 @@ func TestConsumeWatch(t *testing.T) {
 		},
 		{
 			name:  "closed channel returns without reconciling",
-			queue: func(w *watch.FakeWatcher) {},
+			queue: func(*watch.FakeWatcher) {},
 			opts: harnessOpts{
 				profile:     modern,
 				deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "stale")},
@@ -682,7 +699,7 @@ func mustHashFor(profile *configv1.TLSSecurityProfile, enablePQC bool) string {
 	if err != nil {
 		panic(err)
 	}
-	hash, err := TLSConfigHash(client.ClusterTLSSettings{Profile: profile, Spec: spec}, enablePQC)
+	hash, err := TLSConfigHash(client.ClusterTLSSettings{Profile: profile, Spec: spec}, enablePQC, nil)
 	if err != nil {
 		panic(err)
 	}

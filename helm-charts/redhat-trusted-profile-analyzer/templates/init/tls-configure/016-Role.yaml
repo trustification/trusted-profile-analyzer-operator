@@ -12,4 +12,23 @@ rules:
 - apiGroups: ["apps"]
   resources: ["deployments"]
   verbs: ["get", "list", "watch", "update", "patch"]
+{{- if eq ( include "trustification.tlsConfigurator.operandTls" . ) "true" }}
+# Only granted when the reconciler publishes the cluster TLS profile as the
+# workloads' own HTTP server settings: it owns that one ConfigMap outright.
+# The same condition gates the --operand-config-map flag, so the grant and the
+# thing it permits cannot drift apart.
+#
+# Reads and writes are pinned to that single name, so the reconciler cannot
+# read the rest of the namespace's ConfigMaps -- the auth configuration among
+# them. "create" is listed separately because the authorizer cannot match a
+# resourceName on it: the object does not exist yet, so there is no name to
+# check against.
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ include "trustification.tlsConfigurator.operandConfigMapName" . | quote }}]
+  verbs: ["get", "update", "patch"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["create"]
+{{- end }}
 {{- end }}

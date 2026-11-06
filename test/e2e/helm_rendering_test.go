@@ -429,6 +429,22 @@ func getChartPath(t *testing.T) string {
 func renderHelmChart(t *testing.T, chartPath string, values map[string]interface{}) string {
 	t.Helper()
 
+	rendered, stderr, err := tryRenderHelmChart(t, chartPath, values)
+	if err != nil {
+		t.Logf("helm template stderr: %s", stderr)
+		require.NoError(t, err, "helm template should succeed")
+	}
+	return rendered
+}
+
+// tryRenderHelmChart renders the chart and hands back the failure instead of
+// failing the test, for the cases that assert the chart *refuses* to render.
+// It still skips when helm itself is missing, like renderHelmChart.
+func tryRenderHelmChart(
+	t *testing.T, chartPath string, values map[string]interface{},
+) (rendered, stderr string, err error) {
+	t.Helper()
+
 	// Create temporary values file
 	tmpDir := t.TempDir()
 	valuesFile := filepath.Join(tmpDir, "values.yaml")
@@ -446,23 +462,21 @@ func renderHelmChart(t *testing.T, chartPath string, values map[string]interface
 	// machines and CI.
 	cmd := exec.Command("helm", "template", testReleaseName, chartPath,
 		"--namespace", testRenderNamespace, "-f", valuesFile)
-	var stdout, stderr bytes.Buffer
+	var stdout, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stderr = &stderrBuf
 
 	err = cmd.Run()
+	stderr = stderrBuf.String()
 	if err != nil {
-		t.Logf("helm template stderr: %s", stderr.String())
 		// Helm might not be available in test environment
-		stderrStr := stderr.String()
-		if strings.Contains(stderrStr, "helm: not found") ||
-			strings.Contains(stderrStr, "executable file not found") {
+		if strings.Contains(stderr, "helm: not found") ||
+			strings.Contains(stderr, "executable file not found") {
 			t.Skip("helm command not available in test environment")
 		}
-		require.NoError(t, err, "helm template should succeed")
 	}
 
-	return stdout.String()
+	return stdout.String(), stderr, err
 }
 
 func splitYAMLDocs(yamlContent string) []string {

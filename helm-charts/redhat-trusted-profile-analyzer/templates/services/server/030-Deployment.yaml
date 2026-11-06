@@ -97,6 +97,11 @@ spec:
               value: /run/secrets/kubernetes.io/serviceaccount/service-ca.crt
             {{- end }}
 
+          {{- with (include "trustification.application.httpServer.envFrom" $mod | trim) }}
+          envFrom:
+            {{- . | nindent 12 }}
+          {{- end }}
+
           ports:
             {{- include "trustification.application.infrastructure.podPorts" $mod | nindent 12 }}
             - containerPort: 8080

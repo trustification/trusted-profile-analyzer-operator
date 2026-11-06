@@ -20,7 +20,7 @@ cluster configuration object changes.
 
 | Platform | Setting | Why |
 | --- | --- | --- |
-| OpenShift >= 4.22 | **`enabled: true` (required)** | The cluster-wide TLS profile can change at runtime; without the configurator the RHTPA workloads keep serving with the old settings until something else rolls them. The chart refuses to install with the module disabled. |
+| OpenShift >= 4.22 (incl. 5.x) | **`enabled: true` (required)** | The cluster-wide TLS profile can change at runtime; without the configurator the RHTPA workloads keep serving with the old settings until something else rolls them. The chart refuses to install with the module disabled. |
 | OpenShift < 4.22 | optional | The reconciler works there too — it simply is not mandatory, because the cluster-wide TLS profile is not expected to change under you. |
 | Plain Kubernetes | **`enabled: false` (required)** | `config.openshift.io/v1` does not exist, so the reconciler would fail every attempt and retry forever. The chart refuses to install with the module enabled. |
 
@@ -37,9 +37,28 @@ modules:
     # exchange, and include that choice in the rollout hash.
     pqc:
       enabled: true
+    # Optional: make the workloads' own HTTPS listener honor the cluster
+    # profile, instead of only being restarted when it changes.
+    operandTls:
+      enabled: true
     # Optional: periodic drift correction.
     resyncPeriod: 5m
 ```
+
+`operandTls.enabled` is the difference between restarting the workloads and
+*reconfiguring* them. With it off — the default — the RHTPA server keeps
+serving with the TLS profile compiled into `trustd` (Mozilla modern: TLS 1.3
+only) no matter what the cluster profile says; a profile change rolls the pods
+and they come back identical. With it on, the reconciler writes the resolved
+profile into a ConfigMap that the server reads as
+`HTTP_SERVER_TLS_MIN_VERSION`, `HTTP_SERVER_TLS_CIPHERS`,
+`HTTP_SERVER_TLS_CIPHERSUITES` and `HTTP_SERVER_TLS_GROUPS`, so the listener
+tracks the cluster. Note that this can *relax* the listener as well as tighten
+it: a cluster on the `Old` profile will take the server down to TLS 1.0.
+Enabling `pqc` alongside it prevents that — PQC raises the published minimum
+back to TLS 1.3 and pins the groups — at the cost of rejecting TLS 1.2 clients
+the cluster profile would have allowed.
+See `docs/tls-configurator/DEPLOYMENT.md` for the details.
 
 `pqc.enabled` is a floor, not the only source of post-quantum settings. The
 cluster's own TLS profile carries key-exchange groups
@@ -71,7 +90,7 @@ modules:
 
 `templates/init/tls-configure/000-validate.yaml` renders no resources; it only
 validates the combination of platform and setting, and fails the install with an
-explanatory message when they do not match. Both guards have an escape hatch:
+explanatory message when they do not match. Every guard has an escape hatch:
 
 - **Enabled on a cluster with no OpenShift API.** Detection keys off
   `route.openshift.io/v1`. If detection is wrong for your cluster, force it with
@@ -80,10 +99,19 @@ explanatory message when they do not match. Both guards have an escape hatch:
   acknowledge the choice with `modules.tlsConfigurator.allowDisabled: true`.
   You are accepting that a runtime TLS profile change will not roll the
   workloads.
+- **`operandTls` off on a cluster that requires adherence.** When the
+  `APIServer` CR sets `tlsAdherence: StrictAllComponents`, every component has
+  to honor the cluster TLS profile — and the RHTPA server only does that when
+  `operandTls.enabled` is true; otherwise it serves `trustd`'s compiled-in
+  profile. Checked only where the server terminates TLS itself. To install
+  non-adherent anyway, acknowledge the choice with
+  `modules.tlsConfigurator.operandTls.allowDisabled: true`. The reconciler then
+  logs a warning on every pass.
 
-The 4.22 check reads the `ClusterVersion` CR with Helm's `lookup`, which returns
-nothing during `helm template` and `--dry-run`. In those modes the version is
-unknown and the check is skipped, so rendering never fails on a version it
+The 4.22 check reads the `ClusterVersion` CR with Helm's `lookup`, and the
+adherence check reads the `APIServer` CR the same way. `lookup` returns nothing
+during `helm template` and `--dry-run`, so in those modes the cluster state is
+unknown and both checks are skipped — rendering never fails on something it
 cannot read.
 
 ### Why the platform matters
