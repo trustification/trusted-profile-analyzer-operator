@@ -3,7 +3,7 @@ partOf: trustify
 replicas: 1
 
 image:
-  fullName: registry.redhat.io/rhtpa/rhtpa-rhel10@sha256:fc5d7f3aacbca19acd49c2c96f913f69ed1a4db99ae69738b4bceba494a6545a
+  fullName: registry.redhat.io/rhtpa/rhtpa-rhel10@sha256:0dbc8d3f314b0877fc7d63612df2db30ae6d1dd741fe85cc9a0c15977d06ea13
   pullPolicy: IfNotPresent
 
 rust: {}
