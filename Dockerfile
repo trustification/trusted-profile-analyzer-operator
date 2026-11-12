@@ -25,7 +25,7 @@ COPY pkg/ pkg/
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager main.go
 
-FROM registry.access.redhat.com/ubi10/ubi-minimal:1790075800
+FROM registry.access.redhat.com/ubi10/ubi-minimal:1794499368
 
 LABEL com.redhat.component="rhtpa-operator"
 LABEL description="Red Hat Trusted Profile Analyzer Operator"
