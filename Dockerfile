@@ -25,8 +25,6 @@ COPY pkg/ pkg/
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager main.go
 
-# Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM registry.access.redhat.com/ubi10/ubi-minimal:1790075800
 
 LABEL com.redhat.component="rhtpa-operator"
@@ -40,9 +38,6 @@ LABEL summary="RHTPA Operator"
 LABEL version="3.1.2"
 LABEL release=3.1.2
 LABEL maintainer="Red Hat"
-#LABEL operators.operatorframework.io.index.configs.v1=/config
-
-#RUN microdnf update -y && microdnf clean all -y
 
 ENV HOME=/opt/helm \
     USER_NAME=helm \
