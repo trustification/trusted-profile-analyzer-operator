@@ -7,7 +7,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/stretchr/testify v1.12.1
 	gopkg.in/yaml.v3 v3.0.1
-	helm.sh/helm/v3 v3.22.1
+	helm.sh/helm/v4 v4.3.1
 	k8s.io/api v0.37.2
 	k8s.io/apiextensions-apiserver v0.37.2
 	k8s.io/apimachinery v0.37.2
