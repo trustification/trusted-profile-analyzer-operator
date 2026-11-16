@@ -4,8 +4,13 @@ metadata:
   name: bind-job
   namespace: placeholder
 subjects:
+# This one worked only by coincidence: the literal happens to equal what the
+# namePrefix produces, and an omitted namespace defaults to the RoleBinding's
+# own. Both break silently if the prefix ever changes, so use the same
+# convention as every other binding. See role_cluster_rbac_manager_binding.yaml.
 - kind: ServiceAccount
-  name: rhtpa-operator-controller-manager
+  name: controller-manager
+  namespace: system
 roleRef:
   kind: Role
   name: role-job

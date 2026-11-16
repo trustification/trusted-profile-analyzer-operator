@@ -45,6 +45,18 @@ E2E tests should:
 - **`upgrade_test.go`** - Operator upgrade scenarios
 - **`operator_deployment_test.go`** - Operator deployment verification
 
+### OpenShift-only Tests
+- **`tlsconfigurator_cluster_test.go`** - TLS 1.3 and post-quantum key exchange
+  observed over a real handshake with trustd, plus the runtime
+  profile-change → rollout loop.
+
+  These need OpenShift (CRC); they skip unless `E2E_OPENSHIFT=1`. They cannot
+  run on minikube: off OpenShift `openshift.useServiceCa` is false, so the
+  server listens on plain HTTP and the chart refuses to enable the
+  `tlsConfigurator` module at all. Run them with `make e2e-crc` — see
+  [`devel/README.md`](../../devel/README.md) and
+  [`devel/trusted-profile-analyzer-ocp-5-crc.yaml`](../../devel/trusted-profile-analyzer-ocp-5-crc.yaml).
+
 ### Advanced Tests
 - **`error_handling_test.go`** - Invalid configurations, edge cases, error recovery
 - **`operator_health_test.go`** - Health checks, metrics, probes, leader election

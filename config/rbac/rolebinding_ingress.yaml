@@ -4,9 +4,14 @@ metadata:
   name: bind-get-ingress
   namespace: placeholder
 subjects:
+# Unprefixed name + "system" namespace, so kustomize's nameReference and
+# namespace transformers rewrite both. The literal "placeholder" namespace that
+# was here is not substituted by anything, so the subject pointed at a
+# ServiceAccount in a namespace that does not exist.
+# See role_cluster_rbac_manager_binding.yaml.
 - kind: ServiceAccount
-  name: rhtpa-operator-controller-manager
-  namespace: placeholder
+  name: controller-manager
+  namespace: system
 roleRef:
   kind: Role
   name: allow-get-ingress

@@ -13,7 +13,7 @@ CONTROLLER_TOOLS_VERSION ?= v0.18.0
 # To re-generate a bundle for other specific channels without changing the standard setup, you can:
 # - use the CHANNELS as arg of the bundle target (e.g make bundle CHANNELS=candidate,fast,stable)
 # - use environment variables to overwrite this value (e.g export CHANNELS="candidate,fast,stable")
-CHANNELS="stable,stable-v1.0,stable-v1.1,stable-v3"
+CHANNELS="stable-v1.1,stable-v3"
 ifneq ($(origin CHANNELS), undefined)
 BUNDLE_CHANNELS := --channels=$(CHANNELS)
 endif
@@ -132,6 +132,24 @@ e2e-minikube: ## Deploy operator on Minikube for e2e testing (requires running M
 		--type='json' -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/imagePullPolicy", "value": "Never"}]'
 	kubectl -n rhtpa-operator-system rollout status deployment/rhtpa-operator-controller-manager --timeout=120s
 	@echo "Operator deployed. Deploy infrastructure and apply test CR to complete e2e setup."
+
+# Namespace the CR is installed into. Must match the namespace in E2E_CRC_CR.
+E2E_NAMESPACE ?= trustify
+# CR applied by e2e-crc.
+E2E_CRC_CR ?= devel/trusted-profile-analyzer-ocp-5-crc.yaml
+
+.PHONY: e2e-crc
+e2e-crc: ## Run the OpenShift-only TLS 1.3 / PQC e2e tests on CRC. Needs infrastructure + operator installed first; see devel/README.md.
+	@oc get clusterversion version > /dev/null 2>&1 || { echo "Error: not logged into an OpenShift cluster. Try 'oc login -u kubeadmin https://api.crc.testing:6443'"; exit 1; }
+	@echo "OpenShift $$(oc get clusterversion version -o jsonpath='{.status.desired.version}')"
+	@oc -n $(E2E_NAMESPACE) get deployment rhtpa-operator-controller-manager > /dev/null 2>&1 \
+		|| oc get deployment -A -l control-plane=controller-manager --no-headers | grep -q . \
+		|| { echo "Error: no RHTPA operator found. Install it first, e.g. 'operator-sdk run bundle -n $(E2E_NAMESPACE) <bundle-image>'"; exit 1; }
+	oc apply -f $(E2E_CRC_CR)
+	oc -n $(E2E_NAMESPACE) rollout status deployment/tls-configurator --timeout=300s
+	oc -n $(E2E_NAMESPACE) rollout status deployment/server --timeout=600s
+	E2E_OPENSHIFT=1 E2E_NAMESPACE=$(E2E_NAMESPACE) \
+		go test ./test/e2e -run 'TestOpenShift' -v -timeout 40m
 
 ##@ Build
 
