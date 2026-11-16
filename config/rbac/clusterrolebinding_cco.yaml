@@ -10,6 +10,8 @@ roleRef:
   kind: ClusterRole
   name: cco-credentialsrequest-access
 subjects:
+  # Unprefixed name + "system" namespace, so kustomize's nameReference and
+  # namespace transformers rewrite both. See role_cluster_rbac_manager_binding.yaml.
   - kind: ServiceAccount
-    name: rhtpa-operator-controller-manager
-    namespace: placeholder
+    name: controller-manager
+    namespace: system

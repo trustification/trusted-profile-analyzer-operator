@@ -3,9 +3,16 @@ kind: ClusterRoleBinding
 metadata:
   name: rhtpa-rbac-manager
 subjects:
+# Must be the unprefixed name and the "system" namespace: kustomize's
+# nameReference transformer rewrites the name to match the renamed
+# ServiceAccount, and the namespace transformer rewrites "system" to the
+# namespace config/default sets. A literal, already-prefixed name with a
+# "placeholder" namespace is left untouched by both, which binds the role to a
+# ServiceAccount that does not exist -- silently, since RBAC has nothing to
+# report when a subject simply never matches.
 - kind: ServiceAccount
-  name: rhtpa-operator-controller-manager
-  namespace: placeholder
+  name: controller-manager
+  namespace: system
 roleRef:
   kind: ClusterRole
   name: rhtpa-rbac-manager

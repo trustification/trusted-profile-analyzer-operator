@@ -1,0 +1,205 @@
+# RHTPA on CRC running OpenShift 5.x (or any OpenShift >= 4.22).
+#
+# This is the demo CR used by `make e2e-crc` and by the OpenShift-only e2e
+# tests in test/e2e/tlsconfigurator_cluster_test.go. It differs from
+# trusted-profile-analyzer-demo-pqc.yaml in one way that matters: operandTls is
+# **on**, so the cluster TLS profile reaches trustd's own HTTPS listener and
+# can actually be observed in a handshake. With it off the reconciler still
+# rolls the workloads on a profile change, but they go on serving trustd's
+# compiled-in "modern" profile and there is nothing end-to-end to assert.
+#
+# From OpenShift 4.22 (so on every 5.x) the tlsConfigurator module is
+# *required*: the chart refuses to install with it disabled unless
+# modules.tlsConfigurator.allowDisabled is set. Check what the bundle actually
+# ships with:
+#
+#   oc get clusterversion version -o jsonpath='{.status.desired.version}{"\n"}'
+#
+# Prerequisites (see devel/README.md for the full walkthrough):
+#
+#   crc start --cpus 8 --memory 32768 --disk-size 80
+#   oc login -u kubeadmin https://api.crc.testing:6443
+#   oc new-project trustify
+#   oc create configmap crc-trust-anchor --from-file=tls.crt -n trustify
+#   helm upgrade --install --dependency-update -n trustify infrastructure \
+#     charts/trustify-infrastructure --values devel/values-ocp-no-aws-crc.yaml ...
+#   operator-sdk run bundle -n trustify <bundle-image>
+#
+# Then:
+#
+#   oc apply -f devel/trusted-profile-analyzer-ocp-5-crc.yaml
+#
+kind: TrustedProfileAnalyzer
+apiVersion: rhtpa.io/v1
+metadata:
+  name: rhtpa-demo
+  namespace: trustify
+spec:
+  appDomain: -trustify.apps-crc.testing
+  collector: {}
+
+  createDatabase:
+    name: postgres
+    password:
+      valueFrom:
+        secretKeyRef:
+          name: infrastructure-postgresql
+          key: postgres-password
+    username: postgres
+  database: {
+    host: infrastructure-postgresql,
+    port: "5432",
+    name: trustify,
+    username: trustify,
+    password: trustify1234
+  }
+  migrateDatabase:
+    username: postgres
+    password:
+      valueFrom:
+        secretKeyRef:
+          name: infrastructure-postgresql
+          key: postgres-password
+  infrastructure:
+    port: 9010
+  ingress: {
+    className: openshift-default,
+    additionalAnnotations: {
+      haproxy.router.openshift.io/timeout: 5m
+    }
+  }
+  metrics:
+    enabled: false
+  modules:
+    # TLS configurator: required from OpenShift 4.22 upwards, which includes
+    # every 5.x. The image is the operator's own -- the operator fills
+    # image.fullName in from RELATED_IMAGE_TLS_CONFIGURATOR, so nothing is
+    # pinned here.
+    tlsConfigurator:
+      enabled: true
+      # Force TLS 1.3 and the hybrid post-quantum X25519MLKEM768 key exchange,
+      # and fold that choice into the workload rollout hash.
+      pqc:
+        enabled: true
+      # Publish the resolved cluster profile to trustd's own listener through a
+      # ConfigMap the server reads with an optional envFrom. Off by default;
+      # without it the "test the cluster profile over a real handshake" part of
+      # the e2e suite has nothing to look at.
+      #
+      # Note this can also *loosen* the listener: trustd is TLS 1.3-only out of
+      # the box, so a cluster profile of Old or Intermediate would bring it
+      # down to TLS 1.0/1.2 -- except that pqc.enabled above raises the floor
+      # back to 1.3 regardless.
+      operandTls:
+        enabled: true
+        configMapName: tls-configurator-profile
+      # Rendered Deployment names to roll when the cluster TLS configuration
+      # changes. The server Deployment renders as "server".
+      targetDeployments:
+        - server
+      # Periodic drift correction.
+      resyncPeriod: 5m
+    createDatabase:
+      enabled: true
+      image: {}
+    createImporters:
+      enabled: true
+      image: {}
+      importers:
+        redhat-sboms:
+          sbom:
+            description: All Red Hat SBOMs
+            period: 1d
+            source: https://access.redhat.com/security/data/sbom/beta/
+            keys:
+              - https://access.redhat.com/security/data/97f5eac4.txt#77E79ABE93673533ED09EBE2DCE3823597F5EAC4
+            disabled: true
+            fetchRetries: 50
+        redhat-csaf:
+          csaf:
+            description: All Red Hat CSAF data
+            period: 1d
+            source: redhat.com
+            disabled: true
+            fetchRetries: 50
+        cve:
+          cve:
+            description: CVE list v5
+            period: 1d
+            source: https://github.com/CVEProject/cvelistV5
+            disabled: true
+        osv-github:
+          osv:
+            description: GitHub Advisory Database
+            period: 1d
+            source: https://github.com/github/advisory-database
+            path: advisories
+            disabled: true
+    importer:
+      concurrency: 4
+      enabled: true
+      image: {}
+      infrastructure: {}
+      metrics: {}
+      replicas: 1
+      resources:
+        requests:
+          cpu: 1
+          memory: 8Gi
+      rust: {}
+      tracing: {}
+      workingDirectory:
+        size: 32Gi
+    migrateDatabase:
+      enabled: true
+      image: {}
+    server:
+      enabled: true
+      image: {}
+      infrastructure: {}
+      ingress: {}
+      metrics: {}
+      replicas: 1
+      resources:
+        requests:
+          cpu: 1
+          memory: 8Gi
+      rust: {}
+      tracing: {}
+  oidc:
+    uiScope: ""
+    loadUser: true
+    clients:
+      frontend: { }
+      cli:
+        clientSecret:
+  # Required for the whole exercise: useServiceCa is what makes the chart give
+  # the server a service-ca certificate and set HTTP_SERVER_TLS_ENABLED. Off
+  # OpenShift it resolves to false, the server listens on plain HTTP, and there
+  # is no handshake in the RHTPA pods to apply a cluster profile to.
+  openshift:
+    useServiceCa: true
+  partOf: trustify
+  postgresql:
+    enabled: true
+  replicas: 1
+  rust: {}
+  storage: {
+    type: filesystem,
+    size: 32Gi
+  }
+  tls: {
+    additionalTrustAnchor: /etc/trust-anchor/tls.crt
+  }
+  tracing:
+    enabled: false
+
+  extraVolumes:
+    - name: trust-anchor
+      configMap:
+        name: crc-trust-anchor
+
+  extraVolumeMounts:
+    - name: trust-anchor
+      readOnly: true
+      mountPath: /etc/trust-anchor

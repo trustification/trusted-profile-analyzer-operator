@@ -122,8 +122,23 @@ func TestCCOClusterRoleBindingSubjects(t *testing.T) {
 
 	assert.Equal(t, "ServiceAccount", binding.Subjects[0].Kind,
 		"subject should be a ServiceAccount")
-	assert.Equal(t, "rhtpa-operator-controller-manager", binding.Subjects[0].Name,
-		"subject should reference the operator's service account")
+
+	// The subject must be written the way kustomize can rewrite it, not the
+	// way it ends up on the cluster. config/rbac/service_account.yaml declares
+	// the account as "controller-manager" in namespace "system"; the
+	// nameReference transformer then applies the namePrefix and the namespace
+	// transformer substitutes the real namespace, giving
+	// rhtpa-operator-controller-manager in rhtpa-operator-system.
+	//
+	// Spelling the final name here instead is what this test used to assert,
+	// and it is a silent failure: kustomize leaves an unrecognised literal
+	// alone, so the binding is created pointing at a ServiceAccount that does
+	// not exist, and RBAC simply never matches it. Verified on a live cluster
+	// -- the operator was denied every permission this ClusterRole grants.
+	assert.Equal(t, "controller-manager", binding.Subjects[0].Name,
+		"subject must use the unprefixed name so kustomize's nameReference transformer rewrites it")
+	assert.Equal(t, "system", binding.Subjects[0].Namespace,
+		"subject must use the \"system\" namespace so kustomize's namespace transformer rewrites it")
 }
 
 func TestCCOResourcesInKustomization(t *testing.T) {
@@ -137,4 +152,64 @@ func TestCCOResourcesInKustomization(t *testing.T) {
 		"kustomization.yaml should include clusterrole.yaml")
 	assert.True(t, strings.Contains(content, "clusterrolebinding_cco.yaml"),
 		"kustomization.yaml should include clusterrolebinding_cco.yaml")
+}
+
+// operatorServiceAccountNames are the two spellings of the operator's own
+// ServiceAccount: the one declared in config/rbac/service_account.yaml and the
+// one it ends up with after the namePrefix is applied. A binding subject naming
+// either is meant to point at the operator.
+var operatorServiceAccountNames = map[string]bool{
+	"controller-manager":                true,
+	"rhtpa-operator-controller-manager": true,
+}
+
+// TestBindingSubjectsUseKustomizeConvention guards every (Cluster)RoleBinding
+// under config/rbac, not just the CCO one.
+//
+// Kustomize rewrites a subject only when it is written the way the generated
+// ServiceAccount is: the unprefixed name (so nameReference matches it) in
+// namespace "system" (so the namespace transformer substitutes it). A literal
+// post-prefix name with a "placeholder" namespace is passed through untouched,
+// producing a binding whose subject refers to a ServiceAccount that never
+// exists. Nothing reports that -- the API accepts the binding and the
+// authorizer simply never matches it, so the operator just gets "forbidden" on
+// every permission the role was supposed to grant.
+//
+// Found on a live OpenShift cluster: three ClusterRoleBindings were inert this
+// way, and the operator could not create the TLS configurator's ServiceAccount,
+// Role or RoleBinding, so the whole module failed to install.
+func TestBindingSubjectsUseKustomizeConvention(t *testing.T) {
+	paths, err := filepath.Glob(filepath.Join("config", "rbac", "*.yaml"))
+	require.NoError(t, err, "should be able to list config/rbac")
+	require.NotEmpty(t, paths, "config/rbac should contain manifests")
+
+	checked := 0
+	for _, path := range paths {
+		data, err := os.ReadFile(path) //nolint:gosec // fixed, repo-relative path
+		require.NoError(t, err, "%s should be readable", path)
+
+		for _, doc := range strings.Split(string(data), "\n---") {
+			var binding ClusterRoleBinding
+			if err := yaml.Unmarshal([]byte(doc), &binding); err != nil {
+				continue
+			}
+			if !strings.HasSuffix(binding.Kind, "RoleBinding") {
+				continue
+			}
+
+			for _, subject := range binding.Subjects {
+				if subject.Kind != "ServiceAccount" || !operatorServiceAccountNames[subject.Name] {
+					continue
+				}
+				checked++
+				name := filepath.Base(path)
+				assert.Equal(t, "controller-manager", subject.Name,
+					"%s: subject must use the unprefixed name so kustomize rewrites it", name)
+				assert.Equal(t, "system", subject.Namespace,
+					"%s: subject must use the \"system\" namespace so kustomize rewrites it", name)
+			}
+		}
+	}
+
+	assert.NotZero(t, checked, "should have found at least one binding for the operator ServiceAccount")
 }

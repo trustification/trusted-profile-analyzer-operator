@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -122,8 +123,10 @@ func createCRAndVerifyExists(
 	return retrieved
 }
 
-// getKubernetesClient returns a Kubernetes clientset for testing
-func getKubernetesClient(t *testing.T) *kubernetes.Clientset {
+// getRESTConfig loads the ambient kubeconfig. Most tests only need a typed or
+// dynamic client, but the ones that open a port-forward need the *rest.Config
+// itself to build an upgrading round tripper.
+func getRESTConfig(t *testing.T) *rest.Config {
 	t.Helper()
 
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -133,7 +136,14 @@ func getKubernetesClient(t *testing.T) *kubernetes.Clientset {
 	config, err := kubeConfig.ClientConfig()
 	require.NoError(t, err, "should be able to load kubeconfig")
 
-	clientset, err := kubernetes.NewForConfig(config)
+	return config
+}
+
+// getKubernetesClient returns a Kubernetes clientset for testing
+func getKubernetesClient(t *testing.T) *kubernetes.Clientset {
+	t.Helper()
+
+	clientset, err := kubernetes.NewForConfig(getRESTConfig(t))
 	require.NoError(t, err, "should be able to create kubernetes client")
 
 	return clientset
@@ -143,14 +153,7 @@ func getKubernetesClient(t *testing.T) *kubernetes.Clientset {
 func getDynamicClient(t *testing.T) dynamic.Interface {
 	t.Helper()
 
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	configOverrides := &clientcmd.ConfigOverrides{}
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
-
-	config, err := kubeConfig.ClientConfig()
-	require.NoError(t, err, "should be able to load kubeconfig")
-
-	dynamicClient, err := dynamic.NewForConfig(config)
+	dynamicClient, err := dynamic.NewForConfig(getRESTConfig(t))
 	require.NoError(t, err, "should be able to create dynamic client")
 
 	return dynamicClient

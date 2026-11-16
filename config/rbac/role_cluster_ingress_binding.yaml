@@ -10,7 +10,9 @@ roleRef:
   kind: ClusterRole
   name: allow-get-ingress-cluster
 subjects:
+  # Unprefixed name + "system" namespace, so kustomize's nameReference and
+  # namespace transformers rewrite both. See role_cluster_rbac_manager_binding.yaml.
   - kind: ServiceAccount
-    name: rhtpa-operator-controller-manager
-    namespace: placeholder
+    name: controller-manager
+    namespace: system
 

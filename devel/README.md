@@ -468,6 +468,75 @@ CRC note: `crc` tracks a recent OpenShift, so check `clusterversion` above. If
 it is 4.22+, the module is required and an install without it will fail with an
 explanatory message.
 
+## Automated TLS 1.3 / PQC tests on CRC (`make e2e-crc`)
+
+The manual checks above have an automated counterpart:
+
+```console
+make e2e-crc
+```
+
+It applies [`trusted-profile-analyzer-ocp-5-crc.yaml`](trusted-profile-analyzer-ocp-5-crc.yaml)
+— the demo CR with `tlsConfigurator` **and** `pqc` **and** `operandTls` all on —
+waits for the rollouts, and runs the `TestOpenShift*` tests in
+[`test/e2e/tlsconfigurator_cluster_test.go`](../test/e2e/tlsconfigurator_cluster_test.go).
+
+**This needs CRC (or any OpenShift); the minikube job cannot do it.** Off
+OpenShift `openshift.useServiceCa` is false, so the chart never sets
+`HTTP_SERVER_TLS_ENABLED`, the server listens on plain HTTP, and there is no
+handshake in the RHTPA pods for a cluster profile to apply to — and the chart
+refuses to enable the module there in the first place. The existing minikube
+coverage can therefore only assert *rendered YAML*
+(`test/e2e/tlsconfigurator_helm_rendering_test.go`), never a negotiated
+connection.
+
+What the suite asserts:
+
+| Test | Checks |
+|---|---|
+| `TestOpenShiftVersionGateMatchesChart` | reports the cluster version and that the reconciler exists — on 4.22+ (so any 5.x) the chart makes it mandatory |
+| `TestOpenShiftTLSReconcilerIsRunning` | one available replica, `strategy: Recreate` (the reconciler must stay a singleton) |
+| `TestOpenShiftOperandProfileIsPublished` | the operand ConfigMap carries `app.kubernetes.io/managed-by: tls-configurator`, `HTTP_SERVER_TLS_MIN_VERSION=1.3` and `X25519MLKEM768` in `HTTP_SERVER_TLS_GROUPS`, and no published list is empty |
+| `TestOpenShiftServerConsumesOperandProfile` | the server reads it through an **optional** `envFrom`, and carries `rhtpa.io/tls-config-hash` |
+| `TestOpenShiftServerNegotiatesTLS13WithPQC` | a real handshake with trustd negotiates TLS 1.3 **and** the hybrid post-quantum group |
+| `TestOpenShiftServerRejectsTLS12` | a TLS 1.2-only client is refused, so the test above cannot pass on a server that ignored the profile |
+| `TestOpenShiftProfileChangeRollsServer` | changing the cluster profile moves the hash and rolls the workload (opt-in, see below) |
+
+The handshake goes over a **port-forward to the server pod**, not through the
+Route: a Route terminates TLS at the router, so dialling it would measure
+HAProxy's settings rather than trustd's. Go's own client offers
+`X25519MLKEM768` by default, so the assertion is that the server *selected* the
+hybrid group, not merely that it tolerated a client demanding it.
+
+Prerequisites: infrastructure and the operator installed as in the sections
+above (`operator-sdk run bundle -n trustify <bundle-image>`), and
+`oc login`. Then:
+
+```console
+# Override the namespace if the CR does not live in trustify
+make e2e-crc E2E_NAMESPACE=trustify
+
+# Or run the tests directly against an already-deployed instance
+E2E_OPENSHIFT=1 E2E_NAMESPACE=trustify go test ./test/e2e -run TestOpenShift -v
+```
+
+`TestOpenShiftProfileChangeRollsServer` is skipped unless you also opt in,
+because it patches `apiserver/cluster` — cluster-wide state that rolls the
+kube-apiserver too, which on single-node CRC means minutes of churn with the
+API briefly unavailable. The original profile is restored on cleanup:
+
+```console
+E2E_OPENSHIFT=1 E2E_CLUSTER_MUTATION=1 go test ./test/e2e -run TestOpenShiftProfileChange -v -timeout 40m
+```
+
+Without `E2E_OPENSHIFT=1` every test in that file skips, so `make test` and the
+minikube workflow are unaffected.
+
+A note on why this is not a GitHub Actions job: CRC needs a Red Hat pull
+secret, ~4 vCPU / 11 GB RAM and a ~30 GB bundle, and takes 10–15 minutes to
+start — more than a hosted runner can give. Run it locally, or on a
+self-hosted runner against a real cluster.
+
 ## Plain Kubernetes (kind, minikube, EKS/GKE/AKS)
 
 Leave the module out of the CR entirely — disabled is the default, so **no TLS
