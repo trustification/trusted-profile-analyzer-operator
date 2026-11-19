@@ -67,6 +67,13 @@ decision. A cluster that wants the floor at TLS 1.3 says so with the `Modern`
 profile, which is also the platform default from OpenShift 5.1 on.
 See `docs/tls-configurator/DEPLOYMENT.md` for the details.
 
+**TLS 1.3 with post-quantum key exchange is supported on OpenShift 4.22 and
+above.** The dependency is `TLSProfileSpec.groups`, the field that lets a TLS
+security profile name key-exchange groups; it was added to the
+`config.openshift.io` API in 4.22 and sits behind the `TLSGroupPreferences`
+feature gate. Nothing in the chart enforces this — see
+`docs/tls-configurator/DEPLOYMENT.md` for how to check both on a cluster.
+
 `pqc.enabled` is not the only source of post-quantum settings. The cluster's
 own TLS profile carries key-exchange groups (`TLSProfileSpec.groups`), and the
 built-in `Old`, `Intermediate` and `Modern` profiles all list `X25519MLKEM768`

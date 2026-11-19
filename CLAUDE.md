@@ -732,6 +732,23 @@ Because the config is now built by `NewTLSConfigFromProfile`, those groups land
 in `CurvePreferences` automatically — a cluster on `Modern` is post-quantum
 without `--enable-pqc`.
 
+**Supported from OpenShift 4.22 and above.** TLS 1.3 with post-quantum key
+exchange is supported on OpenShift 4.22+. The dependency is
+`TLSProfileSpec.Groups`, the field that lets a TLS security profile name
+key-exchange groups: it was added to the config API in 4.22 and sits behind
+the `TLSGroupPreferences` feature gate, so a cluster below 4.22 cannot express
+a group preference at all, and a 4.22+ cluster with the gate off has the field
+rejected by the API server.
+
+Nothing in the code enforces this — it is a statement of supported
+configuration, documented in `docs/tls-configurator/DEPLOYMENT.md` and the
+chart `README.md`. The one place the gate is consulted at runtime is
+`controller.SupportsTLSGroups`, on the `--action=update` path only; the
+reconcile path does not check it, and an older cluster is not refused or
+warned. Deliberate: the reconciler still works there, since the groups it
+publishes to the operand are resolved from this build's own
+`configv1.TLSProfiles` rather than from the cluster API.
+
 **Router-level PQC is implemented, gated on `TLSGroupPreferences`.**
 `--action=update --enable-pqc` with a `Custom` profile writes
 `Groups: [X25519MLKEM768, X25519]` onto the IngressController profile. The

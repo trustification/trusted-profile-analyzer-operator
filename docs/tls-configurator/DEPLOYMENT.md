@@ -398,6 +398,33 @@ Two independent sources, and you usually want to understand both:
    so on a profile that also permits older versions the group applies to the
    TLS 1.3 handshakes and the rest stay reachable.
 
+### Platform requirement: OpenShift 4.22 and above
+
+TLS 1.3 with post-quantum key exchange is supported on **OpenShift 4.22 and
+above**.
+
+The dependency is `TLSProfileSpec.groups` — the field that lets a TLS security
+profile name key-exchange groups, and so the only way the hybrid group
+`X25519MLKEM768` can be expressed in the cluster-wide profile. It was added to
+the `config.openshift.io` API in 4.22, behind the `TLSGroupPreferences`
+feature gate:
+
+| Cluster | `.spec.tlsSecurityProfile.groups` |
+| --- | --- |
+| OpenShift >= 4.22, `TLSGroupPreferences` on | Available |
+| OpenShift >= 4.22, `TLSGroupPreferences` off | Rejected by the API server — enable the gate |
+| OpenShift < 4.22 | Not in the API |
+
+Check both before relying on a cluster-wide group preference:
+
+```console
+oc get clusterversion version -o jsonpath='{.status.desired.version}{"\n"}'
+oc get featuregate cluster -o jsonpath='{.status.featureGates[0].enabled[*].name}{"\n"}' | tr ' ' '\n' | grep TLSGroupPreferences
+```
+
+Nothing refuses to install or run below 4.22 — the module is not version-gated
+— so this is a supported-configuration statement, not an enforced one.
+
 A cluster on the `Modern` profile is already post-quantum without
 `pqc.enabled`. Use `--action=validate` to see which of the two you are relying
 on — it reports the cluster profile and the hardened variant separately, and
