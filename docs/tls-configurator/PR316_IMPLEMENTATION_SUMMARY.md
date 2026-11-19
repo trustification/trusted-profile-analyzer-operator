@@ -65,8 +65,9 @@ PR #316 introduced a Claude Code plugin for helping developers implement TLS sec
 - `--action get-cluster` - Get cluster-wide TLS profile
 - `--action show-tlsconfig` - Show crypto/tls.Config conversion
 
-**New Flags**:
-- `--use-cluster-profile` - Use cluster profile (future use)
+**New Flags**: none that survive. `--use-cluster-profile` was added here for
+future use, was never read, and has since been removed — the read actions
+always use the cluster profile.
 
 **Output Examples**:
 ```

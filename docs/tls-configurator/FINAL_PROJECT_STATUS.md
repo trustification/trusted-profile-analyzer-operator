@@ -89,12 +89,13 @@ test/tlsconfigurator/suite_test.go         Ginkgo/Gomega integration suite
 | `--target-namespace` | Namespace of workloads to roll (reconcile mode) | — |
 | `--target-deployments` | Comma-separated Deployment names to roll (reconcile mode) | — |
 | `--resync-period` | Periodic drift-correction interval (reconcile mode) | `5m` |
-| `--use-cluster-profile` | **Inert** — accepted, nothing reads it | `false` |
-| `--skip-version-check` | **Inert** — accepted, nothing reads it | `false` |
-
-The last two are flagged with a `TODO` in `main.go:48-57`. They are kept for CLI
-compatibility; wiring them up or removing them is tracked separately. Note the
-consequence: **the 4.22+ gate on `update` cannot currently be bypassed.**
+`--use-cluster-profile` and `--skip-version-check` used to appear here as
+inert, parsed-but-unread flags. They have been removed. The read actions always
+use the cluster profile, so the first selected nothing; the second advertised an
+escape hatch that was never implemented. Note the consequence is unchanged:
+**the 4.22+ gate on `update` cannot be bypassed** — it is enforced by
+`UpdateTLSProfile` -> `ValidateMinimumVersion`, so reintroduce
+`--skip-version-check` only together with the wiring that makes it work.
 
 ---
 
@@ -333,9 +334,7 @@ CLI default and is required for PQC.
    gate. Nothing in `pkg/tlsconfigurator` writes that field yet. Remaining work:
    wire `Groups` into the `update` path and gate on `TLSGroupPreferences` being
    enabled on the cluster.
-2. **Inert flags.** `--use-cluster-profile` and `--skip-version-check` are parsed
-   but unread. Wire them up or remove them.
-3. **Duplicate static bundle RBAC.** `config/rbac/role_cluster_tlsconfigurator.yaml`,
+2. **Duplicate static bundle RBAC.** `config/rbac/role_cluster_tlsconfigurator.yaml`,
    `role_binding_tlsconfigurator.yaml` and the `tls-configurator` entry in
    `config/rbac/service_account.yaml` are leftovers from the hook-Job design.
    They duplicate by name the ClusterRole/ClusterRoleBinding/SA the chart
@@ -365,9 +364,14 @@ these describe the standalone repo and are stale on the following points:
 | "Profile watcher not implemented" | Implemented (`pkg/tlsconfigurator/reconcile`) |
 | "Hot reload not implemented; restart pods manually" | Automatic rolling restart via `rhtpa.io/tls-config-hash` |
 | "Curves unsupported by `openshift/api` v0.0.0-20240830023148" | API now exposes `Groups`; the gap is that we don't write it |
-| "Optional version-check bypass" | Bypass flag is inert; the gate always applies |
+| "Optional version-check bypass" | The bypass flag was never implemented and has been removed; the gate always applies |
 
-The PR #316 substance itself is intact: APIServer CR as source of truth,
-`ConvertTLSProfile`, `TLSVersion`, `OpenSSLToIANACipherSuites`, `CipherSuites`,
-`SecureTLSConfig`, and the `Get{Modern,Intermediate,Old}CipherSuites` helpers all
-exist and are tested.
+The PR #316 substance itself is intact where it is still needed: the APIServer
+CR is the source of truth and `SecureTLSConfig` is still applied. Its
+name-conversion helpers (`TLSVersion`, `OpenSSLToIANACipherSuites`,
+`CipherSuites`, `CipherSuitesOrDie`) have since been **removed** as dead code —
+`NewTLSConfigFromProfile` does that conversion upstream, and the operand path
+hands OpenSSL the profile's own spellings untranslated, so nothing called them.
+`DefaultTLSConfig` went the same way, as did the unused
+`APIServerClient.GetClusterTLSProfile`/`UpdateClusterTLSProfile`/`GetEffectiveTLSProfile`
+and `TLSController.ValidateOpenShiftVersion`.

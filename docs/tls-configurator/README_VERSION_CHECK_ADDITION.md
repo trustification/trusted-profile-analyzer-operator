@@ -89,25 +89,16 @@ later for proper TLS profile support
 | 4.23+ | ✅ | Fully supported |
 | 5.0+ | ✅ | Forward compatible |
 
-### Bypassing Version Check (Not Recommended)
+### Bypassing Version Check
 
-In exceptional cases where you need to bypass the version check:
-
-```bash
-./bin/tls-configurator --action update \
-  --skip-version-check \
-  --type Custom \
-  --min-tls-version VersionTLS13 \
-  --ciphers "TLS_AES_128_GCM_SHA256"
-```
-
-**⚠️ Warning**: Using `--skip-version-check` may result in:
-- Incompatible configurations
-- Unexpected cluster behavior
-- Potential instability
-- Configuration errors
-
-Only use this flag if you absolutely know what you're doing and understand the risks.
+> **Not available.** `--skip-version-check` was declared but never read, and
+> has been removed. There is currently no way to bypass the 4.22 check on
+> `--action=update`; it is enforced by `UpdateTLSProfile` ->
+> `ValidateMinimumVersion`. To run against an older cluster, either use a
+> read-only action (`get`, `get-cluster`, `show-tlsconfig`, `validate`,
+> `reconcile` — none of which gate on the version) or change
+> `MinimumOpenShiftMajorVersion`/`MinimumOpenShiftMinorVersion` in
+> `pkg/tlsconfigurator/client/version.go` and rebuild.
 
 ### Required RBAC Permissions
 

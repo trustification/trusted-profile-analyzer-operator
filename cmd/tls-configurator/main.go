@@ -60,18 +60,16 @@ var (
 	minTLSVersion = flags.String("min-tls-version", "VersionTLS13",
 		"Minimum TLS version: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13")
 	ciphers = flags.String("ciphers", "", "Comma-separated list of ciphers")
-	// TODO: these two flags are accepted for CLI compatibility but are currently
-	// inert -- nothing reads them. The OpenShift 4.22 gate they relate to
-	// (controller.ValidateOpenShiftVersion) also has no callers, so there is
-	// presently nothing for --skip-version-check to skip. Kept as-is by the
-	// operator merge to avoid changing runtime behaviour; wire up or remove
-	// separately.
-	//nolint:unused // accepted for CLI compatibility; see TODO above
-	useCluster = flags.Bool("use-cluster-profile", false, "Use cluster-wide APIServer TLS profile (recommended)")
-	//nolint:unused // accepted for CLI compatibility; see TODO above
-	skipVersionCheck = flags.Bool("skip-version-check", false, "Skip OpenShift version check (not recommended)")
-	enablePQC        = flags.Bool("enable-pqc", false,
-		"Enforce post-quantum, TLS 1.3-only key exchange (X25519MLKEM768)")
+	// Note: --use-cluster-profile and --skip-version-check used to be declared
+	// here for CLI compatibility and were never read. They are gone. The read
+	// actions always use the cluster profile, so the first had nothing to
+	// select; the second implied an escape hatch that was never wired, while
+	// --action=update really is gated on OpenShift 4.22 through
+	// controller.UpdateTLSProfile -> VersionChecker.ValidateMinimumVersion.
+	// Reintroduce --skip-version-check only together with that wiring.
+	enablePQC = flags.Bool("enable-pqc", false,
+		"Always offer the hybrid post-quantum X25519MLKEM768 key exchange "+
+			"(does not raise the minimum TLS version)")
 	targetNamespace = flags.String("target-namespace", "",
 		"Namespace of the workloads to roll out on TLS change (reconcile mode)")
 	targetDeployments = flags.String("target-deployments", "",

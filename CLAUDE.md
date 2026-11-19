@@ -439,8 +439,11 @@ Red Hat documents for this, not hand-rolled:
 - `github.com/openshift/controller-runtime-common/pkg/tls` —
   `GetTLSProfileSpec`, `NewTLSConfigFromProfile`, `SetNextProtos`,
   `APIServerName`.
-- `github.com/openshift/library-go/pkg/crypto` — TLS version and cipher name
-  conversion, and `ShouldHonorClusterTLSProfile`.
+- `github.com/openshift/library-go/pkg/crypto` — `ShouldHonorClusterTLSProfile`.
+  (It also offers TLS version and cipher-name conversion; the thin wrappers
+  around those were removed as dead code, because
+  `NewTLSConfigFromProfile` converts upstream and the operand path hands
+  OpenSSL the profile's own spellings untranslated.)
 
 `pkg/tlsconfigurator/crypto` is a thin adapter over those two. It must not
 regrow local cipher-name tables or per-profile cipher lists: the built-in

@@ -201,43 +201,6 @@ func BuildTLSConfigFromSpec(spec configv1.TLSProfileSpec, opts Options) (
 	return cfg, unsupported, nil
 }
 
-// TLSVersion converts a TLS version string ("VersionTLS12") to the
-// corresponding crypto/tls constant.
-func TLSVersion(version string) (uint16, error) {
-	return libgocrypto.TLSVersion(version)
-}
-
-// OpenSSLToIANACipherSuites converts OpenSSL cipher names to IANA names.
-// Names with no OpenSSL spelling are passed through unchanged, so already-IANA
-// input round-trips.
-func OpenSSLToIANACipherSuites(opensslNames []string) []string {
-	return libgocrypto.OpenSSLToIANACipherSuites(opensslNames)
-}
-
-// CipherSuites converts IANA cipher suite names to crypto/tls constants. It
-// fails on the first name Go does not know; use BuildTLSConfig instead when
-// unknown ciphers should be reported rather than rejected.
-func CipherSuites(ianaNames []string) ([]uint16, error) {
-	suites := make([]uint16, 0, len(ianaNames))
-	for _, name := range ianaNames {
-		id, err := libgocrypto.CipherSuite(name)
-		if err != nil {
-			return nil, fmt.Errorf("unknown cipher suite: %s", name)
-		}
-		suites = append(suites, id)
-	}
-	return suites, nil
-}
-
-// CipherSuitesOrDie is like CipherSuites but panics on error.
-func CipherSuitesOrDie(ianaNames []string) []uint16 {
-	suites, err := CipherSuites(ianaNames)
-	if err != nil {
-		panic(fmt.Sprintf("failed to convert cipher suites: %v", err))
-	}
-	return suites
-}
-
 // ShouldHonorClusterTLSProfile reports whether a component must apply the
 // cluster-wide TLS profile given the cluster's .spec.tlsAdherence policy.
 // Unknown values return true, so a future, stricter policy is honored by
@@ -345,23 +308,4 @@ func TLSVersionName(version uint16) string {
 // library-go helper panics on unknown input, so this uses the stdlib one.
 func CipherSuiteName(id uint16) string {
 	return tls.CipherSuiteName(id)
-}
-
-// DefaultTLSConfig returns the TLS configuration for the Intermediate profile,
-// for callers that cannot reach the API server.
-//
-// Note that this is the pre-5.1 cluster default. A caller that can read the
-// cluster version should resolve the default with ClusterDefaultProfileType
-// instead; this one has nothing to base that on.
-func DefaultTLSConfig() *tls.Config {
-	// The built-in Intermediate profile is a constant with a valid
-	// MinTLSVersion, so the error cannot fire here.
-	cfg, _, _ := BuildTLSConfigFromSpec(*configv1.TLSProfiles[configv1.TLSProfileIntermediateType], Options{})
-	return cfg
-}
-
-// DefaultTLSVersion returns the minimum TLS version of the cluster default
-// profile.
-func DefaultTLSVersion() uint16 {
-	return libgocrypto.TLSVersionOrDie(string(ocptls.DefaultMinTLSVersion))
 }

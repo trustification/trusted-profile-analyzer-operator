@@ -154,17 +154,16 @@ $ ./bin/tls-configurator --action update --type Custom ...
   This tool requires OpenShift 4.22 or later for proper TLS profile support
 ```
 
-### Skipping Version Check (Not Recommended)
+### Skipping Version Check
 
-In rare cases where you need to bypass the version check:
-
-```bash
-./bin/tls-configurator --action update \
-  --skip-version-check \
-  --type Custom \
-  --min-tls-version VersionTLS13 \
-  --ciphers "TLS_AES_128_GCM_SHA256"
-```
+> **Not available.** `--skip-version-check` was declared but never read, and
+> has been removed. There is currently no way to bypass the 4.22 check on
+> `--action=update`; it is enforced by `UpdateTLSProfile` ->
+> `ValidateMinimumVersion`. To run against an older cluster, either use a
+> read-only action (`get`, `get-cluster`, `show-tlsconfig`, `validate`,
+> `reconcile` — none of which gate on the version) or change
+> `MinimumOpenShiftMajorVersion`/`MinimumOpenShiftMinorVersion` in
+> `pkg/tlsconfigurator/client/version.go` and rebuild.
 
 **⚠️ Warning**: Skipping the version check may result in:
 - Incompatible configurations
@@ -318,7 +317,7 @@ To change the minimum version requirement, update these constants and rebuild.
 
 ### Q: What if I need to test on an older cluster?
 
-**A**: Use the `--skip-version-check` flag. Be prepared for potential issues and do not use in production.
+**A**: Use a read-only action — `get`, `get-cluster`, `show-tlsconfig`, `validate` and `reconcile` do not gate on the cluster version. Only `--action=update` does, and there is no flag to bypass it (`--skip-version-check` was never implemented and has been removed).
 
 ### Q: Does this work with OKD?
 

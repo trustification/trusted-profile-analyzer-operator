@@ -230,8 +230,3 @@ func compareCustomProfiles(custom1, custom2 *configv1.CustomTLSProfile) bool {
 func (tc *TLSController) CheckOpenShiftVersion(ctx context.Context) (*client.OpenShiftVersion, error) {
 	return tc.versionChecker.GetOpenShiftVersion(ctx)
 }
-
-// ValidateOpenShiftVersion validates that the cluster meets minimum version requirements
-func (tc *TLSController) ValidateOpenShiftVersion(ctx context.Context) error {
-	return tc.versionChecker.ValidateMinimumVersion(ctx)
-}

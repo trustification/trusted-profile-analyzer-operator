@@ -189,7 +189,6 @@ modules:
     # (TLS 1.3 only), so a cluster that sets no profile of its own is already
     # on TLS 1.3 whether or not this module runs.
     enabled: false
-    name: tls-configurator
     image:
       # The configurator ships inside the operator image, so there is no
       # separate image to pin here. Installed through the operator this is

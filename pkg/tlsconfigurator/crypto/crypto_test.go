@@ -23,59 +23,6 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 )
 
-func TestTLSVersion(t *testing.T) {
-	tests := []struct {
-		name    string
-		version string
-		want    uint16
-		wantErr bool
-	}{
-		{
-			name:    "TLS 1.0",
-			version: "VersionTLS10",
-			want:    tls.VersionTLS10,
-			wantErr: false,
-		},
-		{
-			name:    "TLS 1.1",
-			version: "VersionTLS11",
-			want:    tls.VersionTLS11,
-			wantErr: false,
-		},
-		{
-			name:    "TLS 1.2",
-			version: "VersionTLS12",
-			want:    tls.VersionTLS12,
-			wantErr: false,
-		},
-		{
-			name:    "TLS 1.3",
-			version: "VersionTLS13",
-			want:    tls.VersionTLS13,
-			wantErr: false,
-		},
-		{
-			name:    "invalid version",
-			version: "VersionTLS99",
-			want:    0,
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := TLSVersion(tt.version)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("TLSVersion() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("TLSVersion() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestConvertTLSProfile(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -260,13 +207,6 @@ func TestSecureTLSConfig(t *testing.T) {
 
 	if config.SessionTicketsDisabled {
 		t.Error("SecureTLSConfig should enable session tickets for performance")
-	}
-}
-
-func TestDefaultTLSVersion(t *testing.T) {
-	version := DefaultTLSVersion()
-	if version != tls.VersionTLS12 {
-		t.Errorf("DefaultTLSVersion() = %d, want TLS 1.2 (%d)", version, tls.VersionTLS12)
 	}
 }
 
