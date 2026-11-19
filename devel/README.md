@@ -467,7 +467,8 @@ spec:
 ```
 
 This used to be refused on OpenShift 4.22+ unless `allowDisabled: true` was
-also set. It no longer is; the key is still accepted but does nothing.
+also set. It no longer is, and that key has been removed; a CR still setting it
+is accepted and ignored.
 
 ## Automated TLS 1.3 / PQC tests on CRC (`make e2e-crc`)
 

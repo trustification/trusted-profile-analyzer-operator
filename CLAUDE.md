@@ -663,9 +663,12 @@ would roll the workloads when the cluster-wide profile changed. From OpenShift
 5.1 the platform default profile is Modern (TLS 1.3 only), so a cluster that
 configures nothing is already where that guard was pushing it, and an install
 without the module is a supportable choice rather than a misconfiguration. Do
-not reintroduce it. `modules.tlsConfigurator.allowDisabled` survives as an
-accepted no-op — it is still in `values.yaml` and both schemas so existing CRs
-and Subscriptions that set it keep validating — and nothing reads it.
+not reintroduce it. `modules.tlsConfigurator.allowDisabled` is **gone** from
+`values.yaml` and both schemas along with it. Removing it breaks nothing: the
+`tlsConfigurator` subschema is an `allOf` over definitions that carry no
+`additionalProperties: false`, so a CR or Subscription still setting the key
+validates and is ignored. (`operandTls.allowDisabled` is a different key and is
+still live.)
 
 A second row applies to `operandTls` rather than the module as a whole:
 

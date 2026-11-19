@@ -120,9 +120,9 @@ something it cannot read.
 
 There used to be a third guard here: installing on OpenShift >= 4.22 with the
 module disabled failed unless `modules.tlsConfigurator.allowDisabled: true`
-acknowledged it. That guard is gone and the module is optional at every
-OpenShift version. `allowDisabled` is still accepted so existing values keep
-validating, but it no longer does anything.
+acknowledged it. That guard is gone, the module is optional at every OpenShift
+version, and the key has been removed. A values file or CR that still sets it
+is accepted and ignored, so nothing needs changing on upgrade.
 
 ### Why the platform matters
 

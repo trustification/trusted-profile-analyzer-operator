@@ -48,9 +48,9 @@ it has to catch the disabled case too.
 
 > **Changed:** installing on OpenShift >= 4.22 with the module disabled used to
 > fail unless `modules.tlsConfigurator.allowDisabled: true` acknowledged it.
-> That requirement is gone. `allowDisabled` is still accepted by the values
-> schema, so existing CRs and Subscriptions keep validating, but it no longer
-> has any effect.
+> That requirement is gone, and the key has been removed. A CR or Subscription
+> that still sets it is accepted and ignored, so nothing needs changing on
+> upgrade. (`operandTls.allowDisabled` is a different key and still applies.)
 
 ## Why the platform matters
 
@@ -109,7 +109,6 @@ That is enough. The defaults cover the rest:
 | `resyncPeriod` | `5m` | Periodic drift correction, in case a watch event is missed. |
 | `pqc.enabled` | `false` | See [Post-quantum](#post-quantum-key-exchange) below. |
 | `operandTls.enabled` | `false` | Whether the workloads' own TLS listener honors the cluster profile, or only gets restarted when it changes. See [Honoring the profile inside the workloads](#honoring-the-profile-inside-the-workloads) below. |
-| `allowDisabled` | `false` | Escape hatch for installing *without* the module. |
 | `operandTls.allowDisabled` | `false` | Escape hatch for installing without operand publishing on a `StrictAllComponents` cluster. |
 | `image.fullName` | *(empty)* | Filled in by the operator with its own running image via `RELATED_IMAGE_TLS_CONFIGURATOR`; do not set it. Only a standalone `helm install` has to supply one — rendering fails with a message if the module is enabled and it is empty. |
 
@@ -499,7 +498,8 @@ not roll the RHTPA workloads — they keep serving with the settings they starte
 with until something else restarts them.
 
 This used to fail on OpenShift >= 4.22 unless `allowDisabled: true` was also
-set. It no longer does; the key is still accepted but ignored.
+set. It no longer does, and that key has been removed; a values file still
+setting it is accepted and ignored.
 
 ### Troubleshooting
 

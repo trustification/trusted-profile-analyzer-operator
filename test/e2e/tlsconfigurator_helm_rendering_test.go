@@ -370,24 +370,29 @@ func hasTopLevelField(doc, field string) bool {
 // module disabled unless allowDisabled acknowledged it. It no longer does, and
 // a disabled module simply renders nothing.
 //
-// The deprecated allowDisabled key is still asserted here. It has no effect,
-// but values.schema.json rejects unknown keys, so dropping it would break
-// every existing CR and Subscription that still sets it.
+// allowDisabled has been removed from values.yaml and both schemas, so the
+// second case is the upgrade path rather than a supported setting: a CR or
+// Subscription left over from before must still render. It does because the
+// tlsConfigurator subschema is an allOf over definitions with no
+// additionalProperties: false, so an undeclared key is accepted and ignored.
+// If that ever tightens, this case fails and the key has to come back.
 func TestTLSConfiguratorIsOptionalOnOpenShift(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2ETest)
 	}
 
-	for _, allowDisabled := range []bool{false, true} {
-		t.Run(fmt.Sprintf("allowDisabled=%t", allowDisabled), func(t *testing.T) {
+	for _, legacyAllowDisabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("legacyAllowDisabled=%t", legacyAllowDisabled), func(t *testing.T) {
+			configurator := map[string]interface{}{fieldEnabled: false}
+			if legacyAllowDisabled {
+				configurator["allowDisabled"] = true
+			}
+
 			values := minimalValues()
 			values[fieldOpenshift] = openshiftValues(true)
 			values[fieldModules] = map[string]interface{}{
-				"server": map[string]interface{}{fieldEnabled: true},
-				"tlsConfigurator": map[string]interface{}{
-					fieldEnabled:    false,
-					"allowDisabled": allowDisabled,
-				},
+				"server":          map[string]interface{}{fieldEnabled: true},
+				"tlsConfigurator": configurator,
 			}
 
 			rendered := renderHelmChart(t, getChartPath(t), values)

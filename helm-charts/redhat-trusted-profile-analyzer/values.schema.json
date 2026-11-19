@@ -516,10 +516,6 @@
             {
               "type": "object",
               "properties": {
-                "allowDisabled": {
-                  "type": "boolean",
-                  "description": "Deprecated and ignored. It used to acknowledge installing on OpenShift 4.22+ with the configurator disabled; the chart no longer refuses that, so the key has no effect. Still accepted so existing values keep validating.\n"
-                },
                 "pqc": {
                   "type": "object",
                   "description": "Post-quantum cryptography settings",
