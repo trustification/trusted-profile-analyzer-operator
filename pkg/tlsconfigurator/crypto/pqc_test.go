@@ -131,7 +131,7 @@ func TestBuildTLSConfigWithPQCKeepsALowerProfileFloor(t *testing.T) {
 			Type: configv1.TLSProfileCustomType,
 			Custom: &configv1.CustomTLSProfile{
 				TLSProfileSpec: configv1.TLSProfileSpec{
-					Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+					Ciphers:       []string{tls12CipherAES128},
 					MinTLSVersion: configv1.VersionTLS11,
 				},
 			},

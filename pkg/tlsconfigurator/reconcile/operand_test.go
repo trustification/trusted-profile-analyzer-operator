@@ -39,9 +39,19 @@ const (
 	// wantOperandProfile is the only trustd profile that honors an explicit
 	// minimum version and cipher list; the reconciler always publishes it.
 	wantOperandProfile = "custom"
+	// ocp51 is the first OpenShift release whose unset .spec.tlsSecurityProfile
+	// means Modern rather than Intermediate; most cases below pin to it so the
+	// version-dependent default is the one under test.
+	ocp51 = "5.1.0"
+	// minVersion1X are trustd's spellings of the protocol floors these tests
+	// expect to see published.
+	minVersion10 = "1.0"
+	minVersion11 = "1.1"
+	minVersion12 = "1.2"
+	minVersion13 = "1.3"
 	// wantMinVersion is the minimum TLS version the fixtures below resolve to,
 	// in trustd's spelling of it.
-	wantMinVersion = "1.3"
+	wantMinVersion = minVersion13
 )
 
 func (h *harness) configMapData(t *testing.T) map[string]string {
@@ -246,7 +256,7 @@ func TestPublishRepairsAnEditedConfigMap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read back the configmap: %v", err)
 	}
-	cm.Data[crypto.EnvMinVersion] = "1.0"
+	cm.Data[crypto.EnvMinVersion] = minVersion10
 	if _, err := h.kube.CoreV1().ConfigMaps(testNamespace).Update(ctx, cm, metav1.UpdateOptions{}); err != nil {
 		t.Fatalf("failed to tamper with the configmap: %v", err)
 	}
@@ -347,9 +357,9 @@ func TestPublishesTheVersionAwareDefaultProfile(t *testing.T) {
 		clusterVersion string
 		wantMinVersion string
 	}{
-		{name: "5.1 defaults to Modern", clusterVersion: "5.1.0", wantMinVersion: "1.3"},
-		{name: "5.0 still defaults to Intermediate", clusterVersion: "5.0.9", wantMinVersion: "1.2"},
-		{name: "4.22 still defaults to Intermediate", clusterVersion: "4.22.3", wantMinVersion: "1.2"},
+		{name: "5.1 defaults to Modern", clusterVersion: ocp51, wantMinVersion: minVersion13},
+		{name: "5.0 still defaults to Intermediate", clusterVersion: "5.0.9", wantMinVersion: minVersion12},
+		{name: "4.22 still defaults to Intermediate", clusterVersion: "4.22.3", wantMinVersion: minVersion12},
 	}
 
 	for _, tt := range tests {
@@ -381,16 +391,16 @@ func TestAnExplicitProfileIsNotReplacedByTheClusterDefault(t *testing.T) {
 		profile:          &configv1.TLSSecurityProfile{Type: configv1.TLSProfileIntermediateType},
 		deployments:      []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
 		operandConfigMap: testConfigMap,
-		clusterVersion:   "5.1.0",
+		clusterVersion:   ocp51,
 	})
 
 	if err := h.r.reconcileOnce(context.Background(), triggerStartup); err != nil {
 		t.Fatalf("reconcileOnce() error = %v", err)
 	}
 
-	if got := h.configMapData(t)[crypto.EnvMinVersion]; got != "1.2" {
+	if got := h.configMapData(t)[crypto.EnvMinVersion]; got != minVersion12 {
 		t.Errorf("%s = %q, want %q: an explicit Intermediate profile is honored as written",
-			crypto.EnvMinVersion, got, "1.2")
+			crypto.EnvMinVersion, got, minVersion12)
 	}
 }
 
@@ -400,7 +410,7 @@ func TestAnUnreadableClusterVersionFallsBackInsteadOfFailing(t *testing.T) {
 	h := newHarness(t, harnessOpts{
 		deployments:      []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
 		operandConfigMap: testConfigMap,
-		clusterVersion:   "5.1.0",
+		clusterVersion:   ocp51,
 	})
 	h.configClient.PrependReactor("get", "clusterversions",
 		func(k8stesting.Action) (bool, runtime.Object, error) {
@@ -411,8 +421,8 @@ func TestAnUnreadableClusterVersionFallsBackInsteadOfFailing(t *testing.T) {
 		t.Fatalf("reconcileOnce() error = %v", err)
 	}
 
-	if got := h.configMapData(t)[crypto.EnvMinVersion]; got != "1.2" {
-		t.Errorf("%s = %q, want the Intermediate fallback %q", crypto.EnvMinVersion, got, "1.2")
+	if got := h.configMapData(t)[crypto.EnvMinVersion]; got != minVersion12 {
+		t.Errorf("%s = %q, want the Intermediate fallback %q", crypto.EnvMinVersion, got, minVersion12)
 	}
 }
 
@@ -443,32 +453,32 @@ func TestExplicitSubTLS13ProfilesAreHonoredOnOpenShift51(t *testing.T) {
 		{
 			name:           "unset falls to the 5.1 platform default",
 			profile:        nil,
-			wantMinVersion: "1.3",
+			wantMinVersion: minVersion13,
 		},
 		{
 			name:           "explicit Modern",
 			profile:        &configv1.TLSSecurityProfile{Type: configv1.TLSProfileModernType},
-			wantMinVersion: "1.3",
+			wantMinVersion: minVersion13,
 		},
 		{
 			name:           "explicit Intermediate keeps TLS 1.2",
 			profile:        &configv1.TLSSecurityProfile{Type: configv1.TLSProfileIntermediateType},
-			wantMinVersion: "1.2",
+			wantMinVersion: minVersion12,
 		},
 		{
 			name:           "explicit Old keeps TLS 1.0",
 			profile:        &configv1.TLSSecurityProfile{Type: configv1.TLSProfileOldType},
-			wantMinVersion: "1.0",
+			wantMinVersion: minVersion10,
 		},
 		{
 			name:           "Custom pinned below 1.3 keeps its own floor",
 			profile:        customProfile(configv1.VersionTLS11, subTLS13Ciphers...),
-			wantMinVersion: "1.1",
+			wantMinVersion: minVersion11,
 		},
 		{
 			name:           "Custom at 1.2",
 			profile:        customProfile(configv1.VersionTLS12, subTLS13Ciphers...),
-			wantMinVersion: "1.2",
+			wantMinVersion: minVersion12,
 		},
 	}
 
@@ -479,7 +489,7 @@ func TestExplicitSubTLS13ProfilesAreHonoredOnOpenShift51(t *testing.T) {
 					profile:          tt.profile,
 					deployments:      []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
 					operandConfigMap: testConfigMap,
-					clusterVersion:   "5.1.0",
+					clusterVersion:   ocp51,
 					enablePQC:        pqc,
 				})
 
@@ -497,7 +507,7 @@ func TestExplicitSubTLS13ProfilesAreHonoredOnOpenShift51(t *testing.T) {
 				// Below TLS 1.3 the listener must also be given the profile's
 				// own TLS 1.2 cipher list. Omitting it would fall back to
 				// OpenSSL's defaults, which are wider than the profile.
-				if tt.wantMinVersion != "1.3" {
+				if tt.wantMinVersion != minVersion13 {
 					if got := data[crypto.EnvCiphers]; got == "" {
 						t.Errorf("%s is empty, but the floor is %s: the pre-1.3 handshakes "+
 							"the profile permits need its cipher list", crypto.EnvCiphers, tt.wantMinVersion)
@@ -533,16 +543,16 @@ func TestCustomProfileWithNoSubTLS13CipherIsRaisedAndReported(t *testing.T) {
 		profile:          customProfile(configv1.VersionTLS11, "TLS_AES_128_GCM_SHA256"),
 		deployments:      []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
 		operandConfigMap: testConfigMap,
-		clusterVersion:   "5.1.0",
+		clusterVersion:   ocp51,
 	})
 
 	if err := h.r.reconcileOnce(context.Background(), triggerStartup); err != nil {
 		t.Fatalf("reconcileOnce() error = %v", err)
 	}
 
-	if got := h.configMapData(t)[crypto.EnvMinVersion]; got != "1.3" {
+	if got := h.configMapData(t)[crypto.EnvMinVersion]; got != minVersion13 {
 		t.Errorf("%s = %q, want %q: a profile with no usable pre-1.3 cipher cannot be "+
-			"published at a lower floor", crypto.EnvMinVersion, got, "1.3")
+			"published at a lower floor", crypto.EnvMinVersion, got, minVersion13)
 	}
 
 	assertLogged(t, buf.String(), "profile lists no cipher usable below TLS 1.3")

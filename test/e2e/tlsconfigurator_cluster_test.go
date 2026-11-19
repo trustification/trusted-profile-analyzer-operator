@@ -120,14 +120,22 @@ var apiServerGVR = schema.GroupVersionResource{
 	Resource: "apiservers",
 }
 
+// Built-in TLS security profile type names, as they appear in
+// APIServer.spec.tlsSecurityProfile.type.
+const (
+	profileOld          = "Old"
+	profileIntermediate = "Intermediate"
+	profileModern       = "Modern"
+)
+
 // profileMinVersions maps a built-in profile type to the minimum TLS version
 // the reconciler publishes for it, in trustd's spelling. These are the
 // profiles' own floors: nothing in the configurator raises them, not even
 // pqc.enabled.
 var profileMinVersions = map[string]string{
-	"Old":          "1.0",
-	"Intermediate": "1.2",
-	"Modern":       "1.3",
+	profileOld:          "1.0",
+	profileIntermediate: "1.2",
+	profileModern:       "1.3",
 }
 
 // openShiftCluster is the handle each test in this file works through.
@@ -190,9 +198,9 @@ func (c *openShiftCluster) defaultProfileType(t *testing.T) string {
 	t.Helper()
 
 	if defaultsToModern(c.version(t)) {
-		return "Modern"
+		return profileModern
 	}
-	return "Intermediate"
+	return profileIntermediate
 }
 
 // effectiveProfileType returns the cluster's configured profile type, or the
@@ -557,9 +565,9 @@ func (c *openShiftCluster) swapTLSProfile(t *testing.T, ctx context.Context) (or
 		existing = nil
 	}
 
-	wanted = "Modern"
-	if original == "Modern" {
-		wanted = "Intermediate"
+	wanted = profileModern
+	if original == profileModern {
+		wanted = profileIntermediate
 	}
 
 	restore, err := tlsProfilePatch(existing)

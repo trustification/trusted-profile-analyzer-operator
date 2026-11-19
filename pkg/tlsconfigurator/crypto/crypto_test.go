@@ -133,8 +133,8 @@ func TestBuildTLSConfigReportsUnsupportedCiphersInsteadOfFailing(t *testing.T) {
 			TLSProfileSpec: configv1.TLSProfileSpec{
 				MinTLSVersion: configv1.VersionTLS12,
 				Ciphers: []string{
-					"ECDHE-RSA-AES128-GCM-SHA256", // supported by Go
-					"DHE-RSA-AES128-GCM-SHA256",   // OpenSSL only
+					tls12CipherAES128,           // supported by Go
+					"DHE-RSA-AES128-GCM-SHA256", // OpenSSL only
 				},
 			},
 		},
@@ -321,7 +321,7 @@ func TestResolveProfileSpecWithDefaultKeepsCustomAsWritten(t *testing.T) {
 		Type: configv1.TLSProfileCustomType,
 		Custom: &configv1.CustomTLSProfile{
 			TLSProfileSpec: configv1.TLSProfileSpec{
-				Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+				Ciphers:       []string{tls12CipherAES128},
 				MinTLSVersion: configv1.VersionTLS11,
 			},
 		},
