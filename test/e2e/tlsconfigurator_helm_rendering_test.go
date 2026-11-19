@@ -17,6 +17,7 @@ limitations under the License.
 package e2e
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -303,8 +304,7 @@ func TestTLSConfiguratorIsASingleton(t *testing.T) {
 // which returns nothing under `helm template` and --dry-run, so the check is
 // skipped there. That skip is deliberate and must stay: failing closed on an
 // unreadable policy would break every dry run and the operator's own rendering
-// paths. The fail path itself needs a live cluster, like the 4.22 version
-// guard above it.
+// paths. The fail path itself needs a live cluster.
 func TestTLSConfiguratorAdherenceGuardIsSkippedOnDryRun(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2ETest)
@@ -363,4 +363,36 @@ func findDocument(t *testing.T, rendered, kind, name string) string {
 // line or follow a newline.
 func hasTopLevelField(doc, field string) bool {
 	return strings.HasPrefix(doc, field+"\n") || strings.Contains(doc, "\n"+field+"\n")
+}
+
+// TestTLSConfiguratorIsOptionalOnOpenShift pins the removal of the version
+// guard: the chart used to refuse to render on OpenShift >= 4.22 with the
+// module disabled unless allowDisabled acknowledged it. It no longer does, and
+// a disabled module simply renders nothing.
+//
+// The deprecated allowDisabled key is still asserted here. It has no effect,
+// but values.schema.json rejects unknown keys, so dropping it would break
+// every existing CR and Subscription that still sets it.
+func TestTLSConfiguratorIsOptionalOnOpenShift(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	for _, allowDisabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("allowDisabled=%t", allowDisabled), func(t *testing.T) {
+			values := minimalValues()
+			values[fieldOpenshift] = openshiftValues(true)
+			values[fieldModules] = map[string]interface{}{
+				"server": map[string]interface{}{fieldEnabled: true},
+				"tlsConfigurator": map[string]interface{}{
+					fieldEnabled:    false,
+					"allowDisabled": allowDisabled,
+				},
+			}
+
+			rendered := renderHelmChart(t, getChartPath(t), values)
+			assert.NotContains(t, rendered, "--action=reconcile",
+				"a disabled module must render no reconciler")
+		})
+	}
 }

@@ -17,6 +17,7 @@ package crypto
 
 import (
 	"crypto/tls"
+	"fmt"
 	"testing"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -266,5 +267,132 @@ func TestDefaultTLSVersion(t *testing.T) {
 	version := DefaultTLSVersion()
 	if version != tls.VersionTLS12 {
 		t.Errorf("DefaultTLSVersion() = %d, want TLS 1.2 (%d)", version, tls.VersionTLS12)
+	}
+}
+
+// The cluster-wide default profile is not a constant: OpenShift applies
+// Intermediate when .spec.tlsSecurityProfile is unset up to 5.0, and Modern
+// from 5.1. Resolving an unset profile to Intermediate on 5.1 would describe
+// the cluster as weaker than it is -- and publishing that to the operand would
+// genuinely drop its listener from TLS 1.3 to TLS 1.2.
+func TestClusterDefaultProfileType(t *testing.T) {
+	tests := []struct {
+		major, minor int
+		want         configv1.TLSProfileType
+	}{
+		{4, 21, configv1.TLSProfileIntermediateType},
+		{4, 22, configv1.TLSProfileIntermediateType},
+		{4, 99, configv1.TLSProfileIntermediateType},
+		{5, 0, configv1.TLSProfileIntermediateType},
+		{5, 1, configv1.TLSProfileModernType},
+		{5, 2, configv1.TLSProfileModernType},
+		{6, 0, configv1.TLSProfileModernType},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%d.%d", tt.major, tt.minor), func(t *testing.T) {
+			if got := ClusterDefaultProfileType(tt.major, tt.minor); got != tt.want {
+				t.Errorf("ClusterDefaultProfileType(%d, %d) = %q, want %q",
+					tt.major, tt.minor, got, tt.want)
+			}
+		})
+	}
+}
+
+// The 5.1 default has to be TLS 1.3 all the way down to the resolved spec,
+// since that is what reaches the operand and the rollout hash.
+func TestClusterDefaultProfileTypeResolvesToTLS13From51(t *testing.T) {
+	spec, err := ResolveProfileSpecWithDefault(nil, ClusterDefaultProfileType(5, 1))
+	if err != nil {
+		t.Fatalf("ResolveProfileSpecWithDefault() error = %v", err)
+	}
+	if spec.MinTLSVersion != configv1.VersionTLS13 {
+		t.Errorf("MinTLSVersion = %q, want %q", spec.MinTLSVersion, configv1.VersionTLS13)
+	}
+}
+
+func TestResolveProfileSpecWithDefault(t *testing.T) {
+	modern := *configv1.TLSProfiles[configv1.TLSProfileModernType]
+	intermediate := *configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
+	old := *configv1.TLSProfiles[configv1.TLSProfileOldType]
+
+	tests := []struct {
+		name        string
+		profile     *configv1.TLSSecurityProfile
+		defaultType configv1.TLSProfileType
+		want        configv1.TLSProfileSpec
+	}{
+		{
+			name:        "nil profile takes the supplied default",
+			profile:     nil,
+			defaultType: configv1.TLSProfileModernType,
+			want:        modern,
+		},
+		{
+			name:        "empty type is also no opinion",
+			profile:     &configv1.TLSSecurityProfile{},
+			defaultType: configv1.TLSProfileModernType,
+			want:        modern,
+		},
+		{
+			name:        "no default supplied keeps the upstream fallback",
+			profile:     nil,
+			defaultType: "",
+			want:        intermediate,
+		},
+		// The whole point of the default is that it only applies where the
+		// cluster expressed nothing. A profile the administrator chose is
+		// honored as written, which is also why nothing here forces TLS 1.3
+		// onto Old, Intermediate or Custom.
+		{
+			name:        "an explicit Old profile is not overridden by a Modern default",
+			profile:     &configv1.TLSSecurityProfile{Type: configv1.TLSProfileOldType},
+			defaultType: configv1.TLSProfileModernType,
+			want:        old,
+		},
+		{
+			name:        "an explicit Intermediate profile is not overridden either",
+			profile:     &configv1.TLSSecurityProfile{Type: configv1.TLSProfileIntermediateType},
+			defaultType: configv1.TLSProfileModernType,
+			want:        intermediate,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ResolveProfileSpecWithDefault(tt.profile, tt.defaultType)
+			if err != nil {
+				t.Fatalf("ResolveProfileSpecWithDefault() error = %v", err)
+			}
+			if got.MinTLSVersion != tt.want.MinTLSVersion {
+				t.Errorf("MinTLSVersion = %q, want %q", got.MinTLSVersion, tt.want.MinTLSVersion)
+			}
+			if len(got.Ciphers) != len(tt.want.Ciphers) {
+				t.Errorf("Ciphers = %v, want %v", got.Ciphers, tt.want.Ciphers)
+			}
+		})
+	}
+}
+
+// A Custom profile is taken exactly as written, default or not: its
+// minTLSVersion is the administrator's and nothing raises it.
+func TestResolveProfileSpecWithDefaultKeepsCustomAsWritten(t *testing.T) {
+	custom := &configv1.TLSSecurityProfile{
+		Type: configv1.TLSProfileCustomType,
+		Custom: &configv1.CustomTLSProfile{
+			TLSProfileSpec: configv1.TLSProfileSpec{
+				Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+				MinTLSVersion: configv1.VersionTLS11,
+			},
+		},
+	}
+
+	got, err := ResolveProfileSpecWithDefault(custom, configv1.TLSProfileModernType)
+	if err != nil {
+		t.Fatalf("ResolveProfileSpecWithDefault() error = %v", err)
+	}
+	if got.MinTLSVersion != configv1.VersionTLS11 {
+		t.Errorf("MinTLSVersion = %q, want the custom profile's own %q",
+			got.MinTLSVersion, configv1.VersionTLS11)
 	}
 }

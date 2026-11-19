@@ -120,6 +120,16 @@ var apiServerGVR = schema.GroupVersionResource{
 	Resource: "apiservers",
 }
 
+// profileMinVersions maps a built-in profile type to the minimum TLS version
+// the reconciler publishes for it, in trustd's spelling. These are the
+// profiles' own floors: nothing in the configurator raises them, not even
+// pqc.enabled.
+var profileMinVersions = map[string]string{
+	"Old":          "1.0",
+	"Intermediate": "1.2",
+	"Modern":       "1.3",
+}
+
 // openShiftCluster is the handle each test in this file works through.
 type openShiftCluster struct {
 	namespace string
@@ -174,11 +184,38 @@ func (c *openShiftCluster) version(t *testing.T) string {
 	return version
 }
 
-// atLeast422 reports whether the cluster is on a release where the chart makes
-// the module mandatory. The comparison mirrors the one in
-// templates/init/tls-configure/000-validate.yaml, which is why a major above 4
-// (5.x) counts unconditionally.
-func atLeast422(version string) bool {
+// defaultProfileType returns the profile an unset .spec.tlsSecurityProfile
+// means on this cluster.
+func (c *openShiftCluster) defaultProfileType(t *testing.T) string {
+	t.Helper()
+
+	if defaultsToModern(c.version(t)) {
+		return "Modern"
+	}
+	return "Intermediate"
+}
+
+// effectiveProfileType returns the cluster's configured profile type, or the
+// platform default when it has set none.
+func (c *openShiftCluster) effectiveProfileType(t *testing.T, ctx context.Context) string {
+	t.Helper()
+
+	apiServer, err := c.dynamic.Resource(apiServerGVR).Get(ctx, "cluster", metav1.GetOptions{})
+	require.NoError(t, err, "should be able to read the cluster APIServer CR")
+
+	name, found, err := unstructured.NestedString(apiServer.Object, "spec", "tlsSecurityProfile", "type")
+	require.NoError(t, err, "should be able to read .spec.tlsSecurityProfile.type")
+	if !found || name == "" {
+		return c.defaultProfileType(t)
+	}
+	return name
+}
+
+// defaultsToModern reports whether this cluster's unset
+// .spec.tlsSecurityProfile means Modern rather than Intermediate. The
+// comparison mirrors crypto.ClusterDefaultProfileType, which is what the
+// reconciler uses.
+func defaultsToModern(version string) bool {
 	parts := strings.Split(version, ".")
 	if len(parts) < 2 {
 		return false
@@ -191,19 +228,27 @@ func atLeast422(version string) bool {
 	if err != nil {
 		return false
 	}
-	return major > 4 || (major == 4 && minor >= 22)
+	return major > tlscrypto.ModernDefaultOpenShiftMajorVersion ||
+		(major == tlscrypto.ModernDefaultOpenShiftMajorVersion &&
+			minor >= tlscrypto.ModernDefaultOpenShiftMinorVersion)
 }
 
-// TestOpenShiftVersionGateMatchesChart records which side of the 4.22 gate the
-// cluster is on. On 4.22+ -- so on any 5.x -- the reconciler is not optional,
-// and a run that found it missing there would be testing a cluster the chart
-// should have refused to install on.
-func TestOpenShiftVersionGateMatchesChart(t *testing.T) {
+// TestOpenShiftClusterDefaultProfileMatchesTheVersion records which
+// cluster-wide default this release applies to an unset profile, and checks
+// the reconciler this suite needs is installed.
+//
+// The module is optional at every OpenShift version -- the chart used to
+// refuse to install without it from 4.22, and no longer does -- so a missing
+// Deployment here means the CR did not enable it, not that the cluster is
+// misconfigured.
+func TestOpenShiftClusterDefaultProfileMatchesTheVersion(t *testing.T) {
 	cluster := requireOpenShiftCluster(t)
 
 	version := cluster.version(t)
-	if !atLeast422(version) {
-		t.Logf("OpenShift %s is below 4.22: the module is optional here, but this suite still needs it enabled", version)
+	if defaultsToModern(version) {
+		t.Logf("OpenShift %s: an unset .spec.tlsSecurityProfile means Modern (TLS 1.3 only)", version)
+	} else {
+		t.Logf("OpenShift %s: an unset .spec.tlsSecurityProfile means Intermediate (TLS 1.2)", version)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -267,9 +312,20 @@ func TestOpenShiftOperandProfileIsPublished(t *testing.T) {
 		"%s selects trustd's custom mapping; the built-in names ignore the min version and ciphers",
 		tlscrypto.EnvProfile)
 
-	assert.Equal(t, "1.3", cm.Data[tlscrypto.EnvMinVersion],
-		"%s should be 1.3 with pqc.enabled: hybrid key exchange is only defined for TLS 1.3",
-		tlscrypto.EnvMinVersion)
+	// The published floor is the cluster profile's own. pqc.enabled does not
+	// raise it: hybrid key exchange needs TLS 1.3, but which versions are
+	// acceptable is the cluster's decision, so on a cluster whose effective
+	// profile is Intermediate this is 1.2 and the hybrid group below simply
+	// applies to the TLS 1.3 handshakes.
+	profileType := cluster.effectiveProfileType(t, ctx)
+	wantMinVersion, known := profileMinVersions[profileType]
+	if !known {
+		t.Logf("cluster profile is %q; skipping the minimum-version assertion", profileType)
+	} else {
+		assert.Equal(t, wantMinVersion, cm.Data[tlscrypto.EnvMinVersion],
+			"%s should match the cluster's effective %s profile, which pqc.enabled does not override",
+			tlscrypto.EnvMinVersion, profileType)
+	}
 
 	groups := cm.Data[tlscrypto.EnvGroups]
 	assert.Contains(t, strings.Split(groups, ":"), pqcGroupName,
@@ -353,20 +409,44 @@ func TestOpenShiftServerNegotiatesTLS13WithPQC(t *testing.T) {
 		"server should negotiate the hybrid post-quantum key exchange, got %s", state.CurveID)
 }
 
-// TestOpenShiftServerRejectsTLS12 is the negative half: with pqc.enabled the
-// published floor is TLS 1.3, so a client that cannot go above 1.2 must fail.
-// Without this, a server that quietly ignored the published profile and
-// accepted everything would still pass the test above.
-func TestOpenShiftServerRejectsTLS12(t *testing.T) {
+// TestOpenShiftServerHonorsThePublishedFloor is the negative half: a client
+// that cannot go above TLS 1.2 must be rejected exactly when the published
+// minimum version says so. Without it, a server that quietly ignored the
+// published profile and accepted everything would still pass the test above.
+//
+// The expectation comes from the cluster's effective profile rather than from
+// pqc.enabled, because pqc does not raise the floor -- a cluster on
+// Intermediate publishes 1.2 and must therefore *accept* the TLS 1.2 client.
+// Both directions are a real assertion: the listener tracks the cluster
+// profile up and down.
+func TestOpenShiftServerHonorsThePublishedFloor(t *testing.T) {
 	cluster := requireOpenShiftCluster(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	profileType := cluster.effectiveProfileType(t, ctx)
+	minVersion, known := profileMinVersions[profileType]
+	if !known {
+		t.Skipf("cluster profile is %q; this test only knows the built-in floors", profileType)
+	}
 
 	addr := cluster.forwardServerPort(t)
 
 	conn, err := tls.Dial("tcp", addr, cluster.clientTLSConfig(t, tls.VersionTLS12, tls.VersionTLS12))
-	if err == nil {
-		_ = conn.Close()
-		t.Fatalf("TLS 1.2 handshake succeeded, but the published minimum version is 1.3")
+	if conn != nil {
+		defer func() { _ = conn.Close() }()
 	}
+
+	if minVersion == "1.3" {
+		require.Error(t, err,
+			"the %s profile publishes a minimum of %s, so a TLS 1.2-only client must be rejected",
+			profileType, minVersion)
+		return
+	}
+	require.NoError(t, err,
+		"the %s profile publishes a minimum of %s, so a TLS 1.2-only client must be accepted",
+		profileType, minVersion)
 }
 
 // TestOpenShiftProfileChangeRollsServer exercises the runtime loop end to end:
@@ -450,8 +530,9 @@ func tlsProfilePatch(profile map[string]interface{}) ([]byte, error) {
 
 // swapTLSProfile flips the cluster between two built-in profiles and registers
 // a cleanup that puts the original back verbatim, returning both type names.
-// Intermediate is the effective default when the field is unset, so an absent
-// profile is reported as that and restored by removing the field again.
+// An absent profile is reported as this cluster's platform default -- Modern
+// from OpenShift 5.1, Intermediate below -- and restored by removing the field
+// again.
 //
 // The API requires the sub-object matching the type to be present -- setting
 // `type: Modern` alone is rejected with "type set to Modern, but the
@@ -467,7 +548,7 @@ func (c *openShiftCluster) swapTLSProfile(t *testing.T, ctx context.Context) (or
 	existing, present, err := unstructured.NestedMap(apiServer.Object, "spec", "tlsSecurityProfile")
 	require.NoError(t, err, "should be able to read .spec.tlsSecurityProfile")
 
-	original = "Intermediate"
+	original = c.defaultProfileType(t)
 	if present {
 		if name, ok := existing[fieldType].(string); ok && name != "" {
 			original = name

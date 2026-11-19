@@ -405,8 +405,9 @@ properties:
           watches the cluster-wide TLS profile and rolls target workloads when it
           changes at runtime. Supports post-quantum (X25519MLKEM768) TLS 1.3.
 
-          OpenShift-only: required from OpenShift 4.22, and must stay disabled on
-          plain Kubernetes. The chart enforces both at install time.
+          OpenShift-only: optional at any OpenShift version, and must stay
+          disabled on plain Kubernetes, which the chart enforces at install
+          time.
         allOf:
           - $ref: "#/definitions/Feature"
           - $ref: "#/definitions/Image"
@@ -416,16 +417,21 @@ properties:
               allowDisabled:
                 type: boolean
                 description: |
-                  Acknowledge running on OpenShift 4.22+ without the
-                  configurator. Only consulted when enabled is false; it
-                  suppresses the install-time error.
+                  Deprecated and ignored. It used to acknowledge installing on
+                  OpenShift 4.22+ with the configurator disabled; the chart no
+                  longer refuses that, so the key has no effect. Still
+                  accepted so existing values keep validating.
               pqc:
                 type: object
                 description: Post-quantum cryptography settings
                 properties:
                   enabled:
                     type: boolean
-                    description: Enforce TLS 1.3 + X25519MLKEM768 key exchange
+                    description: |
+                      Always offer the hybrid X25519MLKEM768 key exchange,
+                      even on a cluster profile that omits it. Does not
+                      raise the minimum TLS version, which stays the
+                      cluster profile's to decide.
               operandTls:
                 type: object
                 description: |

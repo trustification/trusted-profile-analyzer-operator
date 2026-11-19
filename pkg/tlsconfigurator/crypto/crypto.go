@@ -50,8 +50,18 @@ var DefaultNextProtos = ocptls.HTTP2NextProtos
 // version, ciphers, key-exchange groups -- comes from the profile, not from
 // here.
 type Options struct {
-	// EnablePQC forces TLS 1.3 and guarantees that the hybrid post-quantum
-	// group X25519MLKEM768 is offered even if the cluster profile omits it.
+	// EnablePQC guarantees that the hybrid post-quantum group X25519MLKEM768
+	// is offered even if the cluster profile omits it.
+	//
+	// It deliberately does *not* raise the minimum protocol version. Hybrid
+	// key exchange is only defined for TLS 1.3, but the minimum version is
+	// the cluster administrator's decision: a cluster on Old, Intermediate or
+	// a Custom profile naming a lower floor has said that pre-1.3 clients must
+	// still connect, and silently overriding that is not this component's
+	// call. On such a profile the hybrid group simply goes unused below
+	// TLS 1.3 and is negotiated at TLS 1.3, which is the most the profile
+	// allows. Clusters that want PQC enforced set a Modern profile -- which is
+	// the default from OpenShift 5.1 on; see ClusterDefaultProfileType.
 	EnablePQC bool
 
 	// NextProtos is the ALPN list to advertise. Nil means DefaultNextProtos;
@@ -80,11 +90,59 @@ func PQCGroups() []configv1.TLSGroup {
 	}
 }
 
+// ModernDefaultOpenShiftMajorVersion and ModernDefaultOpenShiftMinorVersion are
+// the first OpenShift release whose cluster-wide default TLS security profile
+// is Modern (minTLSVersion VersionTLS13) rather than Intermediate.
+const (
+	ModernDefaultOpenShiftMajorVersion = 5
+	ModernDefaultOpenShiftMinorVersion = 1
+)
+
+// ClusterDefaultProfileType returns the TLS security profile an OpenShift
+// cluster of the given major.minor version applies when
+// APIServer.spec.tlsSecurityProfile is left unset.
+//
+// This exists because the upstream resolver cannot know it. Up to and
+// including OpenShift 5.0 the unset default is Intermediate, which is what
+// controller-runtime-common hard-codes. From OpenShift 5.1 the platform
+// default is Modern -- TLS 1.3 only -- so resolving an unset profile to
+// Intermediate there would describe the cluster as *weaker* than it is, and
+// publishing that to the operand would genuinely loosen its listener down to
+// TLS 1.2.
+func ClusterDefaultProfileType(major, minor int) configv1.TLSProfileType {
+	if major > ModernDefaultOpenShiftMajorVersion ||
+		(major == ModernDefaultOpenShiftMajorVersion && minor >= ModernDefaultOpenShiftMinorVersion) {
+		return configv1.TLSProfileModernType
+	}
+	return configv1.TLSProfileIntermediateType
+}
+
 // ResolveProfileSpec resolves a TLSSecurityProfile to the concrete
 // TLSProfileSpec it stands for: built-in types expand from
 // configv1.TLSProfiles, Custom returns its embedded spec, and nil or an
 // unknown type falls back to Intermediate.
+//
+// Prefer ResolveProfileSpecWithDefault where the cluster version is known: the
+// Intermediate fallback is only correct up to OpenShift 5.0.
 func ResolveProfileSpec(profile *configv1.TLSSecurityProfile) (configv1.TLSProfileSpec, error) {
+	return ResolveProfileSpecWithDefault(profile, "")
+}
+
+// ResolveProfileSpecWithDefault is ResolveProfileSpec with an explicit profile
+// type to stand in for a cluster that has expressed no opinion -- a nil
+// profile, or one whose Type is empty. Pass "" to keep the upstream default
+// (Intermediate).
+//
+// Only the "no opinion" cases are substituted. A profile naming a type this
+// build does not know is left to the upstream fallback: that is a profile type
+// added to the OpenShift API later, and the cluster-wide default is no better
+// a guess for it than Intermediate is.
+func ResolveProfileSpecWithDefault(
+	profile *configv1.TLSSecurityProfile, defaultType configv1.TLSProfileType,
+) (configv1.TLSProfileSpec, error) {
+	if defaultType != "" && (profile == nil || profile.Type == "") {
+		profile = &configv1.TLSSecurityProfile{Type: defaultType}
+	}
 	spec, err := ocptls.GetTLSProfileSpec(profile)
 	if err != nil {
 		return configv1.TLSProfileSpec{}, fmt.Errorf("failed to resolve TLS security profile: %w", err)
@@ -204,22 +262,28 @@ func SecureTLSConfig(config *tls.Config) {
 	// to use TLS 1.0/1.1 if explicitly configured
 }
 
-// EnablePQC hardens a crypto/tls.Config for post-quantum key exchange.
-// It forces the minimum protocol version to TLS 1.3 (hybrid PQC key exchange is
-// only defined for TLS 1.3) and sets the key-exchange group preferences to the
-// post-quantum list. The symmetric cipher suites are left untouched: for TLS 1.3
-// Go selects its AEAD suites internally and ignores Config.CipherSuites, and
-// those suites are already quantum-resistant at the symmetric level.
+// EnablePQC hardens a crypto/tls.Config for post-quantum key exchange by
+// setting the key-exchange group preferences to the post-quantum list.
+//
+// It does not touch MinVersion. Hybrid PQC key exchange is only defined for
+// TLS 1.3, but which protocol versions are acceptable is the cluster profile's
+// decision, and raising the floor underneath a cluster that chose Old,
+// Intermediate or a Custom profile with a lower minimum would lock out the
+// clients that profile exists to admit. Go simply does not select a hybrid
+// group below TLS 1.3, so on such a profile the group list applies to the
+// TLS 1.3 handshakes and is ignored by the rest. On a Modern profile -- the
+// platform default from OpenShift 5.1 -- the floor is already TLS 1.3 and
+// nothing needs forcing.
+//
+// The symmetric cipher suites are likewise left untouched. Go ignores
+// Config.CipherSuites at TLS 1.3 and selects its AEAD suites internally, so
+// the field only governs the pre-1.3 handshakes that the profile still
+// permits; clearing it would hand those OpenSSL-style defaults instead of the
+// profile's list.
 func EnablePQC(config *tls.Config) {
 	if config == nil {
 		return
 	}
-	if config.MinVersion < tls.VersionTLS13 {
-		config.MinVersion = tls.VersionTLS13
-	}
-	// Go ignores CipherSuites for TLS 1.3; leaving stale TLS 1.2 suites behind
-	// is just misleading.
-	config.CipherSuites = nil
 	config.CurvePreferences = PQCCurvePreferences()
 }
 
@@ -283,8 +347,12 @@ func CipherSuiteName(id uint16) string {
 	return tls.CipherSuiteName(id)
 }
 
-// DefaultTLSConfig returns the TLS configuration for the cluster default
-// profile (Intermediate), for callers that cannot reach the API server.
+// DefaultTLSConfig returns the TLS configuration for the Intermediate profile,
+// for callers that cannot reach the API server.
+//
+// Note that this is the pre-5.1 cluster default. A caller that can read the
+// cluster version should resolve the default with ClusterDefaultProfileType
+// instead; this one has nothing to base that on.
 func DefaultTLSConfig() *tls.Config {
 	// The built-in Intermediate profile is a constant with a valid
 	// MinTLSVersion, so the error cannot fire here.

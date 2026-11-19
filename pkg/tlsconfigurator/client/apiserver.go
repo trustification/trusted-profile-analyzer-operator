@@ -38,10 +38,23 @@ type ClusterTLSSettings struct {
 	// Profile is the raw .spec.tlsSecurityProfile, nil when unset.
 	Profile *configv1.TLSSecurityProfile
 	// Spec is Profile resolved to concrete ciphers, groups and minimum
-	// version (built-ins expanded, nil/unknown defaulted to Intermediate).
+	// version: built-ins expanded, Custom taken as given, and an unset
+	// profile stood in for by DefaultProfileType.
 	Spec configv1.TLSProfileSpec
+	// DefaultProfileType is the profile an unset .spec.tlsSecurityProfile was
+	// taken to mean -- the platform default for this cluster's version. It is
+	// "" when the caller did not supply one, in which case an unset profile
+	// resolved to the upstream fallback, Intermediate.
+	DefaultProfileType configv1.TLSProfileType
 	// Adherence is .spec.tlsAdherence, "" when unset.
 	Adherence configv1.TLSAdherencePolicy
+}
+
+// UsesClusterDefault reports whether the cluster expressed no profile of its
+// own, so Spec came from the platform default rather than from
+// .spec.tlsSecurityProfile.
+func (s ClusterTLSSettings) UsesClusterDefault() bool {
+	return s.Profile == nil || s.Profile.Type == ""
 }
 
 // ShouldHonor reports whether components must apply this profile, per the
@@ -87,23 +100,38 @@ func (c *APIServerClient) GetAPIServer(ctx context.Context) (*configv1.APIServer
 
 // GetClusterTLSSettings reads the profile and the adherence policy from a
 // single APIServer snapshot and resolves the profile to a concrete
-// TLSProfileSpec. This is the entry point callers should use; the individual
-// getters below exist for the CLI's single-value output.
+// TLSProfileSpec, defaulting an unset profile to Intermediate.
+//
+// Callers that can read the cluster version should use
+// GetClusterTLSSettingsWithDefault instead: Intermediate is only the platform
+// default up to OpenShift 5.0.
 func (c *APIServerClient) GetClusterTLSSettings(ctx context.Context) (ClusterTLSSettings, error) {
+	return c.GetClusterTLSSettingsWithDefault(ctx, "")
+}
+
+// GetClusterTLSSettingsWithDefault is GetClusterTLSSettings with the profile
+// type to stand in for an unset .spec.tlsSecurityProfile -- normally
+// OpenShiftVersion.DefaultTLSProfileType, which is Modern from OpenShift 5.1
+// on. Pass "" to keep the upstream fallback.
+func (c *APIServerClient) GetClusterTLSSettingsWithDefault(
+	ctx context.Context, defaultProfileType configv1.TLSProfileType,
+) (ClusterTLSSettings, error) {
 	apiServer, err := c.GetAPIServer(ctx)
 	if err != nil {
 		return ClusterTLSSettings{}, err
 	}
 
-	spec, err := crypto.ResolveProfileSpec(apiServer.Spec.TLSSecurityProfile)
+	spec, err := crypto.ResolveProfileSpecWithDefault(
+		apiServer.Spec.TLSSecurityProfile, defaultProfileType)
 	if err != nil {
 		return ClusterTLSSettings{}, err
 	}
 
 	return ClusterTLSSettings{
-		Profile:   apiServer.Spec.TLSSecurityProfile,
-		Spec:      spec,
-		Adherence: apiServer.Spec.TLSAdherence,
+		Profile:            apiServer.Spec.TLSSecurityProfile,
+		Spec:               spec,
+		DefaultProfileType: defaultProfileType,
+		Adherence:          apiServer.Spec.TLSAdherence,
 	}, nil
 }
 
@@ -164,8 +192,13 @@ func (c *APIServerClient) UpdateClusterTLSProfile(ctx context.Context, profile *
 	return nil
 }
 
-// GetEffectiveTLSProfile returns the effective TLS profile for the cluster
-// If no profile is configured, it returns the default Intermediate profile
+// GetEffectiveTLSProfile returns the effective TLS profile for the cluster.
+// If no profile is configured, it returns the Intermediate profile.
+//
+// Note that Intermediate is only the platform default up to OpenShift 5.0;
+// from 5.1 an unset profile means Modern. Use
+// GetClusterTLSSettingsWithDefault, which takes the cluster version into
+// account, rather than this.
 func (c *APIServerClient) GetEffectiveTLSProfile(ctx context.Context) (*configv1.TLSSecurityProfile, error) {
 	profile, err := c.GetClusterTLSProfile(ctx)
 	if err != nil {

@@ -1,4 +1,4 @@
-# RHTPA on CRC running OpenShift 5.x (or any OpenShift >= 4.22).
+# RHTPA on CRC running OpenShift (any version).
 #
 # This is the demo CR used by `make e2e-crc` and by the OpenShift-only e2e
 # tests in test/e2e/tlsconfigurator_cluster_test.go. It differs from
@@ -8,12 +8,14 @@
 # rolls the workloads on a profile change, but they go on serving trustd's
 # compiled-in "modern" profile and there is nothing end-to-end to assert.
 #
-# From OpenShift 4.22 (so on every 5.x) the tlsConfigurator module is
-# *required*: the chart refuses to install with it disabled unless
-# modules.tlsConfigurator.allowDisabled is set. Check what the bundle actually
-# ships with:
+# The tlsConfigurator module is optional at every OpenShift version; this CR
+# turns it on because the e2e suite needs it. One version boundary still
+# matters to what the tests observe: from OpenShift 5.1 an unset
+# .spec.tlsSecurityProfile means the Modern profile (TLS 1.3 only), where up
+# to 5.0 it means Intermediate (TLS 1.2). Check which side this cluster is on:
 #
 #   oc get clusterversion version -o jsonpath='{.status.desired.version}{"\n"}'
+#   oc get apiserver cluster -o jsonpath='{.spec.tlsSecurityProfile}{"\n"}'
 #
 # Prerequisites (see devel/README.md for the full walkthrough):
 #
@@ -71,14 +73,15 @@ spec:
   metrics:
     enabled: false
   modules:
-    # TLS configurator: required from OpenShift 4.22 upwards, which includes
-    # every 5.x. The image is the operator's own -- the operator fills
+    # TLS configurator: optional on OpenShift, enabled here because the e2e
+    # suite needs it. The image is the operator's own -- the operator fills
     # image.fullName in from RELATED_IMAGE_TLS_CONFIGURATOR, so nothing is
     # pinned here.
     tlsConfigurator:
       enabled: true
-      # Force TLS 1.3 and the hybrid post-quantum X25519MLKEM768 key exchange,
-      # and fold that choice into the workload rollout hash.
+      # Always offer the hybrid post-quantum X25519MLKEM768 key exchange,
+      # even on a cluster profile that omits it, and fold that choice into the
+      # workload rollout hash. It does not raise the minimum TLS version.
       pqc:
         enabled: true
       # Publish the resolved cluster profile to trustd's own listener through a
@@ -86,10 +89,15 @@ spec:
       # without it the "test the cluster profile over a real handshake" part of
       # the e2e suite has nothing to look at.
       #
-      # Note this can also *loosen* the listener: trustd is TLS 1.3-only out of
-      # the box, so a cluster profile of Old or Intermediate would bring it
-      # down to TLS 1.0/1.2 -- except that pqc.enabled above raises the floor
-      # back to 1.3 regardless.
+      # Note this can also *loosen* the listener: trustd is TLS 1.3-only out
+      # of the box, so a cluster profile of Old or Intermediate brings it down
+      # to TLS 1.0/1.2. pqc.enabled above does not prevent that -- the
+      # protocol floor is the cluster's to set. To keep the listener at
+      # TLS 1.3, put the cluster on the Modern profile (the platform default
+      # from OpenShift 5.1):
+      #
+      #   oc patch apiserver cluster --type=merge \
+      #     -p '{"spec":{"tlsSecurityProfile":{"type":"Modern","modern":{}}}}'
       operandTls:
         enabled: true
         configMapName: tls-configurator-profile

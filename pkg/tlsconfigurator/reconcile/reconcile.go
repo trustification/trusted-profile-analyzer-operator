@@ -63,11 +63,21 @@ const (
 type Reconciler struct {
 	apiServerClient *client.APIServerClient
 	workloadsClient *client.WorkloadsClient
-	cfg             *config.Config
+	// versionChecker resolves what an unset .spec.tlsSecurityProfile means on
+	// this cluster, which depends on its version: Modern from OpenShift 5.1,
+	// Intermediate below. May be nil, in which case the upstream Intermediate
+	// fallback applies.
+	versionChecker *client.VersionChecker
+	cfg            *config.Config
 
 	// lastAdherence suppresses repeat logging of an unchanged tlsAdherence
 	// policy across resync ticks. Only touched from the single Run goroutine.
 	lastAdherence *configv1.TLSAdherencePolicy
+
+	// lastDefaultProfileType does the same for the resolved platform default
+	// profile, which only changes when the cluster is upgraded across 5.1.
+	// Only touched from the single Run goroutine.
+	lastDefaultProfileType *configv1.TLSProfileType
 
 	// lastSummary is the TLS configuration seen by the previous successful
 	// reconcile. It is what a change is logged against: nil means nothing has
@@ -105,9 +115,15 @@ func NewReconciler(cfg *config.Config) (*Reconciler, error) {
 		return nil, err
 	}
 
+	versionChecker, err := client.NewVersionChecker(restConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Reconciler{
 		apiServerClient: apiServerClient,
 		workloadsClient: workloadsClient,
+		versionChecker:  versionChecker,
 		cfg:             cfg,
 	}, nil
 }
@@ -197,7 +213,8 @@ func (r *Reconciler) consumeWatch(ctx context.Context, w watch.Interface, ticker
 // deployment carries the matching hash, rolling out only those that differ.
 // trigger names what caused this pass and prefixes the log lines it writes.
 func (r *Reconciler) reconcileOnce(ctx context.Context, trigger string) error {
-	settings, err := r.apiServerClient.GetClusterTLSSettings(ctx)
+	settings, err := r.apiServerClient.GetClusterTLSSettingsWithDefault(
+		ctx, r.clusterDefaultProfileType(ctx, trigger))
 	if err != nil {
 		return fmt.Errorf("failed to read cluster TLS settings: %w", err)
 	}
@@ -444,6 +461,37 @@ func (r *Reconciler) logAdherence(trigger string, adherence configv1.TLSAdherenc
 	}
 }
 
+// clusterDefaultProfileType resolves what an unset .spec.tlsSecurityProfile
+// means on this cluster. It is read every pass rather than cached at startup
+// so that an in-place upgrade across OpenShift 5.1 is picked up: crossing that
+// boundary changes the effective profile of a cluster whose APIServer CR never
+// changed, which is precisely the kind of silent drift the resync exists for.
+//
+// A failure here is logged and treated as "no version-specific default", which
+// falls back to the upstream Intermediate. It must not abort the pass: the
+// reconciler's job is rolling workloads on profile changes, and the cluster
+// version only matters to clusters that have not set a profile at all.
+func (r *Reconciler) clusterDefaultProfileType(ctx context.Context, trigger string) configv1.TLSProfileType {
+	if r.versionChecker == nil {
+		return ""
+	}
+
+	defaultType, version, err := r.versionChecker.DefaultTLSProfileType(ctx)
+	if err != nil {
+		log.Printf("[%s] Could not read the cluster version, so an unset TLS profile falls back "+
+			"to %s rather than this cluster's own default: %v",
+			trigger, configv1.TLSProfileIntermediateType, err)
+		return ""
+	}
+
+	if r.lastDefaultProfileType == nil || *r.lastDefaultProfileType != defaultType {
+		log.Printf("[%s] OpenShift %s: an unset .spec.tlsSecurityProfile means the %s profile",
+			trigger, version.String(), defaultType)
+		r.lastDefaultProfileType = &defaultType
+	}
+	return defaultType
+}
+
 // tlsSummary is the human-readable projection of one observation of the
 // cluster TLS settings: what the profile resolves to, how it lands in a
 // crypto/tls.Config once this reconciler's own options are applied, and the
@@ -471,7 +519,7 @@ func (r *Reconciler) summarize(settings client.ClusterTLSSettings, hash string) 
 		// stop the rollout, so report it and leave the derived fields empty.
 		return tlsSummary{
 			hash:        hash,
-			profileType: profileTypeName(settings.Profile),
+			profileType: profileTypeName(settings),
 			adherence:   orUnset(settings.Adherence),
 			minVersion:  "unknown",
 			ciphers:     settings.Spec.Ciphers,
@@ -483,7 +531,7 @@ func (r *Reconciler) summarize(settings client.ClusterTLSSettings, hash string) 
 
 	return tlsSummary{
 		hash:        hash,
-		profileType: profileTypeName(settings.Profile),
+		profileType: profileTypeName(settings),
 		adherence:   orUnset(settings.Adherence),
 		minVersion:  crypto.TLSVersionName(tlsConfig.MinVersion),
 		ciphers:     settings.Spec.Ciphers,
@@ -643,12 +691,18 @@ func pqcState(active bool) string {
 }
 
 // profileTypeName names the configured profile type, or reports that none is
-// set and the cluster default applies.
-func profileTypeName(profile *configv1.TLSSecurityProfile) string {
-	if profile == nil || profile.Type == "" {
-		return fmt.Sprintf("<unset> (defaults to %s)", configv1.TLSProfileIntermediateType)
+// set and names the platform default that stood in for it. The default is
+// version-dependent -- Modern from OpenShift 5.1 -- so it is read from the
+// settings rather than assumed.
+func profileTypeName(settings client.ClusterTLSSettings) string {
+	if !settings.UsesClusterDefault() {
+		return string(settings.Profile.Type)
 	}
-	return string(profile.Type)
+	defaultType := settings.DefaultProfileType
+	if defaultType == "" {
+		defaultType = configv1.TLSProfileIntermediateType
+	}
+	return fmt.Sprintf("<unset> (defaults to %s)", defaultType)
 }
 
 // groupNames renders key-exchange groups in preference order.

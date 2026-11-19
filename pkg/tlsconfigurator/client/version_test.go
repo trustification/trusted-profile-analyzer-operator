@@ -17,6 +17,8 @@ package client
 
 import (
 	"testing"
+
+	configv1 "github.com/openshift/api/config/v1"
 )
 
 const (
@@ -214,6 +216,35 @@ func TestOpenShiftVersion_String(t *testing.T) {
 			got := tt.version.String()
 			if got != tt.want {
 				t.Errorf("String() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// An unset .spec.tlsSecurityProfile does not mean the same thing on every
+// cluster: OpenShift defaults it to Intermediate up to 5.0 and to Modern from
+// 5.1. The configurator has to read the cluster version to know which, since
+// the upstream resolver hard-codes Intermediate.
+func TestOpenShiftVersionDefaultTLSProfileType(t *testing.T) {
+	tests := []struct {
+		versionStr string
+		want       configv1.TLSProfileType
+	}{
+		{"4.22.0", configv1.TLSProfileIntermediateType},
+		{"5.0.3", configv1.TLSProfileIntermediateType},
+		{"5.1.0", configv1.TLSProfileModernType},
+		{"5.1.0-rc.1", configv1.TLSProfileModernType},
+		{"5.2.1", configv1.TLSProfileModernType},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.versionStr, func(t *testing.T) {
+			version, err := parseVersion(tt.versionStr)
+			if err != nil {
+				t.Fatalf("parseVersion(%q) error = %v", tt.versionStr, err)
+			}
+			if got := version.DefaultTLSProfileType(); got != tt.want {
+				t.Errorf("DefaultTLSProfileType() = %q, want %q", got, tt.want)
 			}
 		})
 	}

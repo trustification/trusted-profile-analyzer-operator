@@ -364,14 +364,17 @@ which is why `create-importers`, connecting as that role, does need the init con
 # TLS configurator — configuring it per platform
 
 The `tlsConfigurator` module is OpenShift-only. Which setting is correct depends
-on where you deployed the operator, and the chart **enforces** the matrix at
-install time rather than just documenting it.
+on where you deployed the operator.
 
 | Platform | `.spec.modules.tlsConfigurator.enabled` | What happens otherwise |
 |---|---|---|
-| OpenShift >= 4.22 | `true` — required | Install fails unless you also set `allowDisabled: true` |
-| OpenShift < 4.22 | optional | Nothing — it works there, it just isn't mandatory |
+| OpenShift (any version) | optional, recommended | Nothing — the chart does not force the choice |
 | Plain Kubernetes | `false` — the default | Install fails if you enable it |
+
+From OpenShift 5.1 the cluster-wide default TLS profile is `Modern`
+(TLS 1.3 only) rather than `Intermediate`, so a cluster with no
+`.spec.tlsSecurityProfile` is already on TLS 1.3. The reconciler reads the
+cluster version and resolves an unset profile accordingly.
 
 Full reference, including `tlsAdherence` and post-quantum:
 [`docs/tls-configurator/DEPLOYMENT.md`](../docs/tls-configurator/DEPLOYMENT.md).
@@ -387,7 +390,7 @@ kubectl get apiserver cluster -o jsonpath='{.spec.tlsSecurityProfile}{"\n"}'
 kubectl get apiserver cluster -o jsonpath='{.spec.tlsAdherence}{"\n"}'
 ```
 
-## OpenShift 4.22+
+## OpenShift
 
 Add this to your `TrustedProfileAnalyzer` CR (`trusted-profile-analyzer-demo.yaml`
 already uses the `modules:` block — put it alongside `server:` and `importer:`):
@@ -453,20 +456,18 @@ oc patch apiserver cluster --type=merge \
 oc -n trustify rollout status deployment/server
 ```
 
-To install on 4.22+ *without* the module, acknowledge it explicitly — otherwise
-the install is refused:
+To install *without* the module, just leave it off — that is the chart
+default and nothing has to be acknowledged:
 
 ```yaml
 spec:
   modules:
     tlsConfigurator:
       enabled: false
-      allowDisabled: true
 ```
 
-CRC note: `crc` tracks a recent OpenShift, so check `clusterversion` above. If
-it is 4.22+, the module is required and an install without it will fail with an
-explanatory message.
+This used to be refused on OpenShift 4.22+ unless `allowDisabled: true` was
+also set. It no longer is; the key is still accepted but does nothing.
 
 ## Automated TLS 1.3 / PQC tests on CRC (`make e2e-crc`)
 
@@ -485,7 +486,7 @@ waits for the rollouts, and runs the `TestOpenShift*` tests in
 OpenShift `openshift.useServiceCa` is false, so the chart never sets
 `HTTP_SERVER_TLS_ENABLED`, the server listens on plain HTTP, and there is no
 handshake in the RHTPA pods for a cluster profile to apply to — and the chart
-refuses to enable the module there in the first place. The existing minikube
+refuses to enable the module there at all. The existing minikube
 coverage can therefore only assert *rendered YAML*
 (`test/e2e/tlsconfigurator_helm_rendering_test.go`), never a negotiated
 connection.
@@ -494,12 +495,12 @@ What the suite asserts:
 
 | Test | Checks |
 |---|---|
-| `TestOpenShiftVersionGateMatchesChart` | reports the cluster version and that the reconciler exists — on 4.22+ (so any 5.x) the chart makes it mandatory |
+| `TestOpenShiftClusterDefaultProfileMatchesTheVersion` | reports which default an unset profile means on this release (`Modern` from 5.1, `Intermediate` below) and that the reconciler this suite needs is installed |
 | `TestOpenShiftTLSReconcilerIsRunning` | one available replica, `strategy: Recreate` (the reconciler must stay a singleton) |
 | `TestOpenShiftOperandProfileIsPublished` | the operand ConfigMap carries `app.kubernetes.io/managed-by: tls-configurator`, `HTTP_SERVER_TLS_MIN_VERSION=1.3` and `X25519MLKEM768` in `HTTP_SERVER_TLS_GROUPS`, and no published list is empty |
 | `TestOpenShiftServerConsumesOperandProfile` | the server reads it through an **optional** `envFrom`, and carries `rhtpa.io/tls-config-hash` |
 | `TestOpenShiftServerNegotiatesTLS13WithPQC` | a real handshake with trustd negotiates TLS 1.3 **and** the hybrid post-quantum group |
-| `TestOpenShiftServerRejectsTLS12` | a TLS 1.2-only client is refused, so the test above cannot pass on a server that ignored the profile |
+| `TestOpenShiftServerHonorsThePublishedFloor` | a TLS 1.2-only client is refused when the cluster profile's floor is TLS 1.3, and accepted when it is not — the listener tracks the profile in both directions |
 | `TestOpenShiftProfileChangeRollsServer` | changing the cluster profile moves the hash and rolls the workload (opt-in, see below) |
 
 The handshake goes over a **port-forward to the server pod**, not through the

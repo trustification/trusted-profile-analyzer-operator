@@ -5,13 +5,19 @@ The reconciler is OpenShift-specific: it reads the cluster-wide TLS profile from
 the config.openshift.io APIServer CR ("cluster") and rolls the target workloads
 when that profile changes. The API does not exist on plain Kubernetes.
 
-  OpenShift >= 4.22   the module is required; refuse to render with it disabled
-  OpenShift <  4.22   optional -- the reconcile action has no version gate, so
-                      it works there, it is just not mandatory
-  plain Kubernetes    must stay disabled; refuse to render with it enabled
+  OpenShift         optional at every version -- the reconcile action has no
+                    version gate, so it works wherever the config.openshift.io
+                    API exists
+  plain Kubernetes  must stay disabled; refuse to render with it enabled
 
-Both guards can be overridden -- see the messages below -- so an operator can
-still make a deliberate choice.
+There is deliberately no version gate here any more. It used to refuse to
+render on OpenShift >= 4.22 with the module disabled, on the grounds that
+nothing else would roll the workloads onto a TLS 1.3 profile. From OpenShift
+5.1 the platform default profile is Modern -- TLS 1.3 only -- so a cluster that
+sets no profile is already where that guard was pushing it, and an install that
+leaves the module off is a supportable choice rather than a misconfiguration.
+Do not reintroduce it: an install-time `fail` is a blunt instrument for a
+runtime concern, and the reconciler logs the consequence at runtime instead.
 */}}
 {{- $tls := .Values.modules.tlsConfigurator }}
 {{- $isOpenShift := eq (include "trustification.openshift.detect" .) "true" }}
@@ -31,35 +37,6 @@ If this really is OpenShift and detection is wrong, force it with:
     openshift.enabled: true`) }}
 {{- end }}
 
-{{- if and $isOpenShift (not $tls.enabled) (not $tls.allowDisabled) }}
-{{/*
-lookup returns nothing during `helm template` and dry runs, so the version check
-is skipped there rather than failing on an unknown version.
-*/}}
-{{- $clusterVersion := lookup "config.openshift.io/v1" "ClusterVersion" "" "version" }}
-{{- if $clusterVersion }}
-{{- $version := dig "status" "desired" "version" "" $clusterVersion }}
-{{- $parts := splitList "." $version }}
-{{- if ge (len $parts) 2 }}
-{{- $major := atoi (index $parts 0) }}
-{{- $minor := atoi (index $parts 1) }}
-{{- if or (gt $major 4) (and (eq $major 4) (ge $minor 22)) }}
-{{- fail (printf `modules.tlsConfigurator.enabled is false, but this is OpenShift %s where the TLS configurator is required.
-
-From OpenShift 4.22 the cluster-wide TLS security profile can change at runtime,
-and RHTPA workloads only pick up the new settings when something rolls them. The
-configurator is what does that.
-
-Enable it:
-    modules.tlsConfigurator.enabled: true
-
-To install without it anyway, acknowledge the choice explicitly:
-    modules.tlsConfigurator.allowDisabled: true` $version) }}
-{{- end }}
-{{- end }}
-{{- end }}
-{{- end }}
-
 {{/*
 Adherence guard.
 
@@ -76,8 +53,9 @@ and wherever the server speaks plain HTTP behind a TLS-terminating router,
 there is no tls.Config in the RHTPA pods for a cluster profile to apply to, and
 the compliance reference puts that out of scope.
 
-Like the version check above, lookup returns nothing under `helm template` and
-dry runs, so this is skipped there rather than failing on an unreadable policy.
+lookup returns nothing under `helm template` and dry runs, so this is skipped
+there rather than failing on an unreadable policy. Do not make it fail closed:
+that would break every dry run and the operator's own rendering paths.
 */}}
 {{- if and $isOpenShift (eq (include "trustification.openshift.useServiceCa" .) "true") }}
 {{- if ne (include "trustification.tlsConfigurator.operandTls" .) "true" }}

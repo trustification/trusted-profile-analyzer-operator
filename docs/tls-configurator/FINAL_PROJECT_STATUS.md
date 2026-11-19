@@ -85,7 +85,7 @@ test/tlsconfigurator/suite_test.go         Ginkgo/Gomega integration suite
 | `--type` | TLS profile type | `Custom` |
 | `--min-tls-version` | Minimum TLS version | `VersionTLS13` |
 | `--ciphers` | Comma-separated ciphers | — |
-| `--enable-pqc` | Enforce TLS 1.3 + `X25519MLKEM768` | `false` |
+| `--enable-pqc` | Always offer `X25519MLKEM768`; does not raise the minimum TLS version | `false` |
 | `--target-namespace` | Namespace of workloads to roll (reconcile mode) | — |
 | `--target-deployments` | Comma-separated Deployment names to roll (reconcile mode) | — |
 | `--resync-period` | Periodic drift-correction interval (reconcile mode) | `5m` |
@@ -166,8 +166,7 @@ have.
 
 | Platform | `modules.tlsConfigurator.enabled` | Rationale |
 | --- | --- | --- |
-| OpenShift >= 4.22 | **required `true`** | The cluster-wide TLS profile can change at runtime and nothing else rolls the RHTPA workloads to pick it up. |
-| OpenShift < 4.22 | optional | The `reconcile` action does not check the cluster version, so it works; it is just not mandatory. (The `update`/`validate` actions do gate on 4.22 via `ValidateMinimumVersion`, but the Deployment does not run those.) |
+| OpenShift (any version) | optional | The `reconcile` action does not check the cluster version, so it works everywhere, and the chart no longer makes it mandatory from 4.22. (The `update`/`validate` actions still gate on 4.22 via `ValidateMinimumVersion`, but the Deployment does not run those.) |
 | plain Kubernetes | **required `false`** (default) | `config.openshift.io/v1` is absent; the reconciler would fail every attempt and retry forever. |
 
 ### Enabling it (OpenShift)
@@ -206,7 +205,6 @@ too — and fails the install when platform and setting do not match:
 | Condition | Result | Override |
 | --- | --- | --- |
 | `enabled: true`, no OpenShift API detected | `fail` with an explanation | `openshift.enabled: true` if detection is wrong |
-| `enabled: false`, cluster is OpenShift >= 4.22 | `fail` with an explanation | `modules.tlsConfigurator.allowDisabled: true` |
 
 Implementation notes:
 

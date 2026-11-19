@@ -90,9 +90,14 @@ func TestOperandEnvBuiltInProfiles(t *testing.T) {
 	}
 }
 
-// TestOperandEnvPQCOverridesProfile checks that --enable-pqc forces TLS 1.3 and
-// the hybrid group even when the cluster profile asks for neither.
-func TestOperandEnvPQCOverridesProfile(t *testing.T) {
+// TestOperandEnvPQCOffersTheHybridGroupWithoutRaisingTheFloor checks what
+// --enable-pqc does and does not do to a profile that permits pre-1.3
+// handshakes: it substitutes the hybrid key-exchange group, and it leaves the
+// minimum protocol version and the TLS 1.2 cipher list exactly as the cluster
+// profile states them. Raising the floor here would lock out the clients the
+// profile exists to admit, which is the cluster administrator's call to make,
+// not this component's.
+func TestOperandEnvPQCOffersTheHybridGroupWithoutRaisingTheFloor(t *testing.T) {
 	spec := configv1.TLSProfileSpec{
 		Ciphers:       []string{tls13SuiteAES128, tls12CipherAES128},
 		Groups:        []configv1.TLSGroup{configv1.TLSGroupSecP256r1},
@@ -104,12 +109,36 @@ func TestOperandEnvPQCOverridesProfile(t *testing.T) {
 		t.Errorf("OperandEnv() dropped %v, want nothing dropped", dropped)
 	}
 
-	if got := env[EnvMinVersion]; got != minVersionTLS13 {
-		t.Errorf("%s = %q, want \"1.3\": hybrid key exchange is only defined for TLS 1.3",
-			EnvMinVersion, got)
+	if got := env[EnvMinVersion]; got != "1.0" {
+		t.Errorf("%s = %q, want %q: the profile's floor is published as-is under PQC",
+			EnvMinVersion, got, "1.0")
 	}
 	if got := env[EnvGroups]; got != "X25519MLKEM768:X25519" {
 		t.Errorf("%s = %q, want the profile's groups replaced by the PQC list", EnvGroups, got)
+	}
+	if got := env[EnvCiphers]; got != tls12CipherAES128 {
+		t.Errorf("%s = %q, want the profile's TLS 1.2 cipher %q: pre-1.3 handshakes are "+
+			"still reachable", EnvCiphers, got, tls12CipherAES128)
+	}
+}
+
+// A Modern profile already says TLS 1.3, so PQC changes only the groups --
+// and the TLS 1.2 ciphers stay suppressed because the profile's own floor
+// rules them out, not because PQC raised it.
+func TestOperandEnvPQCOnATLS13Profile(t *testing.T) {
+	spec := configv1.TLSProfileSpec{
+		Ciphers:       []string{tls13SuiteAES128, tls12CipherAES128},
+		Groups:        []configv1.TLSGroup{configv1.TLSGroupSecP256r1},
+		MinTLSVersion: configv1.VersionTLS13,
+	}
+
+	env, dropped := OperandEnv(spec, Options{EnablePQC: true})
+	if len(dropped) != 0 {
+		t.Errorf("OperandEnv() dropped %v, want nothing dropped", dropped)
+	}
+
+	if got := env[EnvMinVersion]; got != minVersionTLS13 {
+		t.Errorf("%s = %q, want %q", EnvMinVersion, got, minVersionTLS13)
 	}
 	if got, ok := env[EnvCiphers]; ok {
 		t.Errorf("%s = %q, want it omitted: a TLS 1.3-only server never negotiates these",
