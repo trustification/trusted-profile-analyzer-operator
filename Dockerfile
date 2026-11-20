@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM registry.access.redhat.com/hi/go:1.27.3 AS builder
+FROM registry.access.redhat.com/hi/go:1.27.4 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -25,9 +25,10 @@ COPY pkg/ pkg/
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager main.go
 
-# Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM registry.access.redhat.com/ubi10/ubi-minimal:1790075800
+FROM registry.access.redhat.com/ubi10-micro:1794483900
+COPY --from=registry.access.redhat.com/ubi10/ubi-minimal:latest \
+       /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem \
+       /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
 
 LABEL com.redhat.component="rhtpa-operator"
 LABEL description="Red Hat Trusted Profile Analyzer Operator"
