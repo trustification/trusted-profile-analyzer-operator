@@ -53,10 +53,10 @@ const (
 const operandProfile = "custom"
 
 // minVersionTLS13 is trustd's spelling of TLS 1.3. It is singled out because
-// four decisions turn on it: PQC raises the minimum to it, a profile with no
-// usable pre-1.3 cipher raises the minimum to it, a TLS 1.3-only listener
-// suppresses the TLS 1.2 cipher list, and -- being the ceiling of the version
-// map -- it is what an unrecognised version falls back to.
+// three decisions turn on it: a profile with no usable pre-1.3 cipher raises
+// the minimum to it, a TLS 1.3-only listener suppresses the TLS 1.2 cipher
+// list, and -- being the ceiling of the version map -- it is what an
+// unrecognised version falls back to.
 const minVersionTLS13 = "1.3"
 
 // minVersionTLS12 is trustd's spelling of TLS 1.2.
@@ -108,7 +108,7 @@ var minVersionNames = map[configv1.TLSProtocolVersion]string{
 // would widen what the listener accepts beyond the profile, the minimum
 // version is raised instead -- see the cipher handling below.
 func OperandEnv(spec configv1.TLSProfileSpec, opts Options) (env map[string]string, dropped []string) {
-	minVersion, versionDropped := operandMinVersion(spec.MinTLSVersion, opts.EnablePQC)
+	minVersion, versionDropped := operandMinVersion(spec.MinTLSVersion)
 	dropped = append(dropped, versionDropped...)
 
 	suites, ciphers := splitCiphers(spec.Ciphers)
@@ -162,8 +162,16 @@ func OperandEnv(spec configv1.TLSProfileSpec, opts Options) (env map[string]stri
 	return env, dropped
 }
 
-// operandMinVersion renders the profile's minimum protocol version, raising it
-// to TLS 1.3 under PQC because hybrid key exchange is only defined there.
+// operandMinVersion renders the profile's minimum protocol version.
+//
+// The profile's floor is published as-is, including under PQC. Hybrid key
+// exchange is only defined for TLS 1.3, but a cluster on Old, Intermediate or
+// a Custom profile with a lower minimum has decided that pre-1.3 clients must
+// still be able to connect; raising the operand's floor would break them to
+// enforce a policy the cluster did not set. The hybrid group is published
+// regardless and is negotiated whenever the handshake does reach TLS 1.3.
+// A cluster that wants the floor at TLS 1.3 says so with a Modern profile,
+// which is also the platform default from OpenShift 5.1 on.
 //
 // An unrecognised version is reported and treated as TLS 1.3, the highest this
 // build can name. minTLSVersion is a required field whose CRD pins it to an
@@ -175,7 +183,7 @@ func OperandEnv(spec configv1.TLSProfileSpec, opts Options) (env map[string]stri
 // function must not produce. Refusing to configure the operand at all is no
 // better, since that leaves it on its compiled-in default; TLS 1.3 is the
 // closest this build can come to enforcing what was asked.
-func operandMinVersion(version configv1.TLSProtocolVersion, enablePQC bool) (minVersion string, dropped []string) {
+func operandMinVersion(version configv1.TLSProtocolVersion) (minVersion string, dropped []string) {
 	name, known := minVersionNames[version]
 	if !known {
 		name = minVersionTLS13
@@ -183,9 +191,6 @@ func operandMinVersion(version configv1.TLSProtocolVersion, enablePQC bool) (min
 			"minTLSVersion %q is newer than this build recognises, so the minimum version is "+
 				"set to %s -- the highest it can name -- rather than a weaker floor than the "+
 				"cluster asks for", version, name))
-	}
-	if enablePQC && name != minVersionTLS13 {
-		return minVersionTLS13, dropped
 	}
 	return name, dropped
 }

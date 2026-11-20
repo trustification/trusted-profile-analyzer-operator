@@ -120,7 +120,7 @@ func TestReconcileLogsTheDefaultProfileWhenUnset(t *testing.T) {
 func TestReconcileLogsPQCWhenRequested(t *testing.T) {
 	buf := captureLog(t)
 	h := newHarness(t, harnessOpts{
-		profile:     &configv1.TLSSecurityProfile{Type: configv1.TLSProfileIntermediateType},
+		profile:     &configv1.TLSSecurityProfile{Type: configv1.TLSProfileModernType},
 		deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
 		enablePQC:   true,
 	})
@@ -133,6 +133,30 @@ func TestReconcileLogsPQCWhenRequested(t *testing.T) {
 		"pqcRequested=true",
 		"minVersion=TLS 1.3",
 		"Post-quantum key exchange is active",
+	)
+}
+
+// PQC requested on a profile that still permits TLS 1.2 is reported honestly:
+// the group is offered, but the protocol floor is the cluster's and the
+// deployment is not post-quantum-only. An operator reading this log needs to
+// see that asking for PQC did not silently raise the minimum version.
+func TestReconcileLogsPQCRequestedButNotActiveBelowTLS13(t *testing.T) {
+	buf := captureLog(t)
+	h := newHarness(t, harnessOpts{
+		profile:     &configv1.TLSSecurityProfile{Type: configv1.TLSProfileIntermediateType},
+		deployments: []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
+		enablePQC:   true,
+	})
+
+	if err := h.r.reconcileOnce(context.Background(), triggerStartup); err != nil {
+		t.Fatalf("reconcileOnce() error = %v", err)
+	}
+
+	assertLogged(t, buf.String(),
+		"pqcRequested=true",
+		"minVersion=TLS 1.2",
+		"Key-exchange groups: "+string(configv1.TLSGroupX25519MLKEM768),
+		"Post-quantum key exchange is NOT active",
 	)
 }
 

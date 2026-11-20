@@ -64,6 +64,17 @@ func deploymentWithHash(name, hash string) *appsv1.Deployment {
 	return dep
 }
 
+// clusterVersionCR builds the ClusterVersion the version checker reads. It is
+// always named "version", and the checker takes the first history entry.
+func clusterVersionCR(version string) *configv1.ClusterVersion {
+	return &configv1.ClusterVersion{
+		ObjectMeta: metav1.ObjectMeta{Name: "version"},
+		Status: configv1.ClusterVersionStatus{
+			History: []configv1.UpdateHistory{{Version: version}},
+		},
+	}
+}
+
 type harnessOpts struct {
 	profile     *configv1.TLSSecurityProfile
 	noAPIServer bool
@@ -78,6 +89,11 @@ type harnessOpts struct {
 	// the workloads. Empty -- the default -- is the shipped default: roll the
 	// workloads, but leave their own TLS settings alone.
 	operandConfigMap string
+	// clusterVersion, when set, seeds a ClusterVersion CR and gives the
+	// reconciler a version checker, so an unset profile resolves to the
+	// default that OpenShift release actually applies. Empty leaves the
+	// reconciler without one, which falls back to Intermediate.
+	clusterVersion string
 }
 
 type harness struct {
@@ -93,6 +109,9 @@ func newHarness(t *testing.T, o harnessOpts) *harness {
 	var configObjs []runtime.Object
 	if !o.noAPIServer {
 		configObjs = append(configObjs, apiServerCR(o.profile))
+	}
+	if o.clusterVersion != "" {
+		configObjs = append(configObjs, clusterVersionCR(o.clusterVersion))
 	}
 	configClient := configfake.NewClientset(configObjs...)
 
@@ -115,6 +134,11 @@ func newHarness(t *testing.T, o harnessOpts) *harness {
 		resync = time.Hour
 	}
 
+	var versionChecker *client.VersionChecker
+	if o.clusterVersion != "" {
+		versionChecker = client.NewVersionCheckerWithClientset(configClient)
+	}
+
 	h := &harness{
 		configClient: configClient,
 		kube:         kube,
@@ -122,6 +146,7 @@ func newHarness(t *testing.T, o harnessOpts) *harness {
 		r: &Reconciler{
 			apiServerClient: client.NewAPIServerClientWithClientset(configClient),
 			workloadsClient: client.NewWorkloadsClientWithClientset(kube),
+			versionChecker:  versionChecker,
 			cfg: &config.Config{
 				TargetNamespace:   testNamespace,
 				TargetDeployments: targets,

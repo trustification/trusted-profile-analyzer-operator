@@ -1,13 +1,16 @@
 # Configuring the operator per platform
 
 How to configure the TLS configurator when the operator is deployed on
-**OpenShift 4.22 and above** and on **plain Kubernetes**.
+**OpenShift** and on **plain Kubernetes**.
 
-"4.22 and above" means exactly that, including any future major: the version
-gate is `major > 4 or (major == 4 and minor >= 22)`, so an OpenShift 5.x
-cluster takes the same path as 4.22 and everything in that section applies
-unchanged. Nothing in the chart or the configurator special-cases a major
-beyond 4.
+The module is optional at every OpenShift version — there is no longer a
+version gate that makes it mandatory. One version boundary does still matter,
+but it is about what the cluster itself does rather than about this module:
+from **OpenShift 5.1** the cluster-wide default TLS security profile is
+`Modern` (`minTLSVersion: VersionTLS13`), where up to 5.0 it was
+`Intermediate`. A cluster that sets no `.spec.tlsSecurityProfile` is therefore
+on TLS 1.3 from 5.1 on, and the configurator resolves an unset profile against
+the cluster version so it reports and publishes the right one.
 
 Everything here is set on the `TrustedProfileAnalyzer` CR. The operator passes
 `.spec` straight through to the Helm chart as values, so a chart value
@@ -24,8 +27,7 @@ For the *why* behind the module — the upstream packages it delegates to, how
 
 | Platform | `modules.tlsConfigurator.enabled` | Enforced how |
 | --- | --- | --- |
-| OpenShift >= 4.22 (incl. 5.x) | **`true` — required** | Install fails unless you also set `allowDisabled: true` |
-| OpenShift < 4.22 | optional (works, not mandatory) | Nothing |
+| OpenShift (any version) | optional, recommended | Nothing |
 | Plain Kubernetes | **`false` — required** (the chart default) | Install fails if enabled |
 
 A second rule applies to `operandTls`, independently of the platform row:
@@ -43,6 +45,12 @@ The guard lives in
 `helm-charts/redhat-trusted-profile-analyzer/templates/init/tls-configure/000-validate.yaml`.
 It renders no resources and is deliberately *not* gated on `.enabled`, because
 it has to catch the disabled case too.
+
+> **Changed:** installing on OpenShift >= 4.22 with the module disabled used to
+> fail unless `modules.tlsConfigurator.allowDisabled: true` acknowledged it.
+> That requirement is gone, and the key has been removed. A CR or Subscription
+> that still sets it is accepted and ignored, so nothing needs changing on
+> upgrade. (`operandTls.allowDisabled` is a different key and still applies.)
 
 ## Why the platform matters
 
@@ -76,7 +84,7 @@ profile API to read one from.
 
 ---
 
-## OpenShift 4.22 and above
+## OpenShift
 
 ### Minimum configuration
 
@@ -101,7 +109,6 @@ That is enough. The defaults cover the rest:
 | `resyncPeriod` | `5m` | Periodic drift correction, in case a watch event is missed. |
 | `pqc.enabled` | `false` | See [Post-quantum](#post-quantum-key-exchange) below. |
 | `operandTls.enabled` | `false` | Whether the workloads' own TLS listener honors the cluster profile, or only gets restarted when it changes. See [Honoring the profile inside the workloads](#honoring-the-profile-inside-the-workloads) below. |
-| `allowDisabled` | `false` | Escape hatch for installing *without* the module. |
 | `operandTls.allowDisabled` | `false` | Escape hatch for installing without operand publishing on a `StrictAllComponents` cluster. |
 | `image.fullName` | *(empty)* | Filled in by the operator with its own running image via `RELATED_IMAGE_TLS_CONFIGURATOR`; do not set it. Only a standalone `helm install` has to supply one — rendering fails with a message if the module is enabled and it is empty. |
 
@@ -116,7 +123,7 @@ spec:
   modules:
     tlsConfigurator:
       # 1. Run the reconciler: watch the cluster TLS profile and roll the
-      #    workloads when it changes. Required on 4.22+ regardless.
+      #    workloads when it changes.
       enabled: true
 
       # 2. Make the workloads' own HTTPS listener honor the cluster profile,
@@ -125,8 +132,9 @@ spec:
       operandTls:
         enabled: true
 
-      # 3. Force TLS 1.3 and the hybrid post-quantum X25519MLKEM768 group,
-      #    regardless of what the cluster profile asks for.
+      # 3. Always offer the hybrid post-quantum X25519MLKEM768 group, even
+      #    on a cluster profile that omits it. This does not raise the
+      #    minimum TLS version -- see the table below.
       pqc:
         enabled: true
 
@@ -144,22 +152,22 @@ Why each one, and what it costs:
 
 | Switch | What you gain | What it costs |
 | --- | --- | --- |
-| `enabled` | A runtime profile change rolls the workloads instead of being ignored until the next unrelated restart. | One extra Deployment plus its RBAC. Mandatory on 4.22+ anyway. |
+| `enabled` | A runtime profile change rolls the workloads instead of being ignored until the next unrelated restart. | One extra Deployment plus its RBAC. |
 | `operandTls.enabled` | The server's own listener actually follows the cluster profile, which is what makes RHTPA adherent. Required on a `StrictAllComponents` cluster. | On its own it can *loosen* the listener — see below. The reconciler owns a ConfigMap in the release namespace. |
-| `pqc.enabled` | Enforces hybrid post-quantum key exchange rather than leaving it to OpenSSL's defaults, and pins the floor at TLS 1.3. | Clients that can only do TLS 1.2 are rejected, even if the cluster profile would permit them. |
+| `pqc.enabled` | Guarantees the hybrid post-quantum group is offered rather than leaving it to OpenSSL's defaults, even on a profile that omits it. | The profile's other key-exchange groups are replaced by `X25519MLKEM768:X25519`. It does **not** raise the minimum TLS version. |
 
-**The combination matters.** `operandTls` alone hands the server whatever the
-cluster profile says, so a cluster on `Old` or `Intermediate` drops the
-listener from TLS 1.3-only to TLS 1.0/1.2. Adding `pqc.enabled` prevents that:
-it raises the published `HTTP_SERVER_TLS_MIN_VERSION` to `1.3` and pins
-`HTTP_SERVER_TLS_GROUPS` to `X25519MLKEM768:X25519` whatever the profile asked
-for. So the pair is adherent *and* never weaker than the shipped default.
+**`operandTls` tracks the cluster profile, including downwards.** A cluster
+on `Old` or `Intermediate` drops the listener from TLS 1.3-only to TLS 1.0/1.2.
+That is what honoring a cluster profile means, and `pqc.enabled` does **not**
+override it: it pins `HTTP_SERVER_TLS_GROUPS` to `X25519MLKEM768:X25519` but
+publishes `HTTP_SERVER_TLS_MIN_VERSION` exactly as the profile states it.
 
-The trade is that this is **stricter than the cluster profile, not equal to
-it**. A cluster deliberately on `Intermediate` to keep TLS 1.2 clients working
-will find those clients rejected by the RHTPA listener specifically. If you
-need to actually track the cluster profile downwards, enable `operandTls` and
-leave `pqc` off.
+The protocol floor is the cluster administrator's decision. A cluster
+deliberately on `Intermediate` to keep TLS 1.2 clients working keeps them
+working; raising the floor underneath it would lock out the clients that
+profile exists to admit. If you want the listener at TLS 1.3, set the cluster
+profile to `Modern` — which is also the platform default from OpenShift 5.1,
+so on 5.1+ a cluster that configures nothing is already there.
 
 ### What gets deployed
 
@@ -354,10 +362,10 @@ spec:
 
 **Two things to know about the timing.**
 
-First, `enabled: true` alone does not clear this check. An install that was set
-up to satisfy the 4.22 requirement, and left everything else at defaults, is
-still caught — `operandTls.enabled` defaults to `false` independently. That is
-the most common configuration, so expect it to be the one that trips.
+First, `enabled: true` alone does not clear this check. An install that turned
+the module on and left everything else at defaults is still caught —
+`operandTls.enabled` defaults to `false` independently. That is the most common
+configuration, so expect it to be the one that trips.
 
 Second, the check runs on **every reconcile, not just at install**. It uses
 Helm's `lookup`, which returns nothing under `helm template` and `--dry-run`
@@ -382,11 +390,40 @@ Two independent sources, and you usually want to understand both:
    exists in the OpenShift API, and the built-in `Old`, `Intermediate` and
    `Modern` profiles all list `X25519MLKEM768` first. The configurator honors
    those whether or not you enable `pqc`.
-2. **`pqc.enabled: true` is a floor.** It additionally forces `MinVersion` to
-   TLS 1.3 and pins `CurvePreferences` to `[X25519MLKEM768, X25519]`, and the
-   choice is part of the rollout hash so toggling it rolls the workloads.
-   Hybrid key exchange is only defined for TLS 1.3, which is why the version
-   floor comes with it.
+2. **`pqc.enabled: true` guarantees the group.** It pins `CurvePreferences`
+   to `[X25519MLKEM768, X25519]` even on a profile that omits the hybrid
+   group, and the choice is part of the rollout hash so toggling it rolls the
+   workloads. It does **not** raise `MinVersion`: hybrid key exchange is only
+   defined for TLS 1.3, but the protocol floor belongs to the cluster profile,
+   so on a profile that also permits older versions the group applies to the
+   TLS 1.3 handshakes and the rest stay reachable.
+
+### Platform requirement: OpenShift 4.22 and above
+
+TLS 1.3 with post-quantum key exchange is supported on **OpenShift 4.22 and
+above**.
+
+The dependency is `TLSProfileSpec.groups` — the field that lets a TLS security
+profile name key-exchange groups, and so the only way the hybrid group
+`X25519MLKEM768` can be expressed in the cluster-wide profile. It was added to
+the `config.openshift.io` API in 4.22, behind the `TLSGroupPreferences`
+feature gate:
+
+| Cluster | `.spec.tlsSecurityProfile.groups` |
+| --- | --- |
+| OpenShift >= 4.22, `TLSGroupPreferences` on | Available |
+| OpenShift >= 4.22, `TLSGroupPreferences` off | Rejected by the API server — enable the gate |
+| OpenShift < 4.22 | Not in the API |
+
+Check both before relying on a cluster-wide group preference:
+
+```console
+oc get clusterversion version -o jsonpath='{.status.desired.version}{"\n"}'
+oc get featuregate cluster -o jsonpath='{.status.featureGates[0].enabled[*].name}{"\n"}' | tr ' ' '\n' | grep TLSGroupPreferences
+```
+
+Nothing refuses to install or run below 4.22 — the module is not version-gated
+— so this is a supported-configuration statement, not an enforced one.
 
 A cluster on the `Modern` profile is already post-quantum without
 `pqc.enabled`. Use `--action=validate` to see which of the two you are relying
@@ -435,7 +472,7 @@ optional `envFrom`:
 | Variable | From |
 | --- | --- |
 | `HTTP_SERVER_TLS_SECURITY_PROFILE` | always `custom` — trustd's built-in `old`/`intermediate`/`modern` are Mozilla profiles that ignore the settings below |
-| `HTTP_SERVER_TLS_MIN_VERSION` | `minTLSVersion`, raised to `1.3` under `pqc.enabled` |
+| `HTTP_SERVER_TLS_MIN_VERSION` | `minTLSVersion`, exactly as the profile states it — `pqc.enabled` does not raise it |
 | `HTTP_SERVER_TLS_CIPHERS` | the profile's TLS 1.2 ciphers; omitted when the minimum is 1.3, where they can never be negotiated |
 | `HTTP_SERVER_TLS_CIPHERSUITES` | the profile's TLS 1.3 suites (the `TLS_*` entries) |
 | `HTTP_SERVER_TLS_GROUPS` | `groups`, or `X25519MLKEM768:X25519` under `pqc.enabled` |
@@ -451,9 +488,11 @@ Five things are worth knowing before you turn it on.
   the server's own listener does not adhere, whatever the policy says — and on
   such a cluster the chart refuses to render at all. See [Strict adherence and
   `operandTls`](#strict-adherence-and-operandtls).
-- **Pair it with `pqc.enabled` if you do not want the loosening.** PQC raises
-  the published minimum back to TLS 1.3 and pins the groups, so the listener
-  follows the cluster profile without ever dropping below the shipped default.
+- **`pqc.enabled` does not prevent the loosening.** It pins the key-exchange
+  groups, but the published minimum version stays the profile's. If you do not
+  want the listener below TLS 1.3, set the cluster profile to `Modern` — the
+  platform default from OpenShift 5.1 — rather than expecting this module to
+  override the cluster.
 - **The ConfigMap belongs to the reconciler.** It is created and rewritten at
   runtime, not templated by the chart, because the operator re-renders the
   chart periodically and would overwrite it. Hand edits are reverted on the
@@ -469,27 +508,30 @@ Verify what the workloads actually got:
 oc -n trustify get configmap tls-configurator-profile -o jsonpath='{.data}' | jq
 ```
 
-### Installing without the module on 4.22+
+### Installing without the module
 
-Supported, but you have to say so:
+Supported, and nothing needs acknowledging — `enabled: false` is the chart
+default:
 
 ```yaml
 spec:
   modules:
     tlsConfigurator:
       enabled: false
-      allowDisabled: true
 ```
 
 You are accepting that a runtime change to the cluster-wide TLS profile will
 not roll the RHTPA workloads — they keep serving with the settings they started
 with until something else restarts them.
 
+This used to fail on OpenShift >= 4.22 unless `allowDisabled: true` was also
+set. It no longer does, and that key has been removed; a values file still
+setting it is accepted and ignored.
+
 ### Troubleshooting
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Install fails: *"enabled is false, but this is OpenShift 4.x where the TLS configurator is required"* | 4.22+ with the module off | Set `enabled: true`, or `allowDisabled: true` to accept the consequence |
 | Install fails: *"enabled is true, but this cluster does not expose the OpenShift API"* | `route.openshift.io/v1` not detected | If it really is OpenShift, force detection with `.spec.openshift.enabled: true` |
 | Install fails: *"this cluster sets `tlsAdherence: StrictAllComponents`, but the RHTPA server would not honor the cluster TLS profile"* | Strict cluster with `operandTls.enabled` off — including when `enabled` is already `true` | Set `operandTls.enabled: true`, or `operandTls.allowDisabled: true` to accept non-adherence. See [Strict adherence](#strict-adherence-and-operandtls) |
 | Reconciles start failing on **existing** installs, all at once | Someone just set the cluster to `StrictAllComponents`; the guard runs on every re-render, not only at install | Same fix, applied to each CR. Pods keep serving meanwhile — only drift correction stops |
@@ -622,15 +664,39 @@ still no cluster-wide profile for it to read.
 
 ---
 
-## OpenShift below 4.22
+## The OpenShift 5.1 default profile
 
-Optional. The reconciler has no version gate, so `enabled: true` works and
-behaves exactly as on 4.22+; it is simply not mandatory, because the
-cluster-wide TLS profile is not expected to change under you. The chart does
-not force either choice.
+The reconciler has no version gate and behaves identically on every OpenShift
+release. What does change at 5.1 is the cluster itself: an
+`APIServer.spec.tlsSecurityProfile` that is left unset means `Intermediate`
+(TLS 1.2) up to 5.0 and `Modern` (TLS 1.3 only) from 5.1.
 
-Turning it on early is harmless and means one less thing to remember at
-upgrade time.
+That matters because the upstream resolver the configurator builds on
+hard-codes the `Intermediate` fallback. The configurator therefore reads the
+`ClusterVersion` CR and resolves an unset profile against it, so on a 5.1
+cluster it reports and publishes `Modern`. Without that, enabling `operandTls`
+on a 5.1 cluster with no explicit profile would publish an Intermediate
+profile to the server and take its listener *down* to TLS 1.2 — the opposite
+of honoring the cluster.
+
+Everything else follows from the profile, not the version:
+
+| Cluster profile | Published `HTTP_SERVER_TLS_MIN_VERSION` |
+| --- | --- |
+| unset, OpenShift >= 5.1 | `1.3` (the platform default, `Modern`) |
+| unset, OpenShift <= 5.0 | `1.2` (the platform default, `Intermediate`) |
+| `Modern` | `1.3` |
+| `Intermediate` | `1.2` |
+| `Old` | `1.0` |
+| `Custom` | whatever its `minTLSVersion` says |
+
+An explicitly configured profile is honored as written in every row — nothing
+promotes `Old`, `Intermediate` or `Custom` to TLS 1.3, including
+`pqc.enabled`.
+
+If the cluster version cannot be read (RBAC, an API error), the configurator
+logs it and falls back to `Intermediate`, which is the behaviour it had
+before. It does not abort the pass.
 
 ## A note on detection
 
@@ -643,8 +709,12 @@ spec:
     enabled: true   # or false
 ```
 
-The 4.22 version check reads the `ClusterVersion` CR with Helm's `lookup`,
+The chart's adherence check reads the `APIServer` CR with Helm's `lookup`,
 which returns nothing during `helm template` and `--dry-run`. In those modes
-the version is unknown and the check is **skipped** rather than failed — do not
-"fix" that by failing closed, it would break every dry run and the operator's
-own rendering paths.
+the cluster state is unknown and the check is **skipped** rather than failed —
+do not "fix" that by failing closed, it would break every dry run and the
+operator's own rendering paths.
+
+The cluster *version* is no longer read at render time at all; the chart has
+no version gate, and the 5.1 default above is resolved by the reconciler at
+runtime, where it can read `ClusterVersion` properly.

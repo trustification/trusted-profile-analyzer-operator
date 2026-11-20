@@ -60,18 +60,16 @@ var (
 	minTLSVersion = flags.String("min-tls-version", "VersionTLS13",
 		"Minimum TLS version: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13")
 	ciphers = flags.String("ciphers", "", "Comma-separated list of ciphers")
-	// TODO: these two flags are accepted for CLI compatibility but are currently
-	// inert -- nothing reads them. The OpenShift 4.22 gate they relate to
-	// (controller.ValidateOpenShiftVersion) also has no callers, so there is
-	// presently nothing for --skip-version-check to skip. Kept as-is by the
-	// operator merge to avoid changing runtime behaviour; wire up or remove
-	// separately.
-	//nolint:unused // accepted for CLI compatibility; see TODO above
-	useCluster = flags.Bool("use-cluster-profile", false, "Use cluster-wide APIServer TLS profile (recommended)")
-	//nolint:unused // accepted for CLI compatibility; see TODO above
-	skipVersionCheck = flags.Bool("skip-version-check", false, "Skip OpenShift version check (not recommended)")
-	enablePQC        = flags.Bool("enable-pqc", false,
-		"Enforce post-quantum, TLS 1.3-only key exchange (X25519MLKEM768)")
+	// Note: --use-cluster-profile and --skip-version-check used to be declared
+	// here for CLI compatibility and were never read. They are gone. The read
+	// actions always use the cluster profile, so the first had nothing to
+	// select; the second implied an escape hatch that was never wired, while
+	// --action=update really is gated on OpenShift 4.22 through
+	// controller.UpdateTLSProfile -> VersionChecker.ValidateMinimumVersion.
+	// Reintroduce --skip-version-check only together with that wiring.
+	enablePQC = flags.Bool("enable-pqc", false,
+		"Always offer the hybrid post-quantum X25519MLKEM768 key exchange "+
+			"(does not raise the minimum TLS version)")
 	targetNamespace = flags.String("target-namespace", "",
 		"Namespace of the workloads to roll out on TLS change (reconcile mode)")
 	targetDeployments = flags.String("target-deployments", "",
@@ -175,6 +173,45 @@ func newAPIServerClient(cfg *config.Config) (*client.APIServerClient, error) {
 	return apiServerClient, nil
 }
 
+// clusterTLSSettings reads the cluster-wide TLS settings for the read-only
+// actions, resolving an unset .spec.tlsSecurityProfile to the profile this
+// cluster's OpenShift version actually applies -- Modern from 5.1 on,
+// Intermediate below.
+//
+// A cluster version that cannot be read is reported and falls back to
+// Intermediate. These actions are diagnostics: printing the profile with a
+// caveat is more useful than refusing to print anything.
+func clusterTLSSettings(ctx context.Context, cfg *config.Config) (client.ClusterTLSSettings, error) {
+	k8sConfig, err := config.GetKubeConfig(cfg.Kubeconfig)
+	if err != nil {
+		return client.ClusterTLSSettings{}, fmt.Errorf("failed to get kubernetes config: %w", err)
+	}
+
+	apiServerClient, err := client.NewAPIServerClient(k8sConfig)
+	if err != nil {
+		return client.ClusterTLSSettings{}, fmt.Errorf("failed to create APIServer client: %w", err)
+	}
+
+	var defaultProfileType configv1.TLSProfileType
+	versionChecker, err := client.NewVersionChecker(k8sConfig)
+	if err == nil {
+		defaultProfileType, _, err = versionChecker.DefaultTLSProfileType(ctx)
+	}
+	if err != nil {
+		defaultProfileType = ""
+		fmt.Fprintf(os.Stderr,
+			"⚠️  Could not read the cluster version, so an unset TLS profile is shown as %s "+
+				"rather than this cluster's own default: %v\n",
+			configv1.TLSProfileIntermediateType, err)
+	}
+
+	settings, err := apiServerClient.GetClusterTLSSettingsWithDefault(ctx, defaultProfileType)
+	if err != nil {
+		return client.ClusterTLSSettings{}, fmt.Errorf("failed to get cluster TLS settings: %w", err)
+	}
+	return settings, nil
+}
+
 // printAdherence renders the cluster tlsAdherence policy and what it implies.
 func printAdherence(adherence configv1.TLSAdherencePolicy) {
 	value := string(adherence)
@@ -236,14 +273,9 @@ func reconcileAction(ctx context.Context, cfg *config.Config) error {
 // operator would apply it is post-quantum and TLS 1.3-only compliant. It exits
 // non-zero when it is not.
 func validateAction(ctx context.Context, cfg *config.Config) error {
-	apiServerClient, err := newAPIServerClient(cfg)
+	settings, err := clusterTLSSettings(ctx, cfg)
 	if err != nil {
 		return err
-	}
-
-	settings, err := apiServerClient.GetClusterTLSSettings(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get cluster TLS settings: %w", err)
 	}
 
 	// Report the profile as it stands, then as it would be enforced with PQC.
@@ -260,14 +292,17 @@ func validateAction(ctx context.Context, cfg *config.Config) error {
 	fmt.Println("=======================================")
 	printAdherence(settings.Adherence)
 	fmt.Println()
+	fmt.Printf("Configured type:  %s\n", profileTypeName(settings))
 	fmt.Printf("Cluster profile:  MinVersion %s, key-exchange %s\n",
 		crypto.TLSVersionName(asIs.MinVersion), curveList(asIs.CurvePreferences))
 	fmt.Printf("With --enable-pqc: MinVersion %s, key-exchange %s\n",
 		crypto.TLSVersionName(hardened.MinVersion), curveList(hardened.CurvePreferences))
 	printUnsupported(unsupported)
 
-	// Compliance is judged on the cluster profile itself: --enable-pqc can
-	// always force compliance locally, so reporting that would say nothing.
+	// Compliance is judged on the cluster profile, which is also the only
+	// thing that can decide it: --enable-pqc adds the hybrid group but no
+	// longer raises the minimum version, because the protocol floor is the
+	// cluster administrator's call.
 	compliant, reasons := crypto.IsPQCCompliant(asIs)
 	if compliant {
 		fmt.Println("\n✅ Status: COMPLIANT (post-quantum, TLS 1.3)")
@@ -279,8 +314,10 @@ func validateAction(ctx context.Context, cfg *config.Config) error {
 		fmt.Printf("   - %s\n", r)
 	}
 	fmt.Println("\n   The cluster-wide profile does not mandate post-quantum TLS 1.3." +
-		"\n   Set modules.tlsConfigurator.pqc.enabled=true to enforce it for this" +
-		"\n   operator's workloads regardless, or raise the cluster profile.")
+		"\n   Set APIServer .spec.tlsSecurityProfile to Modern, which is TLS 1.3-only" +
+		"\n   and the platform default from OpenShift 5.1 on. Note that" +
+		"\n   modules.tlsConfigurator.pqc.enabled offers the hybrid key-exchange group" +
+		"\n   but deliberately leaves the minimum protocol version to the cluster.")
 	return fmt.Errorf("configuration is not PQC/TLS 1.3 compliant")
 }
 
@@ -335,12 +372,15 @@ func updateAction(ctx context.Context, ctrl *controller.TLSController) error {
 		tlsConfig.MinTLSVersion = configv1.TLSProtocolVersion(*minTLSVersion)
 	}
 
-	// Post-quantum key exchange is only defined for TLS 1.3, so enforce it.
+	// Post-quantum key exchange is only defined for TLS 1.3, but the minimum
+	// protocol version is not overridden here: --min-tls-version (default
+	// VersionTLS13) is what sets it on a Custom profile, so an operator who
+	// deliberately asked for a lower floor keeps it and the hybrid group
+	// simply applies to the TLS 1.3 handshakes. For a built-in profile type
+	// the floor is the profile's own and is never rewritten.
 	if *enablePQC {
 		tlsConfig.EnablePQC = true
 		if profileType == configv1.TLSProfileCustomType {
-			tlsConfig.MinTLSVersion = configv1.VersionTLS13
-
 			// TLSProfileSpec.Groups is how the PQC key-exchange group reaches
 			// the router, but it is gated on TLSGroupPreferences. Writing it
 			// on a cluster without the gate is rejected, so only set it when
@@ -358,7 +398,8 @@ func updateAction(ctx context.Context, ctrl *controller.TLSController) error {
 					"Go services still negotiate it via the runtime default (Go >= 1.24).")
 			}
 		}
-		log.Printf("PQC enabled: enforcing TLS 1.3 and X25519MLKEM768 key exchange")
+		log.Printf("PQC enabled: offering X25519MLKEM768 key exchange (minimum TLS version "+
+			"left at %s, as the profile asks)", tlsConfig.MinTLSVersion)
 	}
 
 	// Apply the configuration
@@ -425,14 +466,9 @@ func parseCiphers(cipherStr string) []string {
 
 // getClusterAction retrieves the cluster-wide TLS profile from APIServer (recommended approach)
 func getClusterAction(ctx context.Context, cfg *config.Config) error {
-	apiServerClient, err := newAPIServerClient(cfg)
+	settings, err := clusterTLSSettings(ctx, cfg)
 	if err != nil {
 		return err
-	}
-
-	settings, err := apiServerClient.GetClusterTLSSettings(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get cluster TLS settings: %w", err)
 	}
 
 	// Print the resolved spec: built-in profile types expand to the ciphers,
@@ -444,7 +480,7 @@ func getClusterAction(ctx context.Context, cfg *config.Config) error {
 
 	fmt.Println("Cluster-wide TLS Security Profile (from APIServer):")
 	fmt.Println("===================================================")
-	fmt.Printf("Configured type:  %s\n", profileTypeName(settings.Profile))
+	fmt.Printf("Configured type:  %s\n", profileTypeName(settings))
 	printAdherence(settings.Adherence)
 	fmt.Println()
 	fmt.Println("Resolved TLSProfileSpec:")
@@ -457,29 +493,30 @@ func getClusterAction(ctx context.Context, cfg *config.Config) error {
 }
 
 // profileTypeName names the configured profile type, or reports that none is
-// set and the cluster default applies.
-func profileTypeName(profile *configv1.TLSSecurityProfile) string {
-	if profile == nil || profile.Type == "" {
-		return fmt.Sprintf("<unset> (defaults to %s)", configv1.TLSProfileIntermediateType)
+// set and names the platform default that stood in for it. That default is
+// version-dependent -- Modern from OpenShift 5.1 -- so it is taken from the
+// settings rather than assumed.
+func profileTypeName(settings client.ClusterTLSSettings) string {
+	if !settings.UsesClusterDefault() {
+		return string(settings.Profile.Type)
 	}
-	return string(profile.Type)
+	defaultType := settings.DefaultProfileType
+	if defaultType == "" {
+		defaultType = configv1.TLSProfileIntermediateType
+	}
+	return fmt.Sprintf("<unset> (defaults to %s)", defaultType)
 }
 
 // showTLSConfigAction demonstrates converting OpenShift profile to crypto/tls.Config
 func showTLSConfigAction(ctx context.Context, cfg *config.Config) error {
-	apiServerClient, err := newAPIServerClient(cfg)
+	settings, err := clusterTLSSettings(ctx, cfg)
 	if err != nil {
 		return err
 	}
 
-	settings, err := apiServerClient.GetClusterTLSSettings(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get cluster TLS settings: %w", err)
-	}
-
 	fmt.Println("OpenShift TLS Security Profile:")
 	fmt.Println("================================")
-	fmt.Printf("Configured type:  %s\n", profileTypeName(settings.Profile))
+	fmt.Printf("Configured type:  %s\n", profileTypeName(settings))
 	printAdherence(settings.Adherence)
 	fmt.Println()
 	profileData, _ := json.MarshalIndent(settings.Spec, "", "  ")

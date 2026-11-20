@@ -25,7 +25,6 @@ local reimplementations:
 | Resolve a `TLSSecurityProfile` to a concrete `TLSProfileSpec` | `controller-runtime-common/pkg/tls.GetTLSProfileSpec` | `crypto.ResolveProfileSpec` |
 | Build a `crypto/tls.Config` from the spec | `controller-runtime-common/pkg/tls.NewTLSConfigFromProfile` | `crypto.BuildTLSConfigFromSpec` |
 | ALPN, which the cluster profile never sets | `controller-runtime-common/pkg/tls.SetNextProtos` | `crypto.BuildTLSConfigFromSpec` |
-| OpenSSL ↔ IANA cipher names, TLS version parsing | `library-go/pkg/crypto` | `crypto.TLSVersion`, `crypto.OpenSSLToIANACipherSuites`, `crypto.CipherSuites` |
 | Interpret `tlsAdherence` | `library-go/pkg/crypto.ShouldHonorClusterTLSProfile` | `crypto.ShouldHonorClusterTLSProfile` |
 
 The watch itself is the reference's "Direct Go → Watch for Profile Changes"

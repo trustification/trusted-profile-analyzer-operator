@@ -178,17 +178,17 @@ modules:
     # config.openshift.io APIServer CR, which does not exist on plain
     # Kubernetes.
     #
-    #   OpenShift >= 4.22   required -- set this to true; the chart refuses to
-    #                       install with it disabled (see allowDisabled)
-    #   OpenShift <  4.22   optional
+    #   OpenShift           optional at any version. Turn it on to have a
+    #                       runtime change of the cluster-wide TLS profile roll
+    #                       the workloads; with it off they keep running until
+    #                       something else restarts them.
     #   plain Kubernetes    leave false; the chart refuses to install with it
     #                       enabled
+    #
+    # Note that from OpenShift 5.1 the cluster-wide default profile is Modern
+    # (TLS 1.3 only), so a cluster that sets no profile of its own is already
+    # on TLS 1.3 whether or not this module runs.
     enabled: false
-    # Acknowledge running on OpenShift 4.22+ without the configurator. Only
-    # consulted when enabled is false; it suppresses the install-time error and
-    # accepts that a runtime TLS profile change will not roll the workloads.
-    allowDisabled: false
-    name: tls-configurator
     image:
       # The configurator ships inside the operator image, so there is no
       # separate image to pin here. Installed through the operator this is
@@ -200,8 +200,16 @@ modules:
       # it does not.
       fullName: ""
       pullPolicy: IfNotPresent
-    # Post-quantum cryptography: enforce TLS 1.3 + X25519MLKEM768 key exchange
-    # and record it in the workload rollout hash.
+    # Post-quantum cryptography: always offer the hybrid X25519MLKEM768 key
+    # exchange, even on a cluster profile that omits it, and record the
+    # choice in the workload rollout hash.
+    #
+    # This does not raise the minimum TLS version. Hybrid key exchange is
+    # only defined for TLS 1.3, but the protocol floor belongs to the
+    # cluster profile: on Old, Intermediate or a Custom profile naming a
+    # lower minimum, the group applies to the TLS 1.3 handshakes and the
+    # older ones are left reachable, as the cluster asked. From OpenShift
+    # 5.1 the platform default profile is Modern, which is TLS 1.3 only.
     pqc:
       enabled: false
     # Apply the cluster-wide TLS profile to the RHTPA workloads' own HTTPS

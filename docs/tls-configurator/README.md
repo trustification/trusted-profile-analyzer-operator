@@ -8,9 +8,9 @@ Documentation for the TLS configurator that ships inside the operator image
 ## Start here
 
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** — how to configure the module per
-  platform: OpenShift 4.22+ (required, with `tlsAdherence` and post-quantum),
-  OpenShift < 4.22 (optional), and plain Kubernetes (must stay off, and where
-  TLS is configured instead). Includes verification commands and
+  platform: OpenShift (optional at any version, with `tlsAdherence`, the
+  OpenShift 5.1 default profile and post-quantum), and plain Kubernetes (must
+  stay off, and where TLS is configured instead). Includes verification commands and
   troubleshooting. A runnable CRC walkthrough is in
   [`devel/README.md`](../../devel/README.md).
 - **[TLS_ADHERENCE.md](TLS_ADHERENCE.md)** — how the component implements Red

@@ -19,8 +19,10 @@ package reconcile
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
+	configv1 "github.com/openshift/api/config/v1"
 	"github.com/trustification/trusted-profile-analyzer-operator/pkg/tlsconfigurator/client"
 	"github.com/trustification/trusted-profile-analyzer-operator/pkg/tlsconfigurator/crypto"
 	appsv1 "k8s.io/api/apps/v1"
@@ -37,9 +39,19 @@ const (
 	// wantOperandProfile is the only trustd profile that honors an explicit
 	// minimum version and cipher list; the reconciler always publishes it.
 	wantOperandProfile = "custom"
+	// ocp51 is the first OpenShift release whose unset .spec.tlsSecurityProfile
+	// means Modern rather than Intermediate; most cases below pin to it so the
+	// version-dependent default is the one under test.
+	ocp51 = "5.1.0"
+	// minVersion1X are trustd's spellings of the protocol floors these tests
+	// expect to see published.
+	minVersion10 = "1.0"
+	minVersion11 = "1.1"
+	minVersion12 = "1.2"
+	minVersion13 = "1.3"
 	// wantMinVersion is the minimum TLS version the fixtures below resolve to,
 	// in trustd's spelling of it.
-	wantMinVersion = "1.3"
+	wantMinVersion = minVersion13
 )
 
 func (h *harness) configMapData(t *testing.T) map[string]string {
@@ -244,7 +256,7 @@ func TestPublishRepairsAnEditedConfigMap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read back the configmap: %v", err)
 	}
-	cm.Data[crypto.EnvMinVersion] = "1.0"
+	cm.Data[crypto.EnvMinVersion] = minVersion10
 	if _, err := h.kube.CoreV1().ConfigMaps(testNamespace).Update(ctx, cm, metav1.UpdateOptions{}); err != nil {
 		t.Fatalf("failed to tamper with the configmap: %v", err)
 	}
@@ -332,4 +344,216 @@ func TestSteadyStateLeavesTheRestartStampAlone(t *testing.T) {
 		t.Errorf("deployment carries %s=%q, want none: nothing drifted, so the hash alone "+
 			"was enough to roll it", client.TLSRestartAnnotation, got)
 	}
+}
+
+// The 5.1 default has to survive all the way to what the operand actually
+// reads. A cluster on 5.1 with no .spec.tlsSecurityProfile is on Modern, so
+// the published settings must say TLS 1.3 -- publishing Intermediate there
+// would take the server's listener *down* to TLS 1.2 on a cluster that never
+// asked for it, which is the precise failure this default exists to prevent.
+func TestPublishesTheVersionAwareDefaultProfile(t *testing.T) {
+	tests := []struct {
+		name           string
+		clusterVersion string
+		wantMinVersion string
+	}{
+		{name: "5.1 defaults to Modern", clusterVersion: ocp51, wantMinVersion: minVersion13},
+		{name: "5.0 still defaults to Intermediate", clusterVersion: "5.0.9", wantMinVersion: minVersion12},
+		{name: "4.22 still defaults to Intermediate", clusterVersion: "4.22.3", wantMinVersion: minVersion12},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t, harnessOpts{
+				// No profile at all: the cluster has expressed no opinion.
+				deployments:      []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
+				operandConfigMap: testConfigMap,
+				clusterVersion:   tt.clusterVersion,
+			})
+
+			if err := h.r.reconcileOnce(context.Background(), triggerStartup); err != nil {
+				t.Fatalf("reconcileOnce() error = %v", err)
+			}
+
+			if got := h.configMapData(t)[crypto.EnvMinVersion]; got != tt.wantMinVersion {
+				t.Errorf("%s = %q, want %q on OpenShift %s",
+					crypto.EnvMinVersion, got, tt.wantMinVersion, tt.clusterVersion)
+			}
+		})
+	}
+}
+
+// A profile the administrator set is theirs. On a 5.1 cluster an explicit
+// Intermediate still publishes TLS 1.2 -- the platform default only fills in
+// for a cluster that said nothing.
+func TestAnExplicitProfileIsNotReplacedByTheClusterDefault(t *testing.T) {
+	h := newHarness(t, harnessOpts{
+		profile:          &configv1.TLSSecurityProfile{Type: configv1.TLSProfileIntermediateType},
+		deployments:      []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
+		operandConfigMap: testConfigMap,
+		clusterVersion:   ocp51,
+	})
+
+	if err := h.r.reconcileOnce(context.Background(), triggerStartup); err != nil {
+		t.Fatalf("reconcileOnce() error = %v", err)
+	}
+
+	if got := h.configMapData(t)[crypto.EnvMinVersion]; got != minVersion12 {
+		t.Errorf("%s = %q, want %q: an explicit Intermediate profile is honored as written",
+			crypto.EnvMinVersion, got, minVersion12)
+	}
+}
+
+// An unreadable cluster version must not stop the reconciler: it falls back to
+// Intermediate and keeps rolling the workloads.
+func TestAnUnreadableClusterVersionFallsBackInsteadOfFailing(t *testing.T) {
+	h := newHarness(t, harnessOpts{
+		deployments:      []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
+		operandConfigMap: testConfigMap,
+		clusterVersion:   ocp51,
+	})
+	h.configClient.PrependReactor("get", "clusterversions",
+		func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, errors.New("forbidden")
+		})
+
+	if err := h.r.reconcileOnce(context.Background(), triggerStartup); err != nil {
+		t.Fatalf("reconcileOnce() error = %v", err)
+	}
+
+	if got := h.configMapData(t)[crypto.EnvMinVersion]; got != minVersion12 {
+		t.Errorf("%s = %q, want the Intermediate fallback %q", crypto.EnvMinVersion, got, minVersion12)
+	}
+}
+
+// subTLS13Ciphers is what an administrator writes on a Custom profile when
+// older clients must still connect: a TLS 1.3 suite plus ciphers that can
+// actually negotiate below 1.3.
+var subTLS13Ciphers = []string{
+	"TLS_AES_128_GCM_SHA256",
+	"ECDHE-RSA-AES128-GCM-SHA256",
+	"ECDHE-RSA-AES256-GCM-SHA384",
+}
+
+// TestExplicitSubTLS13ProfilesAreHonoredOnOpenShift51 is the case that the
+// 5.1 default must not break. 5.1 defaults an *unset* profile to Modern, but
+// an administrator who explicitly sets Old, Intermediate or a Custom profile
+// with a lower floor has made a decision about which clients must still be
+// able to connect. That decision has to survive -- on 5.1 as anywhere else,
+// and with pqc.enabled as without it, since PQC no longer raises the floor.
+//
+// Each case asserts the reconcile succeeds (the configuration is allowed, not
+// rejected) and that the floor reaching the operand is the profile's own.
+func TestExplicitSubTLS13ProfilesAreHonoredOnOpenShift51(t *testing.T) {
+	tests := []struct {
+		name           string
+		profile        *configv1.TLSSecurityProfile
+		wantMinVersion string
+	}{
+		{
+			name:           "unset falls to the 5.1 platform default",
+			profile:        nil,
+			wantMinVersion: minVersion13,
+		},
+		{
+			name:           "explicit Modern",
+			profile:        &configv1.TLSSecurityProfile{Type: configv1.TLSProfileModernType},
+			wantMinVersion: minVersion13,
+		},
+		{
+			name:           "explicit Intermediate keeps TLS 1.2",
+			profile:        &configv1.TLSSecurityProfile{Type: configv1.TLSProfileIntermediateType},
+			wantMinVersion: minVersion12,
+		},
+		{
+			name:           "explicit Old keeps TLS 1.0",
+			profile:        &configv1.TLSSecurityProfile{Type: configv1.TLSProfileOldType},
+			wantMinVersion: minVersion10,
+		},
+		{
+			name:           "Custom pinned below 1.3 keeps its own floor",
+			profile:        customProfile(configv1.VersionTLS11, subTLS13Ciphers...),
+			wantMinVersion: minVersion11,
+		},
+		{
+			name:           "Custom at 1.2",
+			profile:        customProfile(configv1.VersionTLS12, subTLS13Ciphers...),
+			wantMinVersion: minVersion12,
+		},
+	}
+
+	for _, tt := range tests {
+		for _, pqc := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/pqc=%t", tt.name, pqc), func(t *testing.T) {
+				h := newHarness(t, harnessOpts{
+					profile:          tt.profile,
+					deployments:      []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
+					operandConfigMap: testConfigMap,
+					clusterVersion:   ocp51,
+					enablePQC:        pqc,
+				})
+
+				if err := h.r.reconcileOnce(context.Background(), triggerStartup); err != nil {
+					t.Fatalf("reconcileOnce() error = %v: a profile below TLS 1.3 must be "+
+						"accepted, not rejected", err)
+				}
+
+				data := h.configMapData(t)
+				if got := data[crypto.EnvMinVersion]; got != tt.wantMinVersion {
+					t.Errorf("%s = %q, want %q (pqc=%t)",
+						crypto.EnvMinVersion, got, tt.wantMinVersion, pqc)
+				}
+
+				// Below TLS 1.3 the listener must also be given the profile's
+				// own TLS 1.2 cipher list. Omitting it would fall back to
+				// OpenSSL's defaults, which are wider than the profile.
+				if tt.wantMinVersion != minVersion13 {
+					if got := data[crypto.EnvCiphers]; got == "" {
+						t.Errorf("%s is empty, but the floor is %s: the pre-1.3 handshakes "+
+							"the profile permits need its cipher list", crypto.EnvCiphers, tt.wantMinVersion)
+					}
+				}
+
+				// PQC is about the key exchange, and applies either way.
+				if pqc {
+					if got := data[crypto.EnvGroups]; got != "X25519MLKEM768:X25519" {
+						t.Errorf("%s = %q, want the PQC group list", crypto.EnvGroups, got)
+					}
+				}
+			})
+		}
+	}
+}
+
+// TestCustomProfileWithNoSubTLS13CipherIsRaisedAndReported is the single
+// exception to "an explicit floor below TLS 1.3 is published as-is", and it is
+// a self-contradictory profile rather than a legitimate sub-1.3 one: it names
+// a floor of TLS 1.1 but lists no cipher any version below 1.3 could
+// negotiate.
+//
+// All three ways out are lossy. Publishing an empty cipher list is fatal
+// (OpenSSL rejects a list that selects nothing, so trustd would not start);
+// omitting the variable hands the pre-1.3 versions OpenSSL's default list,
+// accepting suites the profile never allowed. Raising the floor is the only
+// one that is both safe and faithful -- with no permitted pre-1.3 cipher, no
+// handshake below 1.3 could have completed anyway. It is logged, not silent.
+func TestCustomProfileWithNoSubTLS13CipherIsRaisedAndReported(t *testing.T) {
+	buf := captureLog(t)
+	h := newHarness(t, harnessOpts{
+		profile:          customProfile(configv1.VersionTLS11, "TLS_AES_128_GCM_SHA256"),
+		deployments:      []*appsv1.Deployment{deploymentWithHash(testDeployment, "")},
+		operandConfigMap: testConfigMap,
+		clusterVersion:   ocp51,
+	})
+
+	if err := h.r.reconcileOnce(context.Background(), triggerStartup); err != nil {
+		t.Fatalf("reconcileOnce() error = %v", err)
+	}
+
+	if got := h.configMapData(t)[crypto.EnvMinVersion]; got != minVersion13 {
+		t.Errorf("%s = %q, want %q: a profile with no usable pre-1.3 cipher cannot be "+
+			"published at a lower floor", crypto.EnvMinVersion, got, minVersion13)
+	}
+
+	assertLogged(t, buf.String(), "profile lists no cipher usable below TLS 1.3")
 }

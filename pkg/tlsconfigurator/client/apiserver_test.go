@@ -139,3 +139,104 @@ func TestGetTLSAdherencePolicyWithoutAPIServer(t *testing.T) {
 		t.Fatal("GetTLSAdherencePolicy() error = nil, want a not-found error")
 	}
 }
+
+// On OpenShift 5.1 and above an unset profile means Modern, so the settings a
+// reconciler acts on must say TLS 1.3 -- otherwise it would publish
+// Intermediate to the operand and actually loosen a listener the cluster has
+// at TLS 1.3.
+func TestGetClusterTLSSettingsWithDefaultAppliesThePlatformDefault(t *testing.T) {
+	tests := []struct {
+		name            string
+		spec            configv1.APIServerSpec
+		defaultType     configv1.TLSProfileType
+		wantMinVersion  configv1.TLSProtocolVersion
+		wantUsesDefault bool
+	}{
+		{
+			name:            "unset profile on 5.1+ resolves to Modern",
+			spec:            configv1.APIServerSpec{},
+			defaultType:     configv1.TLSProfileModernType,
+			wantMinVersion:  configv1.VersionTLS13,
+			wantUsesDefault: true,
+		},
+		{
+			name:            "unset profile below 5.1 stays Intermediate",
+			spec:            configv1.APIServerSpec{},
+			defaultType:     configv1.TLSProfileIntermediateType,
+			wantMinVersion:  configv1.VersionTLS12,
+			wantUsesDefault: true,
+		},
+		{
+			name:            "no default supplied keeps the upstream fallback",
+			spec:            configv1.APIServerSpec{},
+			defaultType:     "",
+			wantMinVersion:  configv1.VersionTLS12,
+			wantUsesDefault: true,
+		},
+		{
+			// An administrator who chose Intermediate on a 5.1 cluster means
+			// it, and nothing here promotes them to Modern.
+			name: "an explicit Intermediate wins over the platform default",
+			spec: configv1.APIServerSpec{
+				TLSSecurityProfile: &configv1.TLSSecurityProfile{
+					Type: configv1.TLSProfileIntermediateType,
+				},
+			},
+			defaultType:     configv1.TLSProfileModernType,
+			wantMinVersion:  configv1.VersionTLS12,
+			wantUsesDefault: false,
+		},
+		{
+			name: "an explicit Old wins over the platform default",
+			spec: configv1.APIServerSpec{
+				TLSSecurityProfile: &configv1.TLSSecurityProfile{
+					Type: configv1.TLSProfileOldType,
+				},
+			},
+			defaultType:     configv1.TLSProfileModernType,
+			wantMinVersion:  configv1.VersionTLS10,
+			wantUsesDefault: false,
+		},
+		{
+			// The case an administrator reaches for when they need a floor
+			// the built-ins do not offer. It has to survive untouched.
+			name: "an explicit Custom below TLS 1.3 wins over the platform default",
+			spec: configv1.APIServerSpec{
+				TLSSecurityProfile: &configv1.TLSSecurityProfile{
+					Type: configv1.TLSProfileCustomType,
+					Custom: &configv1.CustomTLSProfile{
+						TLSProfileSpec: configv1.TLSProfileSpec{
+							Ciphers:       []string{"ECDHE-RSA-AES128-GCM-SHA256"},
+							MinTLSVersion: configv1.VersionTLS11,
+						},
+					},
+				},
+			},
+			defaultType:     configv1.TLSProfileModernType,
+			wantMinVersion:  configv1.VersionTLS11,
+			wantUsesDefault: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := NewAPIServerClientWithClientset(configfake.NewClientset(apiServer(tt.spec)))
+
+			got, err := c.GetClusterTLSSettingsWithDefault(context.Background(), tt.defaultType)
+			if err != nil {
+				t.Fatalf("GetClusterTLSSettingsWithDefault() unexpected error = %v", err)
+			}
+
+			if got.Spec.MinTLSVersion != tt.wantMinVersion {
+				t.Errorf("MinTLSVersion = %q, want %q", got.Spec.MinTLSVersion, tt.wantMinVersion)
+			}
+			if got.UsesClusterDefault() != tt.wantUsesDefault {
+				t.Errorf("UsesClusterDefault() = %v, want %v",
+					got.UsesClusterDefault(), tt.wantUsesDefault)
+			}
+			if got.DefaultProfileType != tt.defaultType {
+				t.Errorf("DefaultProfileType = %q, want %q", got.DefaultProfileType, tt.defaultType)
+			}
+		})
+	}
+}

@@ -38,10 +38,23 @@ type ClusterTLSSettings struct {
 	// Profile is the raw .spec.tlsSecurityProfile, nil when unset.
 	Profile *configv1.TLSSecurityProfile
 	// Spec is Profile resolved to concrete ciphers, groups and minimum
-	// version (built-ins expanded, nil/unknown defaulted to Intermediate).
+	// version: built-ins expanded, Custom taken as given, and an unset
+	// profile stood in for by DefaultProfileType.
 	Spec configv1.TLSProfileSpec
+	// DefaultProfileType is the profile an unset .spec.tlsSecurityProfile was
+	// taken to mean -- the platform default for this cluster's version. It is
+	// "" when the caller did not supply one, in which case an unset profile
+	// resolved to the upstream fallback, Intermediate.
+	DefaultProfileType configv1.TLSProfileType
 	// Adherence is .spec.tlsAdherence, "" when unset.
 	Adherence configv1.TLSAdherencePolicy
+}
+
+// UsesClusterDefault reports whether the cluster expressed no profile of its
+// own, so Spec came from the platform default rather than from
+// .spec.tlsSecurityProfile.
+func (s ClusterTLSSettings) UsesClusterDefault() bool {
+	return s.Profile == nil || s.Profile.Type == ""
 }
 
 // ShouldHonor reports whether components must apply this profile, per the
@@ -87,23 +100,38 @@ func (c *APIServerClient) GetAPIServer(ctx context.Context) (*configv1.APIServer
 
 // GetClusterTLSSettings reads the profile and the adherence policy from a
 // single APIServer snapshot and resolves the profile to a concrete
-// TLSProfileSpec. This is the entry point callers should use; the individual
-// getters below exist for the CLI's single-value output.
+// TLSProfileSpec, defaulting an unset profile to Intermediate.
+//
+// Callers that can read the cluster version should use
+// GetClusterTLSSettingsWithDefault instead: Intermediate is only the platform
+// default up to OpenShift 5.0.
 func (c *APIServerClient) GetClusterTLSSettings(ctx context.Context) (ClusterTLSSettings, error) {
+	return c.GetClusterTLSSettingsWithDefault(ctx, "")
+}
+
+// GetClusterTLSSettingsWithDefault is GetClusterTLSSettings with the profile
+// type to stand in for an unset .spec.tlsSecurityProfile -- normally
+// OpenShiftVersion.DefaultTLSProfileType, which is Modern from OpenShift 5.1
+// on. Pass "" to keep the upstream fallback.
+func (c *APIServerClient) GetClusterTLSSettingsWithDefault(
+	ctx context.Context, defaultProfileType configv1.TLSProfileType,
+) (ClusterTLSSettings, error) {
 	apiServer, err := c.GetAPIServer(ctx)
 	if err != nil {
 		return ClusterTLSSettings{}, err
 	}
 
-	spec, err := crypto.ResolveProfileSpec(apiServer.Spec.TLSSecurityProfile)
+	spec, err := crypto.ResolveProfileSpecWithDefault(
+		apiServer.Spec.TLSSecurityProfile, defaultProfileType)
 	if err != nil {
 		return ClusterTLSSettings{}, err
 	}
 
 	return ClusterTLSSettings{
-		Profile:   apiServer.Spec.TLSSecurityProfile,
-		Spec:      spec,
-		Adherence: apiServer.Spec.TLSAdherence,
+		Profile:            apiServer.Spec.TLSSecurityProfile,
+		Spec:               spec,
+		DefaultProfileType: defaultProfileType,
+		Adherence:          apiServer.Spec.TLSAdherence,
 	}, nil
 }
 
@@ -128,56 +156,4 @@ func (c *APIServerClient) WatchAPIServer(ctx context.Context) (watch.Interface, 
 		return nil, fmt.Errorf("failed to watch APIServer cluster: %w", err)
 	}
 	return w, nil
-}
-
-// GetClusterTLSProfile retrieves the cluster-wide TLS security profile
-// This is the recommended approach per OpenShift best practices
-func (c *APIServerClient) GetClusterTLSProfile(ctx context.Context) (*configv1.TLSSecurityProfile, error) {
-	apiServer, err := c.GetAPIServer(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// If no TLS profile is specified, return nil (will use default Intermediate)
-	if apiServer.Spec.TLSSecurityProfile == nil {
-		return nil, nil
-	}
-
-	return apiServer.Spec.TLSSecurityProfile, nil
-}
-
-// UpdateClusterTLSProfile updates the cluster-wide TLS security profile
-func (c *APIServerClient) UpdateClusterTLSProfile(ctx context.Context, profile *configv1.TLSSecurityProfile) error {
-	apiServer, err := c.GetAPIServer(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Update the TLS security profile
-	apiServer.Spec.TLSSecurityProfile = profile
-
-	_, err = c.configClient.ConfigV1().APIServers().Update(ctx, apiServer, metav1.UpdateOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to update cluster TLS security profile: %w", err)
-	}
-
-	return nil
-}
-
-// GetEffectiveTLSProfile returns the effective TLS profile for the cluster
-// If no profile is configured, it returns the default Intermediate profile
-func (c *APIServerClient) GetEffectiveTLSProfile(ctx context.Context) (*configv1.TLSSecurityProfile, error) {
-	profile, err := c.GetClusterTLSProfile(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// If no profile is set, return default Intermediate profile
-	if profile == nil {
-		return &configv1.TLSSecurityProfile{
-			Type: configv1.TLSProfileIntermediateType,
-		}, nil
-	}
-
-	return profile, nil
 }

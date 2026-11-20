@@ -26,19 +26,40 @@ func TestEnablePQC(t *testing.T) {
 	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
 	EnablePQC(cfg)
 
-	if cfg.MinVersion != tls.VersionTLS13 {
-		t.Errorf("EnablePQC MinVersion = %x, want TLS 1.3 (%x)", cfg.MinVersion, tls.VersionTLS13)
-	}
 	if len(cfg.CurvePreferences) == 0 || cfg.CurvePreferences[0] != tls.X25519MLKEM768 {
 		t.Errorf("EnablePQC CurvePreferences = %v, want X25519MLKEM768 first", cfg.CurvePreferences)
 	}
 }
 
-func TestEnablePQCDoesNotDowngradeVersion(t *testing.T) {
-	cfg := &tls.Config{MinVersion: tls.VersionTLS13}
+// The protocol floor belongs to the cluster profile. A cluster on Old,
+// Intermediate or a Custom profile with a lower minimum has decided that
+// pre-1.3 clients must still connect, and asking for the hybrid group does not
+// revoke that decision -- Go just will not select the group below TLS 1.3.
+func TestEnablePQCLeavesTheProfileMinimumVersionAlone(t *testing.T) {
+	for _, minVersion := range []uint16{
+		tls.VersionTLS10, tls.VersionTLS12, tls.VersionTLS13,
+	} {
+		t.Run(tls.VersionName(minVersion), func(t *testing.T) {
+			cfg := &tls.Config{MinVersion: minVersion}
+			EnablePQC(cfg)
+			if cfg.MinVersion != minVersion {
+				t.Errorf("MinVersion = %s, want it left at %s",
+					tls.VersionName(cfg.MinVersion), tls.VersionName(minVersion))
+			}
+		})
+	}
+}
+
+// Config.CipherSuites only governs the pre-1.3 handshakes, which are now
+// reachable under PQC on a profile that permits them. Clearing it would hand
+// those Go's defaults instead of the profile's list.
+func TestEnablePQCKeepsTheProfileCiphers(t *testing.T) {
+	suites := []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256}
+	cfg := &tls.Config{MinVersion: tls.VersionTLS12, CipherSuites: suites}
 	EnablePQC(cfg)
-	if cfg.MinVersion != tls.VersionTLS13 {
-		t.Errorf("MinVersion changed unexpectedly: %x", cfg.MinVersion)
+
+	if len(cfg.CipherSuites) != len(suites) {
+		t.Errorf("CipherSuites = %v, want the profile's list %v kept", cfg.CipherSuites, suites)
 	}
 }
 
@@ -83,8 +104,10 @@ func TestIsPQCCompliant(t *testing.T) {
 	}
 }
 
-func TestBuildTLSConfigWithPQC(t *testing.T) {
-	profile := &configv1.TLSSecurityProfile{Type: configv1.TLSProfileIntermediateType}
+// On a Modern profile the floor is already TLS 1.3, so PQC is fully in effect
+// with nothing forced.
+func TestBuildTLSConfigWithPQCOnModern(t *testing.T) {
+	profile := &configv1.TLSSecurityProfile{Type: configv1.TLSProfileModernType}
 
 	cfg, _, err := BuildTLSConfig(profile, Options{EnablePQC: true})
 	if err != nil {
@@ -95,8 +118,53 @@ func TestBuildTLSConfigWithPQC(t *testing.T) {
 	if !compliant {
 		t.Errorf("expected PQC-compliant config, reasons=%v", reasons)
 	}
-	if cfg.CipherSuites != nil {
-		t.Errorf("TLS 1.3 ignores Config.CipherSuites; want it cleared, got %v", cfg.CipherSuites)
+}
+
+// On a profile that permits TLS 1.2 the hybrid group is offered but the floor
+// stays where the cluster put it, so the result is deliberately *not*
+// PQC-compliant: compliance is the cluster profile's to grant.
+func TestBuildTLSConfigWithPQCKeepsALowerProfileFloor(t *testing.T) {
+	profiles := map[string]*configv1.TLSSecurityProfile{
+		"Old":          {Type: configv1.TLSProfileOldType},
+		"Intermediate": {Type: configv1.TLSProfileIntermediateType},
+		"Custom": {
+			Type: configv1.TLSProfileCustomType,
+			Custom: &configv1.CustomTLSProfile{
+				TLSProfileSpec: configv1.TLSProfileSpec{
+					Ciphers:       []string{tls12CipherAES128},
+					MinTLSVersion: configv1.VersionTLS11,
+				},
+			},
+		},
+	}
+
+	for profileType, profile := range profiles {
+		t.Run(profileType, func(t *testing.T) {
+			plain, _, err := BuildTLSConfig(profile, Options{})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			cfg, _, err := BuildTLSConfig(profile, Options{EnablePQC: true})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if cfg.MinVersion != plain.MinVersion {
+				t.Errorf("MinVersion = %s with PQC, want the profile's own %s",
+					TLSVersionName(cfg.MinVersion), TLSVersionName(plain.MinVersion))
+			}
+			if len(cfg.CipherSuites) != len(plain.CipherSuites) {
+				t.Errorf("CipherSuites = %v with PQC, want the profile's own %v",
+					cfg.CipherSuites, plain.CipherSuites)
+			}
+			if len(cfg.CurvePreferences) == 0 || cfg.CurvePreferences[0] != tls.X25519MLKEM768 {
+				t.Errorf("CurvePreferences = %v, want X25519MLKEM768 first", cfg.CurvePreferences)
+			}
+			if compliant, _ := IsPQCCompliant(cfg); compliant {
+				t.Errorf("a %s profile permits pre-1.3 handshakes, so it must not be "+
+					"reported as PQC compliant", profileType)
+			}
+		})
 	}
 }
 

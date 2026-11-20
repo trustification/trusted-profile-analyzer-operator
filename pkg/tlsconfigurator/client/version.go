@@ -22,7 +22,9 @@ import (
 	"strconv"
 	"strings"
 
+	configv1 "github.com/openshift/api/config/v1"
 	configclient "github.com/openshift/client-go/config/clientset/versioned"
+	"github.com/trustification/trusted-profile-analyzer-operator/pkg/tlsconfigurator/crypto"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 )
@@ -57,6 +59,13 @@ func NewVersionChecker(config *rest.Config) (*VersionChecker, error) {
 	return &VersionChecker{
 		configClient: configClient,
 	}, nil
+}
+
+// NewVersionCheckerWithClientset creates a VersionChecker around an existing
+// config clientset, so callers can inject an alternative implementation --
+// notably a fake clientset in tests -- without going through a *rest.Config.
+func NewVersionCheckerWithClientset(configClient configclient.Interface) *VersionChecker {
+	return &VersionChecker{configClient: configClient}
 }
 
 // GetOpenShiftVersion retrieves the OpenShift cluster version
@@ -116,6 +125,26 @@ func (v *VersionChecker) ValidateMinimumVersion(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// DefaultTLSProfileType returns the TLS security profile this cluster applies
+// when APIServer.spec.tlsSecurityProfile is unset: Modern from OpenShift 5.1
+// on, Intermediate below that.
+func (v *OpenShiftVersion) DefaultTLSProfileType() configv1.TLSProfileType {
+	return crypto.ClusterDefaultProfileType(v.Major, v.Minor)
+}
+
+// DefaultTLSProfileType reads the cluster version and reports which profile an
+// unset .spec.tlsSecurityProfile stands for there. The version is returned
+// alongside so callers can log what the decision was based on.
+func (v *VersionChecker) DefaultTLSProfileType(ctx context.Context) (
+	configv1.TLSProfileType, *OpenShiftVersion, error,
+) {
+	version, err := v.GetOpenShiftVersion(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+	return version.DefaultTLSProfileType(), version, nil
 }
 
 // IsAtLeast checks if this version is at least the specified major.minor version

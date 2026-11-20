@@ -17,6 +17,7 @@ limitations under the License.
 package e2e
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -303,8 +304,7 @@ func TestTLSConfiguratorIsASingleton(t *testing.T) {
 // which returns nothing under `helm template` and --dry-run, so the check is
 // skipped there. That skip is deliberate and must stay: failing closed on an
 // unreadable policy would break every dry run and the operator's own rendering
-// paths. The fail path itself needs a live cluster, like the 4.22 version
-// guard above it.
+// paths. The fail path itself needs a live cluster.
 func TestTLSConfiguratorAdherenceGuardIsSkippedOnDryRun(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipE2ETest)
@@ -363,4 +363,41 @@ func findDocument(t *testing.T, rendered, kind, name string) string {
 // line or follow a newline.
 func hasTopLevelField(doc, field string) bool {
 	return strings.HasPrefix(doc, field+"\n") || strings.Contains(doc, "\n"+field+"\n")
+}
+
+// TestTLSConfiguratorIsOptionalOnOpenShift pins the removal of the version
+// guard: the chart used to refuse to render on OpenShift >= 4.22 with the
+// module disabled unless allowDisabled acknowledged it. It no longer does, and
+// a disabled module simply renders nothing.
+//
+// allowDisabled has been removed from values.yaml and both schemas, so the
+// second case is the upgrade path rather than a supported setting: a CR or
+// Subscription left over from before must still render. It does because the
+// tlsConfigurator subschema is an allOf over definitions with no
+// additionalProperties: false, so an undeclared key is accepted and ignored.
+// If that ever tightens, this case fails and the key has to come back.
+func TestTLSConfiguratorIsOptionalOnOpenShift(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipE2ETest)
+	}
+
+	for _, legacyAllowDisabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("legacyAllowDisabled=%t", legacyAllowDisabled), func(t *testing.T) {
+			configurator := map[string]interface{}{fieldEnabled: false}
+			if legacyAllowDisabled {
+				configurator["allowDisabled"] = true
+			}
+
+			values := minimalValues()
+			values[fieldOpenshift] = openshiftValues(true)
+			values[fieldModules] = map[string]interface{}{
+				"server":          map[string]interface{}{fieldEnabled: true},
+				"tlsConfigurator": configurator,
+			}
+
+			rendered := renderHelmChart(t, getChartPath(t), values)
+			assert.NotContains(t, rendered, "--action=reconcile",
+				"a disabled module must render no reconciler")
+		})
+	}
 }

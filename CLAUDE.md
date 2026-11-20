@@ -350,8 +350,8 @@ The operator requires a ClusterRole with permissions on `cloudcredential.openshi
 
 Detailed documentation lives in `docs/tls-configurator/`:
 
-- `DEPLOYMENT.md` — per-platform configuration (OpenShift 4.22+, OpenShift
-  < 4.22, plain Kubernetes), verification and troubleshooting. `devel/README.md`
+- `DEPLOYMENT.md` — per-platform configuration (OpenShift, plain
+  Kubernetes), verification and troubleshooting. `devel/README.md`
   has the runnable CRC version.
 - `TLS_ADHERENCE.md` — how the component implements Red Hat's *TLS Profile
   Compliance — Implementation Reference*.
@@ -439,8 +439,11 @@ Red Hat documents for this, not hand-rolled:
 - `github.com/openshift/controller-runtime-common/pkg/tls` —
   `GetTLSProfileSpec`, `NewTLSConfigFromProfile`, `SetNextProtos`,
   `APIServerName`.
-- `github.com/openshift/library-go/pkg/crypto` — TLS version and cipher name
-  conversion, and `ShouldHonorClusterTLSProfile`.
+- `github.com/openshift/library-go/pkg/crypto` — `ShouldHonorClusterTLSProfile`.
+  (It also offers TLS version and cipher-name conversion; the thin wrappers
+  around those were removed as dead code, because
+  `NewTLSConfigFromProfile` converts upstream and the operand path hands
+  OpenSSL the profile's own spellings untranslated.)
 
 `pkg/tlsconfigurator/crypto` is a thin adapter over those two. It must not
 regrow local cipher-name tables or per-profile cipher lists: the built-in
@@ -448,6 +451,41 @@ profiles live in `configv1.TLSProfiles` and already carry `Groups`, including
 `X25519MLKEM768`. `BuildTLSConfig` returns an `unsupported []string` rather
 than erroring on ciphers Go cannot offer — a cluster profile may legitimately
 name OpenSSL-only suites, and failing there would stop reconciliation.
+
+### The cluster default profile is version-dependent (OpenShift 5.1)
+
+The one place the upstream resolver is deliberately *not* trusted. An
+`APIServer.spec.tlsSecurityProfile` that is unset does not mean the same thing
+on every release: it is `Intermediate` (TLS 1.2) up to OpenShift 5.0 and
+`Modern` (TLS 1.3 only) from **5.1**. `GetTLSProfileSpec` hard-codes
+`Intermediate` — correct when it was written, wrong on 5.1.
+
+So the configurator reads `ClusterVersion` and substitutes the right default:
+
+- `crypto.ClusterDefaultProfileType(major, minor)` — the rule, `Modern` from
+  5.1 (`ModernDefaultOpenShiftMajorVersion`/`MinorVersion`).
+- `crypto.ResolveProfileSpecWithDefault` — substitutes it, but **only** when
+  the cluster expressed no opinion (nil profile, or `Type: ""`). A profile the
+  administrator chose is honored as written; an unknown *type* is left to the
+  upstream fallback, since the platform default is no better a guess for a
+  profile type added after this build.
+- `client.OpenShiftVersion.DefaultTLSProfileType` /
+  `VersionChecker.DefaultTLSProfileType` — the glue;
+  `APIServerClient.GetClusterTLSSettingsWithDefault` is what callers use.
+  `ClusterTLSSettings.DefaultProfileType` records which default was applied so
+  logs can name it.
+
+The reconciler resolves it **every pass**, not once at startup: an in-place
+upgrade across 5.1 changes the effective profile of a cluster whose `APIServer`
+CR never changed, which is exactly the silent drift the resync exists for. A
+cluster version that cannot be read is logged and falls back to `Intermediate`
+— it must not abort the pass, since the version only matters to clusters that
+set no profile at all.
+
+Getting this wrong is not cosmetic. With `operandTls` on, resolving an unset
+profile to `Intermediate` on a 5.1 cluster would publish
+`HTTP_SERVER_TLS_MIN_VERSION=1.2` and take the server's listener *down* from
+the TLS 1.3 the cluster actually runs.
 
 ### `tlsAdherence`
 
@@ -466,9 +504,8 @@ would be quietly non-adherent. `000-validate.yaml` therefore `lookup`s the
 `APIServer` CR and refuses to render when adherence is `StrictAllComponents`,
 the server is TLS-serving (`useServiceCa`), and publishing is off — with
 `modules.tlsConfigurator.operandTls.allowDisabled: true` as the explicit
-acknowledgement, mirroring the module's own `allowDisabled`. As with the 4.22
-guard, `lookup` is empty under `helm template`/`--dry-run` so the check is
-skipped there; do not make it fail closed. A policy tightened *after* install
+acknowledgement. `lookup` is empty under `helm template`/`--dry-run` so the
+check is skipped there; do not make it fail closed. A policy tightened *after* install
 is caught by the operator's next re-render, and the reconciler logs a warning
 on every observation in the meantime.
 
@@ -583,6 +620,11 @@ cluster says. `modules.tlsConfigurator.operandTls.enabled` (**default
     empty ciphersuite list would disable TLS 1.3 on a profile that permits it.
   - Profile names no ciphers at all: no opinion expressed, defaults stand and
     the minimum version is left alone.
+- **`EnablePQC` does not raise the minimum version** — see *Enabling
+  Post-Quantum Cryptography* below. `operandMinVersion` publishes the
+  profile's floor as-is, so the only thing that can raise it is the
+  no-usable-pre-1.3-cipher case above, which is about expressing the profile
+  faithfully rather than about hardening.
 - **An unrecognised `minTLSVersion` falls back to 1.3, not 1.2.** The field is
   required and enum-validated by the CRD, so a value `minVersionNames` does not
   carry can only come from an OpenShift API newer than this build — i.e. a
@@ -611,14 +653,25 @@ just unenforced.
 
 ### When the module must be on, and when it must be off
 
-The module is OpenShift-only, and the chart *enforces* the matrix rather than
-just documenting it:
+The module is OpenShift-only. Only the plain-Kubernetes row is enforced:
 
 | Platform | `modules.tlsConfigurator.enabled` | Enforced by |
 | --- | --- | --- |
-| OpenShift >= 4.22 | **required `true`** | install fails unless `allowDisabled: true` |
-| OpenShift < 4.22 | optional | nothing — `reconcile` has no version gate, so it runs fine, it is just not mandatory |
+| OpenShift (any version) | optional | nothing — `reconcile` has no version gate, so it runs on any release, and the chart does not force the choice |
 | plain Kubernetes | **required `false`** (the default) | install fails if enabled |
+
+**The 4.22 requirement is gone.** The chart used to refuse to install on
+OpenShift >= 4.22 with the module disabled, on the grounds that nothing else
+would roll the workloads when the cluster-wide profile changed. From OpenShift
+5.1 the platform default profile is Modern (TLS 1.3 only), so a cluster that
+configures nothing is already where that guard was pushing it, and an install
+without the module is a supportable choice rather than a misconfiguration. Do
+not reintroduce it. `modules.tlsConfigurator.allowDisabled` is **gone** from
+`values.yaml` and both schemas along with it. Removing it breaks nothing: the
+`tlsConfigurator` subschema is an `allOf` over definitions that carry no
+`additionalProperties: false`, so a CR or Subscription still setting the key
+validates and is ignored. (`operandTls.allowDisabled` is a different key and is
+still live.)
 
 A second row applies to `operandTls` rather than the module as a whole:
 
@@ -646,18 +699,19 @@ It renders no resources and is deliberately **not** gated on
   `trustification.openshift.detect` helper (`route.openshift.io/v1` +
   `openshift.enabled`). Escape hatch for wrong detection:
   `openshift.enabled: true`.
-- The 4.22 check uses `lookup "config.openshift.io/v1" "ClusterVersion" ""
-  "version"` and parses `.status.desired.version`. `lookup` returns nothing
-  under `helm template` / `--dry-run`, so the check is **skipped** there rather
-  than failing on an unreadable version. Do not "fix" that by failing closed —
-  it would break every dry run and the operator's own rendering paths.
-- `modules.tlsConfigurator.allowDisabled` (default `false`) is consulted only
-  when `enabled` is `false`. It is an explicit acknowledgement that a runtime
-  TLS profile change will not roll the workloads.
+- The adherence check uses `lookup` on the `APIServer` CR, which returns
+  nothing under `helm template` / `--dry-run`, so it is **skipped** there
+  rather than failing on an unreadable policy. Do not "fix" that by failing
+  closed — it would break every dry run and the operator's own rendering
+  paths.
+- The chart reads no cluster *version* any more. The only version-dependent
+  behaviour left is the 5.1 default profile, and that is resolved by the
+  reconciler at runtime (see below), where `ClusterVersion` is actually
+  readable.
 
 User-facing versions of this live in the chart `README.md` and in
 `values.yaml` comments; `values.schema.json` is the schema Helm actually
-enforces, so `allowDisabled` had to be added there (the `.yaml` schema is the
+enforces, so a key has to be added there too (the `.yaml` schema is the
 source but is not what Helm reads).
 
 ### Enabling Post-Quantum Cryptography
@@ -666,8 +720,8 @@ PQC in TLS 1.3 is delivered through the hybrid **key-exchange group**
 `X25519MLKEM768` (X25519 + ML-KEM-768, NIST FIPS 203) — **not** through the
 cipher suites, which stay the same. Hybrid PQC key exchange requires TLS 1.3.
 
-PQC support (a `--enable-pqc` flag, `CurvePreferences=[X25519MLKEM768, X25519]`,
-forced TLS 1.3, a `validate` action) and the runtime `reconcile` mode are built
+PQC support (a `--enable-pqc` flag, `CurvePreferences=[X25519MLKEM768,
+X25519]`, a `validate` action) and the runtime `reconcile` mode are built
 into the configurator. Because it now ships in the operator image, there is no
 separate image to rebuild or republish — an operator build carries it.
 
@@ -678,14 +732,43 @@ Because the config is now built by `NewTLSConfigFromProfile`, those groups land
 in `CurvePreferences` automatically — a cluster on `Modern` is post-quantum
 without `--enable-pqc`.
 
+**Supported from OpenShift 4.22 and above.** TLS 1.3 with post-quantum key
+exchange is supported on OpenShift 4.22+. The dependency is
+`TLSProfileSpec.Groups`, the field that lets a TLS security profile name
+key-exchange groups: it was added to the config API in 4.22 and sits behind
+the `TLSGroupPreferences` feature gate, so a cluster below 4.22 cannot express
+a group preference at all, and a 4.22+ cluster with the gate off has the field
+rejected by the API server.
+
+Nothing in the code enforces this — it is a statement of supported
+configuration, documented in `docs/tls-configurator/DEPLOYMENT.md` and the
+chart `README.md`. The one place the gate is consulted at runtime is
+`controller.SupportsTLSGroups`, on the `--action=update` path only; the
+reconcile path does not check it, and an older cluster is not refused or
+warned. Deliberate: the reconciler still works there, since the groups it
+publishes to the operand are resolved from this build's own
+`configv1.TLSProfiles` rather than from the cluster API.
+
 **Router-level PQC is implemented, gated on `TLSGroupPreferences`.**
 `--action=update --enable-pqc` with a `Custom` profile writes
 `Groups: [X25519MLKEM768, X25519]` onto the IngressController profile. The
 field is behind the `TLSGroupPreferences` feature gate and the API server
 rejects it when the gate is off, so `controller.SupportsTLSGroups` reads the
 `FeatureGate` CR first and the field is skipped (with a log line) on clusters
-without it. `--enable-pqc` additionally forces TLS 1.3 locally, since hybrid
-key exchange is only defined for TLS 1.3.
+without it.
+
+**`--enable-pqc` does not force TLS 1.3.** It used to, on the reasoning that
+hybrid key exchange is only defined there. It no longer does, in
+`crypto.EnablePQC`, in `OperandEnv` and in the `update` action alike: which
+protocol versions are acceptable is the cluster administrator's decision, and
+a cluster on `Old`, `Intermediate` or a `Custom` profile with a lower floor
+has said that pre-1.3 clients must still connect. Raising the floor underneath
+it locks out exactly the clients that profile exists to admit. The hybrid group
+is offered regardless and is simply not selected below TLS 1.3, so the profile
+gets the strongest key exchange it permits. A cluster that wants the floor at
+TLS 1.3 sets the `Modern` profile — the platform default from OpenShift 5.1.
+`EnablePQC` therefore also stopped clearing `Config.CipherSuites`: that field
+governs the pre-1.3 handshakes, which are now reachable.
 
 To enable from the operator side:
 
