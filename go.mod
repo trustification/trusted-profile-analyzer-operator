@@ -5,7 +5,7 @@ go 1.27.3
 require (
 	github.com/operator-framework/helm-operator-plugins v0.9.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
-	helm.sh/helm/v3 v3.22.1
+	helm.sh/helm/v4 v4.3.2
 	k8s.io/apimachinery v0.37.2
 	k8s.io/client-go v0.37.2
 	sigs.k8s.io/controller-runtime v0.25.2
