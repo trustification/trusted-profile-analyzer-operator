@@ -818,7 +818,7 @@ Run linting: `golangci-lint run` (not wrapped in Makefile)
 2. Build and push operator image: `make podman-build podman-push`
 3. Update bundle: `make bundle`
 4. Build and push bundle: `make bundle-build bundle-push`
-5. The bundle contains OLM metadata with channels: `stable-v1.1,stable-v3`
+5. The bundle contains OLM metadata with channels: `stable-v3`
 6. Default channel: `stable-v3`
 
 ## Testing Strategy
